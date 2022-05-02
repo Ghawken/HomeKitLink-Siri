@@ -19,16 +19,16 @@ Expect to see some immediate error messages as will need to download and install
 
 Either after or before in a terminal window
 
-###`sudo pip3 install cryptography`
+#### `sudo pip3 install cryptography`
 
 Restart the plugin.
 
 Return to the terminal window and copy and paste the below
 
-This removes the apple quarantine bit for downloaded files and is needed for full function.  Very annoyingly unlike the pip3 command it is needed everything you upgrade!
+This removes the apple quarantine bit for downloaded files and is needed for full function.  Very annoyingly unlike the pip3 command it is needed everytime you upgrade!
 Arghh.. Apple...
 
-### `sudo xattr -rd com.apple.quarantine /Library/Application\ Support/Perceptive\ Automation/Indigo\ 2022.1/Plugins`
+####`sudo xattr -rd com.apple.quarantine /Library/Application\ Support/Perceptive\ Automation/Indigo\ 2022.1/Plugins`
  
 NB: As the version of indigo increases please update the 2022.1 to the most relevant.
 
@@ -67,6 +67,23 @@ Temperature/Humidity number values - need **JUST** the number value - no degrees
 If in doubt check the device in question states to review.  If problematic the plugin will display 0, and/or give an error.
 
 In the aim of keeping the options completely open - you can select anything .... however it does require some inital device setup/thinking.
+
+### Examples
+
+This is the HomeKitLink Bridge Edit Page.  
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png)
+
+
+The first menu is a Indigo Device Selection menu -
+all Indigo Devices lists ALL indigo devices.
+Everything else just list devices you may be more interested in - eg. Sensors Lights etc.
+This only makes it easier to find devices.   These are duplicated in the all list - just harder to find if you have hundreds of devices.
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png)
+
+
+
 
 ###Lights - dimmer/brightness/Color
 Lightbulb:  Should be the choice for all light devices.
