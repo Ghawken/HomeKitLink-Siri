@@ -48,7 +48,7 @@ These details are also saved within Indigo, so migrate and move with indigo with
 
 If you break HomeKit by your poor device option - in the normal course of events you simply remove the device from the HomeKit bridge and start again..
 
-###Setup: Next
+### Setup: Next
 
 Create a HomeKitLink-Siri (HTKS) Bridge device.
 Select the devices you wish to publish,  and select what device it should be, click save.
@@ -107,11 +107,11 @@ Below are the currently supported device types.  These are automatically guessed
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png)
 
 
-##Menu Items:
+## Menu Items:
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png)
 
-###Show Device Publications
+### Show Device Publications
 This shows in indigos log all current devices wished to be published to HomeKit.
 Such as (updated since this photo)
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png)
