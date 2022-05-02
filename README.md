@@ -8,7 +8,7 @@ This plugin (HTKS) aims to allow you to create HomeKit Bridges, which you add yo
 
 **First install**
 
-** Need Python 3 version of Indigo 2021.2.0+ **
+**Need Python 3 version of Indigo 2021.2.0+**
 
 Download latest and greatest indigoplugin file
 
@@ -28,12 +28,12 @@ Return to the terminal window and copy and paste the below
 This removes the apple quarantine bit for downloaded files and is needed for full function.  Very annoyingly unlike the pip3 command it is needed everytime you upgrade!
 Arghh.. Apple...
 
-####`sudo xattr -rd com.apple.quarantine /Library/Application\ Support/Perceptive\ Automation/Indigo\ 2022.1/Plugins`
+#### `sudo xattr -rd com.apple.quarantine /Library/Application\ Support/Perceptive\ Automation/Indigo\ 2022.1/Plugins`
  
 NB: As the version of indigo increases please update the 2022.1 to the most relevant.
 
 
-###Limitations
+### Limitations
 
 Only one indigo device, once, can be published to any HomeKit Bridge.  
 
@@ -74,34 +74,85 @@ This is the HomeKitLink Bridge Edit Page.
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png)
 
-
 The first menu is a Indigo Device Selection menu -
 all Indigo Devices lists ALL indigo devices.
 Everything else just list devices you may be more interested in - eg. Sensors Lights etc.
 This only makes it easier to find devices.   These are duplicated in the all list - just harder to find if you have hundreds of devices.
 
+The Show All option selection enables you to select any HomeKit device for the currently selected indigo device.  (as per the warnings)
+The Show QR Code button will show the QR code the current HomeKitLink Bridge device - it needs to be started first for this to function.
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png)
+
+It is important for device to be published to Homekit:
+To enable the Publish checkbox, and click SAVE once all details have been entered.
+Once this is done - the log will display info, and you can keep adding devices if happy are straightforward.
+
+If you are adding a strange device, or pushing the envelope you should add one at a time and ensure works.
+If the device fails in HomeKit, unpublish in HomeKitLink Bridge and click save.
+Important:
+If you are changing HomeKit device - Light to MotionSensor that will be an issue.
+Remove it first, Save, Save config and alllow bridge to restart.
+Check in HomeKit app device is gone and then readd as new device type.
+
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png)
 
+Below is an example of the device list menu - it shows devices published to this HomeKitLink Bridge, and devices published to other HomeKitLink Bridges
+To Edit the devices you need to edit the appropriate HomeKitLink Bridge.
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png)
 
 
+Below are the currently supported device types.  These are automatically guessed by HKLS, but can be selected by ShowAll option.
 
-###Lights - dimmer/brightness/Color
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png)
+
+
+##Menu Items:
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png)
+
+###Show Device Publications
+This shows in indigos log all current devices wished to be published to HomeKit.
+Such as (updated since this photo)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png)
+
+If HomeKitLink Bridge is disabled - will show as warning.  
+If HomeKitLink Bridge does not exist at all (deleted) it will show red
+
+### Unlink any Orphaned Devices
+This will remove linkage for all/any devices whose bridge no longer exists
+
+### Rerun ffmpeg Call for Logging
+This will run the last camera (uses ffmpeg) video stream command - use this to check for simple errors in displaying the camera stream
+
+### Debug Log Menu Options
+Will display seperate menu with a number of debugging options, which hopefully won't be needed for most users
+
+### Move Accessories to another Bridge
+This will copy HomeKit Accessories (all these devices we are publishing) from one HomeKitLink Bridge to another.
+Use this if deleted a bridge and need to move old devices across to new.
+
+
+## Devices
+
+### Lights - dimmer/brightness/Color
 Lightbulb:  Should be the choice for all light devices.
 Unless you wish a simple on/off device (even if brightness etc available) - in which case select Lightbulb_switch
 
-###Switch:  Within Homekit this can be changed to Switch, Fan
+### Switch:  Within Homekit this can be changed to Switch, Fan
 This is simply On/off device.
 Action Groups default to this option.
 Any onOff device within indigo should be supported.
 
-###Cameras:
+### Cameras:
 Blue Iris - options come from the Blue Iris plugin, if you haven't installed this and you wish to use Blue Iris - you should.  It enables Motion detection for each camera, live with HomeKit notifications, and Doorbell option exists for each camera.
 eg. press Doorbell and get Notification and live stream click access.
+
 Security Spy - camera streams, Doorbell can also be selected.  Motion detection is pending some plugin changes if possible
 
-###Motion Sensor:
-###Temperature Sensor:
-###Humidity Sensor:
-###Contact Sensor
+### Motion Sensor:
+### Temperature Sensor:
+### Humidity Sensor:
+### Contact Sensor
 Above rules apply, either defaults to Sensorvalue or can select another state to be used..
 
