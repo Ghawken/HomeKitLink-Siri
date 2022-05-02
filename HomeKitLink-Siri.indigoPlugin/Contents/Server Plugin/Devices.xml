@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Devices>
 	<Device type="custom" id="homeKitBridgeDevice">
-		<Name>HomeKit Spawn Bridge</Name>
+		<Name>HomeKitLink-Siri Bridge</Name>
 		<ConfigUI>
 			<Field id="deviceIdlabel" type="label" fontColor="indigo" fontSize="large" >
 				<Label>Select the device you wish to publish (or edit) to HomeKit.</Label>
@@ -148,7 +148,7 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 			</Field>
 
 			<Field id="sep211a" type="separator"/>
-			<Field id="qrcodeshow" type="button" fontSize="large" enabledBindingId="HomeKit_publishDevice_2"  fontColor="red" >
+			<Field id="qrcodeshow" type="button" fontSize="large" fontColor="red" >
 				<Label>
 					Show QR Code
 					Bridge Accessory</Label>

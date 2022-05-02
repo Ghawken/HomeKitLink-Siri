@@ -1348,7 +1348,7 @@ class Plugin(indigo.PluginBase):
                     if self.debug2:
                         self.logger.debug("Found Thermostat Matching Device...")
                     if this_is_debug_device:
-                        self.logger.ifno("Found Thermostat Matching Device...")
+                        self.logger.info("Found Thermostat Matching Device...")
                     if hasattr(updated_device, "temperatures"):  ## double check here in
                         if original_device.temperatures != updated_device.temperatures:
                             listtemps = updated_device.temperatures
@@ -1756,15 +1756,21 @@ class Plugin(indigo.PluginBase):
                                     if self.debug5:
                                         self.logger.debug("Setter.  Lockstate. List : Device already Locked.  But regardless given lock - I will resend. ")
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
+                                    accessoryself.char_target_state.set_value(1)
+                                    #accessoryself.char_current_state.set_value(1)
                                 else:  # TargetLockState exisits here
                                     if self.debug5:
                                         self.logger.debug("Device On and wishes to be Unlocked turning Off.")
                                     indigo.device.turnOff(accessoryself.indigodeviceid)
+                                    accessoryself.char_target_state.set_value(1)
+                                    #accessoryself.char_current_state.set_value(1)
                         elif isinstance(valuetoSet, int):
                             if valuetoSet == 1:
                                 if self.debug5:
-                                    self.logger.debug("Settter.  Lockstate: Int Device already Locked.  Ignoring that command.")
+                                    self.logger.debug("Settter.  Lockstate: Int Device already Locked. But Given Lock will send command.")
                                 indigo.device.turnOn(accessoryself.indigodeviceid)
+                                accessoryself.char_target_state.set_value(1)
+                                #accessoryself.char_current_state.set_value(1)
                             else:  # ==0 presumably exisits here
                                 if self.debug5:
                                     self.logger.debug("Device On and wishes to be Unlocked turning Off.")
@@ -1780,17 +1786,19 @@ class Plugin(indigo.PluginBase):
                             else:
                                 if self.debug5:
                                     self.logger.debug("Device Unlocked and wishes to be Unlocked. Ignore")
-
+                                accessoryself.char_target_state.set_value(0)
                         elif isinstance(valuetoSet, int):
                             ## 1 or 0 just set
                             if valuetoSet == 1:
                                 if self.debug5:
                                     self.logger.debug("Setter. Lockstaate. Int. Device Unlocked, command to Lock")
                                 indigo.device.turnOn(accessoryself.indigodeviceid)
+                                accessoryself.char_target_state.set_value(1)
+                                #accessoryself.char_current_state.set_value(1)
                         else:
                             if self.debug5:
                                 self.logger.debug("Device Unlocked and wishes to be Unlocked. Ignore")
-
+                            accessoryself.char_target_state.set_value(0)
                 else:
                     if self.debug5:
                         self.logger.debug("No onOffState within Lock.. Not sure what to set.  Ending.")
@@ -2814,6 +2822,17 @@ class Plugin(indigo.PluginBase):
         listofallBridges = []
         myArray = []
         for device in indigo.devices:
+            # ; original below ; may keep both as may be useful for HomeKit Bridge copies
+            # uniqueID = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)
+            # modified below
+            spawnProps = device.globalProps.get("com.GlennNZ.indigoplugin.HomeKitSpawn")
+            if spawnProps !=None:
+                uniqueID = spawnProps.get("HomeKit_bridgeUniqueID", 99)
+            if uniqueID != 99 and uniqueID != "":
+                if int(uniqueID) not in listofallBridges:
+                    listofallBridges.append(int(uniqueID))
+
+        for device in indigo.devices:
             uniqueID = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)
             if uniqueID != 99 and uniqueID != "":
                 if int(uniqueID) not in listofallBridges:
@@ -2829,12 +2848,43 @@ class Plugin(indigo.PluginBase):
         try:
             toBridgedevice = int(valuesDict["toBridge"])  ## deviceID not BridgeUniqueID
             fromBridge = int(valuesDict["fromBridge"])  ## this is UniqueID as generated above
+
             toBridge = int(indigo.devices[toBridgedevice].pluginProps.get("bridgeUniqueID", 99))
             if toBridge == 99 or fromBridge == 99:
                 self.logger.info("Error with the from Bridge or the to Bridge selection")
                 return
 
             something_done = False
+
+            # TODO delete below when setup new devices
+            for device in indigo.devices:
+                spawnProps = device.globalProps.get("com.GlennNZ.indigoplugin.HomeKitSpawn")
+                if spawnProps == None:  ## no old props
+                    continue
+                if spawnProps.get("HomeKit_publishDevice", False):
+                    try:
+                        if spawnProps.get("HomeKit_bridgeUniqueID", 99) == fromBridge:
+                            device_props = dict(device.pluginProps)
+                            device_props["HomeKit_bridgeUniqueID"] = toBridge
+                            device_props["HomeKit_deviceSensor"] = spawnProps.get("HomeKit_deviceSensor")
+                            device_props["HomeKit_deviceSubtype"] = spawnProps.get("HomeKit_deviceSubtype")
+                            device_props["HomeKit_publishDevice"] = True
+                            device_props["homekit-name"] = spawnProps.get("homekit-name")
+
+                            # HomeKit_bridgeUniqueID : 3283 (integer)
+                            # HomeKit_deviceSensor : onOffState (string)
+                            # HomeKit_deviceSubtype : OccupancySensor (string)
+                            # HomeKit_deviceSubtype : false (bool)
+                            # homekit-name : Occupatum Test (string)
+                            self.logger.warning("Found Device {} attached to Bridge ID {}, moving to new Bridge ID {}".format(device.name, fromBridge, toBridge))
+                            device.replacePluginPropsOnServer(indigo.Dict(device_props))
+                            self.logger.debug("new PluginProps {}".format(device_props))
+                            something_done = True
+                    except:
+                        self.logger.exception("Error in device update")
+                        self.logger.debug("Error in device Move", exc_info=True)
+
+            ## below keep
             for device in indigo.devices:
                 if device.pluginProps.get("HomeKit_publishDevice", False):
                     try:

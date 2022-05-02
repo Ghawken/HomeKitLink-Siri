@@ -3,7 +3,7 @@
     <Field id="infoLabel0" type="label" fontSize='large' fontColor="black">
         <Field id="sep7c" type="separator"/>
 
-        <Label>HomeKit Spawn Plugin</Label>
+        <Label>HomeKitLink-Siri Plugin</Label>
     </Field>
     <Field id="space0" type="label" fontColor="black">
         <Label>Developed by: GlennNZ</Label>
