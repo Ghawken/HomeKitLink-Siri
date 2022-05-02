@@ -1,0 +1,100 @@
+<?xml version="1.0"?>
+<MenuItems>
+
+    <MenuItem id="sep1"/>
+    <MenuItem id="showPublications">
+        <Name>Show Device Publications</Name>
+        <CallbackMethod>show_device_publications</CallbackMethod>
+    </MenuItem>
+    <MenuItem id="sepa1"/>
+    <MenuItem id="toggleDebug">
+        <Name>Toggle Debugging</Name>
+        <CallbackMethod>toggleDebugEnabled</CallbackMethod>
+    </MenuItem>
+    <MenuItem id="restartBridge">
+        <Name>Restart HomeKit</Name>
+        <CallbackMethod>restartBridge</CallbackMethod>
+    </MenuItem>
+
+
+    <MenuItem id="sep2"/>
+    <MenuItem id="sep3"/>
+    <MenuItem id="deleteIsolatedDevices">
+        <Name>Unlink any Orphaned Devices</Name>
+        <CallbackMethod>delete_isolated_devices</CallbackMethod>
+    </MenuItem>
+    <MenuItem id="deleteStateFiles">
+        <Name>Delete residual States Files</Name>
+        <CallbackMethod>delete_busy_home</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="ffmpegcmd-show">
+        <Name>Rerun Ffmpeg Call for logging</Name>
+        <CallbackMethod>Menu_runffmpeg</CallbackMethod>
+    </MenuItem>
+
+    <MenuItem id="debugMenu">
+        <Name>Debug Log Menu Options</Name>
+        <ConfigUI>
+            <Field id="internallist" type="button">
+                <Label>Press to Log:</Label>
+                <Title>Debug Log Internal List</Title>
+                <CallbackMethod>show_internallist</CallbackMethod>
+            </Field>
+            <Field id="bridgesshow" type="button">
+                <Label>Press to Log:</Label>
+                <Title>Debug all Bridges</Title>
+                <CallbackMethod>show_bridges</CallbackMethod>
+            </Field>
+            <Field id="driversshow" type="button">
+                <Label>Press to Log:</Label>
+                <Title>Debug Log Drivers</Title>
+                <CallbackMethod>show_drivers</CallbackMethod>
+            </Field>
+            <Field id="thresshow" type="button">
+                <Label>Press to Log:</Label>
+                <Title>Debug Log Threads</Title>
+                <CallbackMethod>show_threads</CallbackMethod>
+            </Field>
+            <Field id="deviceList" type="button">
+                <Label>Press to Log:</Label>
+                <Title>Debug Log Device List</Title>
+                <CallbackMethod>show_selfdevicelist</CallbackMethod>
+            </Field>
+            <Field id="dumpAccessory" type="button">
+                <Label>Log all Accessories</Label>
+                <Title>Debug all Accessories</Title>
+                <CallbackMethod>Menu_dump_accessories</CallbackMethod>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
+
+    <MenuItem id="moveBridgeitems">
+        <Name>Move Accessories to another Bridge</Name>
+        <ConfigUI>
+            <Field id="fromBridge" type="menu">
+                <Label>From Bridge:</Label>
+                <List class="self" method="bridgeListGenerator"/>
+            </Field>
+            <Field id="toBridge" type="menu">
+                <Label>To Bridge:</Label>
+                <List class="indigo.devices" filter="self"/>
+            </Field>
+            <Field id="internallist" type="button">
+                <Label>Do:</Label>
+                <Title>Move Accessories</Title>
+                <CallbackMethod>menu_actionMoveAccessories</CallbackMethod>
+            </Field>
+			<Field id="moveLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+				<Label>This will, all going well, will move accessories from one bridge to another.  It enables recovery of accessories (without needing to remove etc) if bridge deleted.
+It would be important to unpair the old bridge in homekit app.
+				</Label>
+			</Field>
+            <Field id="moveWarningLabel" type="label" fontColor="orange" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+				<Label>NB: This is not without some risk to both bridges.  Use with caution.</Label>
+			</Field>
+
+        </ConfigUI>
+    </MenuItem>
+
+</MenuItems>

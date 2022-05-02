@@ -1,0 +1,108 @@
+0.0.4
+
+Add Device HomeKit Bridges to enable unlimited devices.
+Multiple refactoring around this approach
+Beginning of device selection - cutting down visible options to options that make sense.
+
+0.0.6
+Manage the startup, shutdown of multiple threads/eventsloops, bridges, attached drivers etc..
+Took some subconscious help - but believe is working well.
+Bridges and all attached Accessory, Accessory Driver Loops and Thread to manage - start, end, stop when device communication enabled/disabled...
+
+0.1.8 (oops)
+Add SmokeSensor
+Add LeakSensor
+Add CarbonMonoxide Sensor
+Add Luminancy/Light Sensor (add checks for >100000 lumens reported. TODO Ideally should have a device by device conversion...)
+
+0.2.2
+Slight refactor to deviceid list to maximise speed in deviceupdate pathway (no perceived issues - but can't be quicker than list of integers)
+Add Debug single device in plugin Config - enables selection of one device to track down update/homekit interface issues
+
+0.2.13
+
+Add Audio enabled/disable selector for cameras (some streams will fail if audio enabled)
+Show current value for device states within DeviceState selector - if using showALL
+Bug fix for empty string integer conversion for previous deleted device being parsed
+Further Z-wave/Hue Light Testing: Changes to RGB/Temperature lights - currently if RGB running as color light color selector works, if running as White light color selector works, but doesn't change light color.
+(belief this is best compromise currently - as really 2 device RGB and one White light)  Could change so that is temperature selected RGB off, White is on - however temperature won't be reflected
+in the white color as this is simply the white of the bulb selected.
+Further Thermostat testing addition - looking okay
+Fix for C and F temperatures - HomeKit lives in Celsius.  Convert non-C thermostat temperatures.  Add Temperature unit selection option  (can change iphone to F easily in Settings Region, Temperature display units for testing)
+Hours chasing the Target/Current issue where HomeKit crashes with no error/Bridge unresponding if 3 (Auto) set to CurrentValue...
+[TODO Consider que and thread for setter....  currently testing with 10 clients connected and good speed.  Obviously if multiple actions selected at once may be issue, but may hit indigo issues soon thereafter anyway.
+Que would allow deletion of pending events for same device.. on/off/on/on/on/off etc. - deleted all but last if onOffState call.. for example.]
+TODO add Window Coverings.
+Github Issue #12 Max Lengths:  Santise all names to avoid unrecognised HomeKit crash
+Check for ports in use and then use another one; not extensively tested and hard to believe will be big issue.  PluginConfig allows set base port number
+
+0.2.14
+Change camera thread handling - start when cameras active/check with bridge start/bridge loading
+Change the messaging regarding device adding/deleting
+Add super.init() to deviceDeleted - pending answer to query
+Move super.init() to beginning of deviceUpdated rather than end.
+Reformatting code (beginning of tidy up)
+
+0.2.15
+Typo fix for Lightbulb - LightBulb
+Device Selection screen editing/changes
+Continue Device selection fine tuning - default to best guess device, add information
+Bug fix for SS camera image width
+Tidy up for Debug menu items - move to config window
+Fix for restartBridge - left over from Device Bridge change over
+Delete unused code.
+Support DeviceDeleted updated, no need for DeviceAdded.
+unQuarantine button - fails currently, but never say never
+
+0.2.16
+Add MenutItem to Move Accessories from one Bridge to another.  Has some small risk.
+But enables recovery of devices if delete bridge or wish to delete bridge and not completely start over.
+Redo Logging all Devices - shows missing and disabled bridge devices
+Consider copy HomeKit Bridge devices to new bridge - is a ownerProp in HomeKit bridge plugin
+Fix for Lightbulb mis-spelling brightness issue I believe
+Fix for Lightbulb RGB Temperature lights all now being LightBulbs
+Fix for Saturation not being given if 100 occasionally
+
+0.2.17
+Fix for camera thread exception - keep on trucking regardless
+Move to subtypes expressing exactly the Accessory Subtype eg. Lightbulb subtype adjusted depending on whether Hue/ColorTemp/Light_switch
+Simply Setter and DeviceUpdated
+
+TODO
+GarageDoor - not implemented; basic switch only currently, should be same as lock and quick :)
+Security System
+*Window Coverings/Blinds/and there is a Slat device -  also not implemented
+
+Documentation - yucky.
+Camera Device - manual entry options.. maybe... - again yucky working well for BI and likely SS
+SS as final bit of SS support - need motion in SS devices - hopefully Perry is able to do
+
+UV sensor?
+Water level sensor - can hack one together with a humidifer device... haven't tried annoying
+then:
+Custom - thermostat for me (1 main device, multiple zones for temp only)
+
+
+Done:
+Luminance Sensor
+CarbonMonoxide Sensor
+Smoke Sensor
+Leak Sensor
+Fan
+Fanv2 - minus swing and rotation direction.
+Humidity - seems good
+Temperature - seems good, bug fixes for strings in some plugin devices.  No conversion of C to F just presents what you have?  Could do - but can't see point.
+Switches - good, also can be changed in app to other representations
+ContactSensor - Window/Door open etc good
+MotionSensor - good
+Lights - RGB control - seems okay (more z wave RGB testing needed), Brightness etc good.  White balance - not supported, although temperature and HueLights hue work fine
+Locks - seems good
+Action Groups - all via switch or can change icon in HomeKit
+Thermostats: Partially supported only; largely because can't test.
+For my use case I will likely need to customise the device.  eg. I have one system set to auto/cool/heat with temp max, and then multiple zones
+which can be off/setpoint temperature.  Cannot change auto/heat/cool for individual zones, although they do report temperature and otherwise work as a thermostat.
+Ideally would reflect the main device's state or off.  Off turns off the zone, anything else - zone == main device state.  Sorry thinking outlook - that would work ideally.
+Pretty custom though.   Could get away with using DoorbellId for main device state, and rest individual thermostate device.  Hmm.. this will slow me down...
+
+Occupancy Sensor done - checked with Occupatum Plugin and any True/False onoffState device.  Works.
+

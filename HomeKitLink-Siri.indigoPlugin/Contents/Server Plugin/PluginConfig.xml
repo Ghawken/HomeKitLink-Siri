@@ -1,0 +1,101 @@
+<?xml version="1.0"?>
+<PluginConfig>
+    <Field id="infoLabel0" type="label" fontSize='large' fontColor="black">
+        <Field id="sep7c" type="separator"/>
+
+        <Label>HomeKit Spawn Plugin</Label>
+    </Field>
+    <Field id="space0" type="label" fontColor="black">
+        <Label>Developed by: GlennNZ</Label>
+    </Field>
+
+
+    <Field id="sep7" type="separator"/>
+    <Field id="space10" type="label" alignText="right">
+        <Label>Debugging Options:</Label>
+    </Field>
+    <Field id="sep4" type="separator"/>
+    <Field id="space11" type="label" fontSize="small">
+        <Label>Turn on debugging only when needed. Be careful when posting the output to the forums or other public places as it could expose sensitive information.</Label>
+    </Field>
+    <Field id="debug1" type="checkbox" tooltip="Enabling will result in verbose logging of IP150 connection.">
+        <Label/>
+        <Description>1. Debug Plugin HomeKit Callbacks</Description>
+    </Field>
+
+    <Field id="debug2" type="checkbox" tooltip="Enabling will result in .">
+        <Label/>
+        <Description>2. Debug Device Updating Reporting</Description>
+    </Field>
+
+    <Field id="debug3" type="checkbox" tooltip="Enabling will result .">
+        <Label/>
+        <Description>3. Debug HomeKit Library Verbose</Description>
+    </Field>
+
+    <Field id="debug4" type="checkbox" tooltip="Enabling will result .">
+        <Label/>
+        <Description>4. Debug Plugin Getter Callback</Description>
+    </Field>
+
+    <Field id="debug5" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>5. Debug Plugin Setter Callback</Description>
+    </Field>
+
+    <Field id="debug6" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>6. Debug Home Kit Devices</Description>
+    </Field>
+
+    <Field id="debug7" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>7. Debug Home Kit Camera</Description>
+    </Field>
+
+    <Field id="debug8" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>8. Debug Indigo Device Selection</Description>
+    </Field>
+
+    <Field id="debugDeviceid" type="menu" defaultValue="-3" fontColor="orange">
+        <Label>Debug Device:</Label>
+        <List class="self" method="debug_device_generator" dynamicReload="true"/>
+    </Field>
+
+    <Field id="showDebugLevel" type="menu" defaultValue="20" tooltip="Controls the amount of debug information written to the log.">
+        <Label>Debug level:</Label>
+        <Description>Level of Debug information to show in Indigo</Description>
+        <List>
+            <Option value="5">Detailed Debugging Messages</Option>
+            <Option value="10">Debugging Messages</Option>
+            <Option value="20">Informational Messages</Option>
+            <Option value="30">Warning Messages</Option>
+            <Option value="40">Error Messages</Option>
+            <Option value="50">Critical Errors Only</Option>
+        </List>
+    </Field>
+    <Field id="sepaer4" type="separator"/>
+    <Field id="advanced" type="checkbox" tooltip="Enabling will show advanced options." alwaysUseInDialogHeightCalc="true">
+        <Label>Use with care, only updated on plugin Start/Restart.</Label>
+        <Description>Show Advanced Options</Description>
+
+    </Field>
+    <Field id="basePortnumber"
+           type="textfield"
+           tooltip="Enter Port to start" defaultValue="51826" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Enter Driver Start Port Number:</Label>
+    </Field>
+    <Field id="sepaer4another" type="separator"/>
+    <Field id="password"
+           type="textfield"
+           tooltip="Enter system Password" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Enter System Password:</Label>
+    </Field>
+    <Field id="runSystem" type="button" fontSize="large" visibleBindingId="advanced" visibleBindingValue="true">
+        <Label/>
+        <Title>unQuarantine files</Title>
+        <CallbackMethod>runSystem</CallbackMethod>
+    </Field>
+
+</PluginConfig>

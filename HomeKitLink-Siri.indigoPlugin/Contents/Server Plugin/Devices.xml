@@ -1,0 +1,191 @@
+<?xml version="1.0"?>
+<Devices>
+	<Device type="custom" id="homeKitBridgeDevice">
+		<Name>HomeKit Spawn Bridge</Name>
+		<ConfigUI>
+			<Field id="deviceIdlabel" type="label" fontColor="indigo" fontSize="large" >
+				<Label>Select the device you wish to publish (or edit) to HomeKit.</Label>
+			</Field>
+			<Field id="selectdevice_or_AG" type="menu" defaultValue="device" >
+				<Label>Select Type to List:</Label>
+        	 <List>
+                	<Option value="device">all Indigo Devices</Option>
+                    <Option value="action_group">Indigo Action Groups</Option>
+				 	<Option value="lights">Indigo Lights</Option>
+				    <Option value="switch">Indigo Relay Devices</Option>
+				    <Option value="sensor">Indigo Sensor Devices</Option>
+				    <Option value="BI_camera">Blue Iris Camera</Option>
+				 	<Option value="SS_camera">Securitry Spy Camera</Option>
+                </List>
+				  <CallbackMethod>menuChanged</CallbackMethod>
+			</Field>
+			<Field id="deviceId" type="menu" defaultValue="">
+				<Label>Publish:</Label>
+				<List class="self" method="device_list_generator" dynamicReload="true"/>
+				<CallbackMethod>select_device</CallbackMethod>
+			</Field>
+			<Field type="checkbox" id="isDeviceSelected" defaultValue="false" hidden="true">
+				<Label/>
+				<Description/>
+			</Field>
+
+			<Field type="textfield" id="bridgeUniqueID" hidden="true">
+				<Label/>
+				<Description/>
+			</Field>
+
+			<Field id="sep1" type="separator"/>
+
+			<Field type="checkbox" id="HomeKit_publishDevice_2" defaultValue="false" enabledBindingId="isDeviceSelected">
+				<Label>Publish device:</Label>
+				<Description>Make this device available to HomeKit           </Description>
+				<CallbackMethod>toggle_publish</CallbackMethod>
+			</Field>
+			<Field id="publishDeviceLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="showSubtypes" visibleBindingValue="true">
+				<Label>Please enable this checkBox for Device to be accessible within HomeKit.</Label>
+			</Field>
+			<Field type="checkbox" id="showSubtypes" defaultValue="true" hidden="true">
+				<Label/>
+				<Description/>
+			</Field>
+
+			<Field id="altName" type="textfield" enabledBindingId="HomeKit_publishDevice_2" defaultValue="false">
+				<Label>HomeKit Device name:</Label>
+			</Field>
+			<Field id="altNameLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>This is the HomeKit Name of the Device.</Label>
+			</Field>
+
+			<Field id="deviceSubtype" type="menu" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="showSubtypes" visibleBindingValue="true">
+				<Label>HomeKit Device Type:</Label>
+				<List class="self" method="subtype_generator" dynamicReload="true"/>
+				<CallbackMethod>subtype_callback</CallbackMethod>
+			</Field>
+
+
+			<Field id="deviceSubtypeLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="showSubtypes" visibleBindingValue="true">
+				<Label>Select an available HomeKit Device Type.. this list will hopefully grow with plugin Updates.</Label>
+			</Field>
+			<Field id="deviceSubtype_LightInfo" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="LightBulb">
+				<Label>LightBulb - This really refers to 3 devices within HomeKit.
+1. Simple switch on/off which is a bulb, this can be changed in app to any other switch icon.
+2. Dimmerable Bulb with brightness control
+3. Dimmerable Bulb with RGB color support.
+The plugin will decide which is possible aiming for 3, then 2, then 1.  If one = a simple switch is wished regardless, select LightBulb_switch.
+				</Label>
+			</Field>
+
+			<Field id="tempSelector" type="checkbox" tooltip="Enabling will select Fahrenheit ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat">
+				<Label/>
+				<Description>Enable to Select Fahrenheit</Description>
+			</Field>
+
+			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will select Audio ." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" >
+				<Label/>
+				<Description>Support Audio</Description>
+			</Field>
+			<Field id="savelabelAudio" type="label" fontColor="orange" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" alwaysUseInDialogHeightCalc="true">
+				<Label>Audio: This may break the playback of Stream.</Label>
+			</Field>
+
+			<Field id="doorbellId" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+				<Label>DoorBell Linked:</Label>
+				<List class="self" method="doorbell_list_generator" dynamicReload="true" />
+			</Field>
+			<Field id="doorBellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true"  visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+				<Label>Device to make a DoorBell with this camera.</Label>
+			</Field>
+			<Field id="deviceSensor" type="menu" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="showALL" visibleBindingValue="true">
+				<Label>Device State:</Label>
+				<List class="self" method="devicestate_generator" dynamicReload="true"/>
+			</Field>
+			<Field id="deviceSensorLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="showALL" visibleBindingValue="true">
+				<Label>This shows the state and == its current value to help guide the correct state to choose.
+
+If you are selecting a Sensor select the device State to send to homeKit.  If Temperature Sensor - device needs to be number without text C/F etc.
+If incorrect, hopefully won't break bridge and update with this selector.  If using an Relay device, this can be BLANK without harm.
+				</Label>
+			</Field>
+			<Field id="saveLabelSpacing" type="label" fontColor="black" fontSize="large" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+				<Label>
+
+
+				</Label>
+			</Field>
+
+			<Field id="save" type="button"  alignWithControl="true" fontSize="large"  enabledBindingId="isDeviceSelected">
+				<Label>Click Here to Save: </Label>
+				<Title>**        Save Device      **</Title>
+				<CallbackMethod>save</CallbackMethod>
+			</Field>
+
+			<Field id="saveLabel" type="label" fontColor="black" fontSize="large" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+				<Label>Click to save the publication information.</Label>
+			</Field>
+			<Field id="saveWarningLabel" type="label" fontColor="orange" fontSize="small" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+				<Label>NB: Changes are not saved if you switch devices
+or close this dialog without saving first !
+Plus the Publish checkbox must be enabled if you wish device in HomeKit</Label>
+			</Field>
+			<Field id="saveDisabledLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="false">
+				<Label>You must first select a device.
+				</Label>
+			</Field>
+
+	<Field id="sep21a1" type="separator"/>
+
+			<Field id="showALL" type="checkbox" tooltip="Enabling will ." enabledBindingId="HomeKit_publishDevice_2" dynamicReload="true">
+        <Label></Label>
+        <Description>Show all Options</Description>
+				<CallbackMethod>all_options_menuChanged</CallbackMethod>
+    	</Field>
+			<Field id="showALLWarningLabel" type="label" fontColor="orange" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="showALL" visibleBindingValue="true">
+				<Label>
+This will show all possible HomeKit device options for the selected Indigo Device.
+This comes with some risk of making the HomeKit Bridge unreachable, if uncertain add one device at a time.
+If device fails and changing device types, unpublish the device, Save Device, Save Dialog which will restart Bridge.
+				</Label>
+			</Field>
+
+			<Field id="sep211a" type="separator"/>
+			<Field id="qrcodeshow" type="button" fontSize="large" enabledBindingId="HomeKit_publishDevice_2"  fontColor="red" >
+				<Label>
+					Show QR Code
+					Bridge Accessory</Label>
+				<Title> Show QR Code </Title>
+				<CallbackMethod>showQRcode</CallbackMethod>
+			</Field>
+		<Field id="sep211ab" type="separator"/>
+		</ConfigUI>
+
+			<UiDisplayStateId>Status</UiDisplayStateId>
+		<States>
+			<State id="Status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Bridge Status String</TriggerLabel>
+				<ControlPageLabel>Bridge Status String</ControlPageLabel>
+			</State>
+
+	<State id="uniqueID">
+        <ValueType>String</ValueType>
+        <TriggerLabel>Unique Bridge ID</TriggerLabel>
+        <ControlPageLabel>Unique Bridge ID</ControlPageLabel>
+      </State>
+
+	<State id="pincode">
+        <ValueType>String</ValueType>
+        <TriggerLabel>Pincode to add this Bridge</TriggerLabel>
+        <ControlPageLabel>Pincode to add this Bridge</ControlPageLabel>
+      </State>
+
+	<State id="QRCode">
+        <ValueType>String</ValueType>
+        <TriggerLabel>QRCode Html</TriggerLabel>
+        <ControlPageLabel>QRCode Html</ControlPageLabel>
+      </State>
+
+</States>
+	</Device>
+
+
+</Devices>

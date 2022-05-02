@@ -1,0 +1,28 @@
+# Project exclude paths
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home2.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home3685.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_99.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_1114.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_1191.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_1924.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_2253.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_2518.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_2672.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_3283.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_3685.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_4071.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_4619.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_5097.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_5741.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_6316.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_8506.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_8526.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_8728.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_9031.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/busy_home_9310.state
+/HomeKitLink-Siri.indigoPlugin/Contents/Resources/MissingDocumentation.txt
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/cutpastepython.py
+/venv/
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/QRCode.html
+/.idea
