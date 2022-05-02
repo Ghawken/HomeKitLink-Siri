@@ -86,7 +86,7 @@ class Plugin(indigo.PluginBase):
         try:
             import cryptography
         except ImportError:
-            raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting Homekit Spawn Plugin  ", " Missing required Library; Cryptography missing ", " Run 'pip3 install cryptograph' in a Terminal window ", " and then restart plugin. ", "="))
+            raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting HomeKitLink-Siri Plugin  ", " Missing required Library; Cryptography missing ", " Run 'pip3 install cryptograph' in a Terminal window ", " and then restart plugin. ", "="))
 
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(u"logLevel = " + str(self.logLevel))
@@ -163,7 +163,7 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
         self.logger.info("")
-        self.pluginprefDirectory = '{}/Preferences/Plugins/com.GlennNZ.indigoplugin.HomeKitSpawn'.format(indigo.server.getInstallFolderPath())
+        self.pluginprefDirectory = '{}/Preferences/Plugins/com.GlennNZ.indigoplugin.HomeKitLink-Siri'.format(indigo.server.getInstallFolderPath())
 
         # Change to logging
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s',
@@ -305,7 +305,7 @@ class Plugin(indigo.PluginBase):
         #     checkid = newid
 
         else:
-            self.logger.debug("Starting {} HomeKit Spawn Bridge with Unique Bridge ID {}".format(device.name, checkid))
+            self.logger.debug("Starting {} HomeKitLink Bridge with Unique Bridge ID {}".format(device.name, checkid))
 
         if int(checkid) not in self.deviceBridgeNumber:
             self.deviceBridgeNumber.append(int(checkid))
@@ -340,7 +340,7 @@ class Plugin(indigo.PluginBase):
             checkid = device.pluginProps.get("bridgeUniqueID", "")
 
             if checkid != "":
-                self.logger.debug("Stopping {} HomeKit Spawn Bridge with Unique Bridge ID {}".format(device.name, checkid))
+                self.logger.debug("Stopping {} HomeKitLink Bridge with Unique Bridge ID {}".format(device.name, checkid))
                 if checkid in self.deviceBridgeNumber:
                     self.logger.debug("Checkid {} and total deviceBridgeNumber {}".format(checkid, self.deviceBridgeNumber))
                     self.deviceBridgeNumber.remove(int(checkid))
@@ -733,7 +733,7 @@ class Plugin(indigo.PluginBase):
                     bridge.add_accessory(accessory)
 
                     # self.runningAccessoryCount = self.runningAccessoryCount +1
-                    bridge.set_info_service(firmware_revision=self.pluginVersion, manufacturer="Indigo " + self.pluginIndigoVersion, model="HomeKitSpawn Bridge " + str(bridgenumber), serial_number=str(bridgenumber) + "1244")
+                    bridge.set_info_service(firmware_revision=self.pluginVersion, manufacturer="Indigo " + self.pluginIndigoVersion, model="HomeKitLink Bridge " + str(bridgenumber), serial_number=str(bridgenumber) + "1244")
             self.device_list_internal = self.device_list_internal + extend_device_list
 
             # self.logger.debug("Self.Device_list_internal:\n\n{}\n".format(self.device_list_internal))
@@ -922,7 +922,7 @@ class Plugin(indigo.PluginBase):
             self.driver_multiple.append(AccessoryDriver(indigodeviceid=str(uniqueID), port=int(nextport), persist_file=persist_file_location))
             self.portsinUse.add(nextport)
             self.logger.debug("Sets of Ports Currently in Use: {}".format(self.portsinUse))
-            self.bridge_multiple.append(Bridge(self.driver_multiple[-1], self, uniqueID, 'HomeKitSpawn Bridge ' + str(uniqueID)))
+            self.bridge_multiple.append(Bridge(self.driver_multiple[-1], self, uniqueID, 'HomeKitLink Bridge ' + str(uniqueID)))
             self.driver_multiple[-1].add_accessory(accessory=self.get_bridge_multiple(self.driver_multiple[-1], self.bridge_multiple[-1], uniqueID))
             self.driverthread_multiple.append(threading.Thread(name=str(uniqueID), target=self.driver_multiple[-1].start, daemon=True))
             self.driverthread_multiple[-1].start()
@@ -1256,7 +1256,7 @@ class Plugin(indigo.PluginBase):
         self.create_deviceList_internal()
 
     def shutdown(self):
-        self.logger.info("Shutting down HomeKit Spawn")
+        self.logger.info("Shutting down HomeKitLink")
 
     ### Subscription Changes
     ########################################
@@ -2173,7 +2173,7 @@ class Plugin(indigo.PluginBase):
             if device.states["QRCode"] != None:
                 QRhttp = open("QRCode.html", "w")
                 Qrcodedata = device.states["QRCode"]  ## I know - could be plugin prefs but here it is
-                Qrcodedata = Qrcodedata.replace("<div><h1>HomeKit Spawn</h1>", "<div><h1>HomeKit Spawn</h1>\n<h1>Device: " + str(device.name) + "</h1>\n")
+                Qrcodedata = Qrcodedata.replace("<div><h1>HomeKitLink Siri</h1>", "<div><h1>HomeKitLink Siri</h1>\n<h1>Device: " + str(device.name) + "</h1>\n")
 
                 # update QRcode html page on the fly here - otherwise when name is changed won't update.
                 QRhttp.write(Qrcodedata)
@@ -2264,10 +2264,10 @@ class Plugin(indigo.PluginBase):
         # self.logger.info("{}".format(values_dict))
         self.logger.info("Attempting to unquarantine Plugin files...")
         self.logger.info("Command to run (copy into terminal) if fails\n{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
-        locationofshfile = indigo.server.getInstallFolderPath() + "/" + "Plugins/HomeKitSpawn.indigoPlugin/Contents/Server Plugin/quarantine.sh"
+        locationofshfile = indigo.server.getInstallFolderPath() + "/" + "Plugins/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/quarantine.sh"
 
     #        # locationofshfile = locationofshfile.replace(' ', '\ ')
-    #         applescript1 = ('set ffmpeg to "\\\"/Library/Application Support/Perceptive Automation/Indigo 2022.1/Plugins/HomeKitSpawn.indigoPlugin/Contents/Server Plugin/ffmpeg/ffmpeg\\\""')
+    #         applescript1 = ('set ffmpeg to "\\\"/Library/Application Support/Perceptive Automation/Indigo 2022.1/Plugins/HomeKitL.indigoPlugin/Contents/Server Plugin/ffmpeg/ffmpeg\\\""')
     #         applescript2 = ('set myscript to "sudo /usr/bin/xattr -rd com.apple.quarantine " & ffmpeg')
     #         applescript3 = ('set myAppleScriptAsShellScript2 to "osascript -e \'do shell script \"" & myscript & "\"\'" with administrator privileges')
     #         applescript4 = ('do shell script "echo The value: " & myAppleScriptAsShellScript2')
@@ -3067,12 +3067,12 @@ class Plugin(indigo.PluginBase):
                 if len(checknumber2) >= 4:
                     ## make sure can manage old 4 digits to 9 digit numbers even thought it is only affecting me!
                     if str(checknumber2) not in listofstateids:
-                        self.logger.warning("No HomeKit Spawn Bridge with an ID {}.  Must be orphaned.  Deleting this file.".format(checknumber2))
+                        self.logger.warning("No HomeKitLink-Siri Bridge with an ID {}.  Must be orphaned.  Deleting this file.".format(checknumber2))
                         if os.path.isfile(os.path.join(self.pluginprefDirectory, file)):
                             os.remove(os.path.join(self.pluginprefDirectory, file))
                             self.logger.warning("Deleted file {}".format(file))
                     else:
-                        self.logger.debug("HomeKit Spawn Bridge with unique ID {} exists.  Moving On.".format(checknumber2))
+                        self.logger.debug("HomeKitLink-Siri Bridge with unique ID {} exists.  Moving On.".format(checknumber2))
 
     def restartBridge(self, *args, **kwargs):
         self.logger.info("Restart all Bridges Called")
@@ -3114,7 +3114,7 @@ class Plugin(indigo.PluginBase):
     ##
     def restartPlugin(self):
         # indigo.server.log(u"restart Plugin Called.")
-        plugin = indigo.server.getPlugin('com.GlennNZ.indigoplugin.HomeKitSpawn')
+        plugin = indigo.server.getPlugin('com.GlennNZ.indigoplugin.HomeKitLink-Siri')
         plugin.restart()
 
     #######################################
