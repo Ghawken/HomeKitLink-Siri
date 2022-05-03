@@ -68,8 +68,14 @@ Fix for camera thread exception - keep on trucking regardless
 Move to subtypes expressing exactly the Accessory Subtype eg. Lightbulb subtype adjusted depending on whether Hue/ColorTemp/Light_switch
 Simply Setter and DeviceUpdated
 
+0.2.19
+Renaming - more problematic than I thought it would be...
+Renaming completed
+Add support for GarageDoors - on list but never actually supported.
+
+
 TODO
-GarageDoor - not implemented; basic switch only currently, should be same as lock and quick :)
+Fan support, Fan_switch option and Fanv2 support.
 Security System
 *Window Coverings/Blinds/and there is a Slat device -  also not implemented
 

@@ -1035,8 +1035,8 @@ class Lock(Accessory):
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
         serv_lock = self.add_preload_service("LockMechanism")
-        self.char_current_state = serv_lock.configure_char( 'LockCurrentState', value=3, getter_callback=self.get_lock)  ## 3 == unknown at startup
-        self.char_target_state = serv_lock.configure_char("LockTargetState",getter_callback=self.get_lock, setter_callback=self.set_lock)
+        self.char_current_state = serv_lock.configure_char( 'LockCurrentState', value=3 , getter_callback=self.get_lock)  ## 3 == unknown at startup
+        self.char_target_state = serv_lock.configure_char("LockTargetState", setter_callback=self.set_lock, getter_callback=self.get_lock)
         #serv_lock.setter_callback = self.set_lock ## Setter for everything
         # Only set target state not current... see if fixes unlocking
     ##
@@ -1065,20 +1065,63 @@ class GarageDoor(Accessory):
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
-        self.add_preload_service('GarageDoorOpener')\
-            .configure_char('TargetDoorState', setter_callback=self.change_state)
+        self.activate_only = self.is_activate(indigodeviceid)
+
+        serv_garage_door = self.add_preload_service("GarageDoorOpener", )
+        self.char_current_state = serv_garage_door.configure_char(
+            "CurrentDoorState", value=0, getter_callback=self.get_state
+        )
+        self.char_target_state = serv_garage_door.configure_char(
+            "TargetDoorState", value=0, setter_callback=self._set_chars
+        )
+        # self.char_obstruction_detected = serv_garage_door.configure_char(
+        #     "ObstructionDeteced", value=False
+        # )
+        # Could be like Doorbell and Camera - obstruction sensor - except this type Sensor True/False
+        # TODO add support - will need config changes/menu
+
+        serv_garage_door.setter_callback = self._set_chars  ## Setter for everything
+
+    def is_activate(self, deviceid):
+        """Check if entity is activate only."""
+        return self.plugin.check_activateOnly(deviceid)
+        # check for absence of onOffState or whether active group - probably reverse logic
 
     async def run(self):
         if self.plugin.debug6:
             logger.debug("Run called once, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
 
-    def change_state(self, value):
+    def get_state(self):
+        # logger.debug("Bulb value: %s", value)
+        if self.activate_only:
+            #logger.debug("Active Only switch setting to False")
+            return False
+        value = self.plugin.Plugin_getter_callback(self, "onOffState")
+        return value
+
+    def _set_chars(self, char_values):
+        """This will be called every time the value of one of the
+        characteristics on the service changes.
+        """
         if self.plugin.debug6:
-            logger.debug("Bulb value: %s", value)
-        self.get_service('GarageDoorOpener')\
-            .get_characteristic('CurrentDoorState')\
-            .set_value(value)
+            logger.debug(f"_Set_Chars received : {char_values}")
+        #{'TargetDoorState': 0}
+        # but also receiving a integer value 1 or 0
+        # Odd Here we seem to get a 0 or a 1 alone, then followed immediately by a dict with TargetDoorState and the same 1 or 0
+        # No other item is set up to be a setter...  no sure whether this is my error, library feature or library bug
+        # Check is a dict and ignore the random integer value being received.
+        # also slightly naughty here changing TargetDoorState to a On state and sending to Onoffstate pathway
+        #
+        if isinstance(char_values,dict):
+            if "TargetDoorState" in char_values:
+                if self.plugin.debug6:
+                    logger.debug('TargetDoorState wished to be {}, converted to and sending to Indigo'.format( char_values))
+                char_values["On"] = char_values.pop("TargetDoorState")  ## replace targetdoorstate with On and send through onOffRelay actioning..
+                if self.plugin.debug6:
+                    logger.debug("Char Values converted from TargetDoorState to On/off.  New char_values : {}".format(char_values))
+                self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?senmd
+
 
 class MotionSensor(Accessory):
 

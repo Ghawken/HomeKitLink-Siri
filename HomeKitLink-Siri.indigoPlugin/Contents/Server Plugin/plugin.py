@@ -622,6 +622,8 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.HueLightBulb(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "LightBulb_switch":
                         accessory = HomeKitDevices.LightBulb(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "GarageDoor":
+                        accessory = HomeKitDevices.GarageDoor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "HueLightBulb":
                         accessory = HomeKitDevices.HueLightBulb(driver, self, item["deviceid"], item['devicename'], aid=int(deviceAID))
                     elif item['subtype'] == "MotionSensor":
@@ -1508,7 +1510,7 @@ class Plugin(indigo.PluginBase):
 
                                 self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
 
-                elif str(updateddevice_subtype) == "Lock":  ## example of one way sesnor
+                elif str(updateddevice_subtype) in ( "Lock", "GarageDoor") :  ## example of one way sesnor
                     # if type(original_device) == indigo.RelayDevice:
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
@@ -1998,6 +2000,12 @@ class Plugin(indigo.PluginBase):
                 if "onOffState" in indigodevice.states:
                     if self.debug4:
                         self.logger.debug("Found onOffState using that..")
+                    return indigodevice.states["onOffState"]
+
+            elif statetoGet == "lockState":
+                if "onOffState" in indigodevice.states:
+                    if self.debug4:
+                        self.logger.debug("lockState: Found onOffState using that..")
                     return indigodevice.states["onOffState"]
 
             elif statetoGet == "Hue":
