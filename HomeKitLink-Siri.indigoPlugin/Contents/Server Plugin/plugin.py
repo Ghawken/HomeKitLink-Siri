@@ -2796,6 +2796,7 @@ class Plugin(indigo.PluginBase):
             # ; original below ; may keep both as may be useful for HomeKit Bridge copies
             # uniqueID = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)
             # modified below
+            uniqueID = 99
             spawnProps = device.globalProps.get("com.GlennNZ.indigoplugin.HomeKitSpawn")
             if spawnProps !=None:
                 uniqueID = spawnProps.get("HomeKit_bridgeUniqueID", 99)
