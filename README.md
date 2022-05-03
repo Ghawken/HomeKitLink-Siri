@@ -37,6 +37,8 @@ NB: As the version of indigo increases please update the 2022.1 to the most rele
 
 Only one indigo device, once, can be published to any HomeKit Bridge.  
 
+Each bridge has  a maximum of 95 devices published.  Currently this is not enforced.  This is on TODO list.
+
 Seperate indigo devices but one physical device = **no problem eg. motion, light sensors**.
 If you wish the exactly same device eg. 2 dimmer devices to be available in homekit - potentially under different names this is not possible without some simple help.
 Simply use Masquerade plugin, or virtual devices and copy the device wished into a new device - use this new device within this plugin.  Repeat as many times as wished.
@@ -50,21 +52,25 @@ If you break HomeKit by your poor device option - in the normal course of events
 
 ### Setup: Next
 
-Create a HomeKitLink-Siri (HTKS) Bridge device.
-Select the devices you wish to publish,  and select what device it should be, click save.
+Create a HomeKitLink-Siri (HKLS) Bridge device.
+Select the devices you wish to publish,  and select what device it should be, enable Checkbox Publish and click save.
 Repeat this as often as needed.   Please SAVE within the Config Dialog when done.
 
+Once SAVE is pressed the Bridge will be stopped and restarted.  If this isn't need press cancel.
+
 Here the options need explaining:
-You can select any available HomeKit device (if Show-all selected)
+
+You can select any available HomeKit device (if Show-all selected) - for the selected Indigo Device
 If you are setting up a sensor device - this is a device that returns sensor information to HomeKit - the plugin will give you an option of what deviceState to use.
 
-Often this should be sensorValue - this is the standard value of any sensor.   Sometimes if you are selecting a plugin to be a sensor device 
-eg. piBeacon sensors - you will choose the best value.
+Typically this should be sensorValue - this is the standard value of any sensor.   Sometimes if you are selecting a plugin device to be a sensor device 
+eg. piBeacon sensors, or RFXCOM plugins - you should choose the best state fitting the usage.
 To aid this choose the config menu will show the most recent value for this state.
 
-Importantly for most On/Off Motion/Occupancy Sensors this should be true/False.
-Temperature/Humidity number values - need **JUST** the number value - no degrees C  or degrees F.  Just 22.1
-If in doubt check the device in question states to review.  If problematic the plugin will display 0, and/or give an error.
+Importantly for most On/Off Motion/Occupancy Sensors this should be true/False state.
+Temperature/Humidity number values - must have **JUST** the number value - no degrees C  or degrees F.  Just 22.1
+If in doubt check the device in question states to review.  If problematic the plugin will display 0, and/or give an error, or worse case scenario the bridge will not update.
+This is recoverable by removing the device in question from being published to Homekit.
 
 In the aim of keeping the options completely open - you can select anything .... however it does require some inital device setup/thinking.
 
@@ -76,19 +82,26 @@ This is the HomeKitLink Bridge Edit Page.
 
 The first menu is a Indigo Device Selection menu -
 all Indigo Devices lists ALL indigo devices.
-Everything else just list devices you may be more interested in - eg. Sensors Lights etc.
+Everything else just shorten this list to devices you may be more interested in - eg. Sensors, or Lights etc.
 This only makes it easier to find devices.   These are duplicated in the all list - just harder to find if you have hundreds of devices.
 
-The Show All option selection enables you to select any HomeKit device for the currently selected indigo device.  (as per the warnings)
-The Show QR Code button will show the QR code the current HomeKitLink Bridge device - it needs to be started first for this to function.
+The **Show All Options** option selection enables you to select any HomeKit device for the currently selected indigo device.  (as per the warnings)
+
+The Show QR Code button will show the QR code, for adding this bridge to HomeKit for the current HomeKitLink Bridge device.
+The bridge needs to be running for this to function, so add devices, Save - check no errors and return to Show QR code. 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png)
+
+From within your HomeKit app:
+Add Accessory - scan QR Code - and use this code.
+THe Homekit App when then take your thorough the rest of the process.
 
 It is important for device to be published to Homekit:
 To enable the Publish checkbox, and click SAVE once all details have been entered.
 Once this is done - the log will display info, and you can keep adding devices if happy are straightforward.
 
-If you are adding a strange device, or pushing the envelope you should add one at a time and ensure works.
+If you are adding a strange device, or pushing the envelope you should add one at a time and ensure works from within the HomeKit App.
 If the device fails in HomeKit, unpublish in HomeKitLink Bridge and click save.
+
 Important:
 If you are changing HomeKit device - Light to MotionSensor that will be an issue.
 Remove it first, Save, Save config and alllow bridge to restart.
@@ -96,15 +109,28 @@ Check in HomeKit app device is gone and then readd as new device type.
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png)
 
-Below is an example of the device list menu - it shows devices published to this HomeKitLink Bridge, and devices published to other HomeKitLink Bridges
+
+Below is an example of the device list menu - it shows devices published to this HomeKitLink Bridge, and greyed-out devices published to other HomeKitLink Bridges
 To Edit the devices you need to edit the appropriate HomeKitLink Bridge.
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png)
 
 
 Below are the currently supported device types.  These are automatically guessed by HKLS, but can be selected by ShowAll option.
+Most should be funcitioning close to 100%
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png)
+
+
+
+The main supported cameras are BlueIris and Security Spy plugin cameras.  BI is more smoothed out as far as its support goes.
+When you select a Camera you can also add a DoorBell.
+This DoorBell can be any Onoff indigio device.  When this device is activated - HomeKit will show you the Camera stream with a notification that DoorBell was pressed.
+For BlueIris the Cameras also are registered in HomeKit as Motion Sensors - and you can trigger act on these depending on your settings within the HomeKit App.
+For Security Spy - we are hoping that a plugin update will also enable this function.
+
+Other cameras - basically aren't supported, and you would be better off running a homebridge instance outside of Indigo.
+
 
 
 ## Menu Items:
@@ -165,11 +191,43 @@ The approach to Sensors is that this is user selectable.  Technically you could 
 
 ### Occupancy Sensor
 
-###
+### Valve
+
+### ShowerHead
+
+### Outlet
+
+### Thermostat
+Largely supported.  Main still be some fine tuning needed
 
 ### Motion Sensor:
 ### Temperature Sensor:
 ### Humidity Sensor:
 ### Contact Sensor
 Above rules apply, either defaults to Sensorvalue or can select another state to be used..
+
+## When will this happen?
+
+Good question.
+
+The aim, and focus of this Plugin is to allow HomeKit to access Indigo Native devices - not allow your Samsung TV which may have a plugin in Indigo to then get into HomeKit.
+Into Indigo and then out to Homekit.  If that is your aim I would suggest you run a homebridge instance somewhere - potentially on Indigo Mac and add whatever plugins are needed.
+
+Currently
+- all Indigo Relay Devices are supported
+- all Indigo Dimmer Devices are supported as both Lights and Fans
+- Speed Control devices supported as a Fan type
+- all action Groups are support as Switchs/Fans/Outlets
+- all Sensor devices; including plugins sensors (that are likely not anywhere except in Indigo) are supported
+Bug fixing these devices and adding features will be the priority.
+
+## There is a bug / this doesn't work
+
+Please add a issue to Github - and based on the above principals that will guide priority
+
+TODO list - hopefully done before end of Beta
+Security System Support
+Window Covering Support
+
+
 
