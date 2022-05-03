@@ -133,22 +133,39 @@ This will copy HomeKit Accessories (all these devices we are publishing) from on
 Use this if deleted a bridge and need to move old devices across to new.
 
 
-## Devices
+## Devices supported
 
 ### Lights - dimmer/brightness/Color
 Lightbulb:  Should be the choice for all light devices.
 Unless you wish a simple on/off device (even if brightness etc available) - in which case select Lightbulb_switch
+Within the HomeKit can you can group Accessories together into one.
+
+### Fan (simple switch) and Fan V2
+Plugin self decides.
+If wish a simple Fan regardless of device - then select Switch and change within HomeKit
 
 ### Switch:  Within Homekit this can be changed to Switch, Fan
 This is simply On/off device.
 Action Groups default to this option.
 Any onOff device within indigo should be supported.
+Within HomeKit any switch can be displayed as a Fan, Switch or Outlet - simply select Icon and change.
 
 ### Cameras:
 Blue Iris - options come from the Blue Iris plugin, if you haven't installed this and you wish to use Blue Iris - you should.  It enables Motion detection for each camera, live with HomeKit notifications, and Doorbell option exists for each camera.
 eg. press Doorbell and get Notification and live stream click access.
 
 Security Spy - camera streams, Doorbell can also be selected.  Motion detection is pending some plugin changes if possible
+
+### Locks
+
+### GarageDoor
+
+The below sensors are supported by Plugin.
+The approach to Sensors is that this is user selectable.  Technically you could make a Light Switch a Occupancy Sensor as everything is user selectable.
+
+### Occupancy Sensor
+
+###
 
 ### Motion Sensor:
 ### Temperature Sensor:

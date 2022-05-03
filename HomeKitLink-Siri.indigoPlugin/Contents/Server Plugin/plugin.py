@@ -286,24 +286,6 @@ class Plugin(indigo.PluginBase):
             newProps["bridgeUniqueID"] = int(newid)
             checkid = newid
 
-        # elif checkid in self.deviceBridgeNumber:
-        #     self.logger.info("Alarm.  Another Bridge has just been started with the same unique ID as another. ")
-        #     self.logger.info("This defeats the purpose of a unique ID some.   Perhaps User has duplicated device?")
-        #     self.logger.info("This would not be ideal.  Would suggest delete device, and create New.")
-        #     self.logger.info("Fixing this issue, hopefully without creating another one though.  Still above recommended")
-        #     deviceidtouse = 0
-        #     try:
-        #         while deviceidtouse==0:
-        #             newid = random.randrange(100000,999999)  ##update to 9 digits - given busystate saved less likely collusion.
-        #             if int(newid) not in self.deviceBridgeNumber:
-        #                 deviceidtouse = newid
-        #                 break
-        #     except:
-        #         self.logger.exception("Caught in Random Number Generator")
-        #
-        #     newProps["bridgeUniqueID"]= int(newid)
-        #     checkid = newid
-
         else:
             self.logger.debug("Starting {} HomeKitLink Bridge with Unique Bridge ID {}".format(device.name, checkid))
 
@@ -954,60 +936,6 @@ class Plugin(indigo.PluginBase):
             device.updateStatesOnServer(key="status", value="Error")
             device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
             device.setErrorStateOnServer("Failure to Start Bridge.")
-
-
-    # def startBridge(self):  # startBridgeS (with an s)
-    #
-    #     ## Replaced with a deviceStart individual bridge start up
-    #     ## Found in startsingleBridge
-    #     ## Used in restart all Bridges however.
-    #
-    #     self.logger.info("Please Restart individual devices, or restart enquire plugin")
-    #     return
-    #     ## TODO fix this iter devices and stop all, and then start all best option.
-    #
-    #     self.logger.debug("Starting Threads for Bridge HAP")
-    #     self.create_deviceList_internal()
-    #
-    #     # self.driver = AccessoryDriver(port=51826, persist_file='busy_home.state')
-    #     # self.bridge = Bridge(self.driver, self, 0, 'HomeKitSpawn Bridge')
-    #     # self.driver.add_accessory(accessory=self.get_bridge_multiple(self.driver,3 ) )
-    #     # self.driverthread = threading.Thread(target=self.driver.start, daemon=True)
-    #     # self.driverthread.start()
-    #     # self.bridge.setup_message()
-    #     ## checkid = device.pluginProps.get("bridgeUniqueID","")
-    #     ## for the bridge devices == as above
-    #     x = 0  # yes starting a 0.  Shouldnt matter what thread a individual device bridge is
-    #     for device in indigo.devices.iter("self"):
-    #         uniqueID = device.pluginProps.get("bridgeUniqueID", 99)
-    #         if uniqueID != 99:
-    #             ## add port check somehow
-    #             self.logger.info("Starting up HomeKit Bridge ID {}".format(uniqueID))
-    #             persist_file_location = os.path.join(self.pluginprefDirectory, 'busy_home_' + str(uniqueID) + '.state')
-    #             self.driver_multiple.append(AccessoryDriver(indigodeviceid=str(uniqueID), port=int(self.startingPortNumber + x), persist_file=persist_file_location))
-    #             self.bridge_multiple.append(Bridge(self.driver_multiple[x], self, uniqueID, 'HomeKitSpawn Bridge ' + str(uniqueID)))
-    #             self.driver_multiple[x].add_accessory(accessory=self.get_bridge_multiple(self.driver_multiple[x], self.bridge_multiple[x], uniqueID))
-    #             self.driverthread_multiple.append(threading.Thread(name=str(uniqueID), target=self.driver_multiple[x].start, daemon=True))
-    #             self.driverthread_multiple[x].start()
-    #             returned = self.bridge_multiple[x].setup_message()
-    #             self.logger.debug("Bridge {} Setup and Running.".format(uniqueID))
-    #             updatedStates = [
-    #                 {'key': 'pincode', 'value': returned[1]},
-    #                 {'key': 'QRCode', 'value': returned[0]},
-    #                 {'key': "Status", 'value': "Operational"}
-    #             ]
-    #             device.updateStatesOnServer(updatedStates)
-    #             device.updateStateImageOnServer(indigo.kStateImageSel.PowerOn)
-    #             self.sleep(0.1)
-    #             x = x + 1
-    #
-    #     # if len(self.listofenabledcameras) >0:
-    #     #     self.logger.info("Camera Accessory Found, starting single thread to manage images.")
-    #     #     self.start_CameraSnapshots()
-    #
-    #     self.sleep(5)
-    #     self.pluginStartingUp = False
-    #     self.logger.info("{} Home Kit Accessories are now Started.".format(self.runningAccessoryCount))
 
     # Get XML child element from dom
     # Thanks Colorado4Wheeler - https://github.com/Colorado4Wheeler/HomeKit-Bridge/blob/master/EPS%20HomeKit%20Bridge.indigoPlugin/Contents/Server%20Plugin/plugin.py
@@ -2719,9 +2647,10 @@ class Plugin(indigo.PluginBase):
                 return
             device_props = dict(device.pluginProps)
 
-            if values_dict["HomeKit_publishDevice_2"]:  # Not the 2 here - in the Alexa plugin this field was the same in the device and in the pluginConfig XML
+            if values_dict["HomeKit_publishDevice_2"]:
+                # Note the 2 here - in the Alexa plugin this field was the same in the device and in the pluginConfig XML
                 # so when I refactored to a Device approach everything crapped out.  Was because the  Plugin Config XML device had publish_Device
-                # as did the actual device selected!
+                # as did the actual device selected!  Took forever to find out why!
                 if values_dict["altName"] != "":
                     alternate_name = values_dict["altName"]
                     if device_props.get("homekit-name", "") != alternate_name:
@@ -2743,7 +2672,7 @@ class Plugin(indigo.PluginBase):
                     ## can be user selected away from this default - but set default.
                     if values_dict["deviceSubtype"] != "":
                         subtype = values_dict["deviceSubtype"]
-                        # TODO change to contains sensor late. may add other problem...
+                        # TODO change to contains sensor in string - may add other problem...
                         if subtype in ("TemperatureSensor", "HumiditySensor", "OccupancySensor", "SmokeSensor", "ContactSensor", "CarbonDioxideSensor", "LightSensor", "LeakSensor", "CarbonMonoxideSensor"):
                             settoSensor = "sensorValue"
                             device_props["HomeKit_deviceSensor"] = settoSensor
@@ -2812,7 +2741,7 @@ class Plugin(indigo.PluginBase):
                 else:
                     self.logger.warn("You have removed an HomeKit Device. ")
                     self.logger.warn("After pressing Save, the Bridge will restart for this to take effect.")
-                    self.logger.warn("The device should disappear from HomeKit Clients in a few seconds")
+                    self.logger.warn("The device should disappear from HomeKit Clients in a short space of time.")
 
         except Exception as exc:
             self.logger.error(u"An unknown error occurred {}".format(str(exc)))

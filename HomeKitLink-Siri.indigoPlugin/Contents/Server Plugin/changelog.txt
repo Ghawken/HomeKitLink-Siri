@@ -77,10 +77,12 @@ Add support for Fanv2 and Fan (simple) -- plugin choosens either Fanv2 (if speed
 (Can always select Switch and then within App change Icon to Fan as required)
 
 TODO
-Fan support, Fan_switch option and Fanv2 support.
+add warning and block greater than 95 accessories being added Per Bridge..
+
+
+TODO
 Security System
 *Window Coverings/Blinds/and there is a Slat device -  also not implemented
-
 Documentation - yucky.
 Camera Device - manual entry options.. maybe... - again yucky working well for BI and likely SS
 SS as final bit of SS support - need motion in SS devices - hopefully Perry is able to do
@@ -92,6 +94,7 @@ Custom - thermostat for me (1 main device, multiple zones for temp only)
 
 
 Done:
+Fan support, Fan_switch option and Fanv2 support.
 Luminance Sensor
 CarbonMonoxide Sensor
 Smoke Sensor
