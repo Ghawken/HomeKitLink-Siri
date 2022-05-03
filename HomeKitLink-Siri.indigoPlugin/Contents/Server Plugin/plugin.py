@@ -2116,7 +2116,34 @@ class Plugin(indigo.PluginBase):
             if device.states["QRCode"] != None:
                 QRhttp = open("QRCode.html", "w")
                 Qrcodedata = device.states["QRCode"]  ## I know - could be plugin prefs but here it is
-                Qrcodedata = Qrcodedata.replace("<div><h1>HomeKitLink Siri</h1>", "<div><h1>HomeKitLink Siri</h1>\n<h1>Device: " + str(device.name) + "</h1>\n")
+                Qrcodedata = Qrcodedata.replace("<div><h1>HomeKitLink Siri</h1>", "<div><h1>  HomeKitLink Siri</h1>\n<h1> Device: " + str(device.name) + "</h1>\n")
+                Qrcodedata = '''<head><link rel="shortcut icon" href="https://static.indigodomo.com/www/favicon.ico">
+                    <link href="https://static.indigodomo.com/www/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <!-- Custom styles for this template -->
+    <link href="https://static.indigodomo.com/www/css/indigodomo.css" rel="stylesheet">
+    <link href="https://static.indigodomo.com/www/font-awesome/css/font-awesome.css" rel="stylesheet">
+    <link href="https://static.indigodomo.com/www/css/social-buttons.css" rel="stylesheet">
+    </head>
+    <body>
+    <div class="background">
+    <!-- START navbar
+    ================================================== -->
+    <div class="navbar-wrapper">
+      <div class="container">
+        <div>
+          <div class="domotics-logo"><img src="https://static.indigodomo.com/www/images/wordmark.png"/></div>
+         ''' + Qrcodedata  + '''
+        </div>
+        </div>
+        </div>       
+                </body>
+                '''
 
                 # update QRcode html page on the fly here - otherwise when name is changed won't update.
                 QRhttp.write(Qrcodedata)

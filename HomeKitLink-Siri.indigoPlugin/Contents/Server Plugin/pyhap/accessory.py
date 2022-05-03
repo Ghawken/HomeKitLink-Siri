@@ -260,9 +260,8 @@ class Accessory:
       #      logger.info(QRCode(xhm_uri).terminal(quiet_zone=2))
           #  textcode = QRCode(xhm_uri).text(quiet_zone=8)
             image_as_str = QRCode(xhm_uri).png_as_base64_str(scale=5)
-            html_img = '''<div><h1>HomeKit Spawn</h1>
-            
-  <p>Indigo Plugin: Scan this QR Code to add HomeKit Spawn Bridge</p>
+            html_img = '''<div><h1>HomeKitLink Siri</h1>
+  <p>  Indigo Plugin: Scan this QR Code to add HomeKitLink Siri Bridge to HomeKit</p>
   <img src="data:image/png;base64,{}" width="600" height="600">'''.format(image_as_str)
             html_img = html_img + "</div>"
             #builtins.QRCodeurl = html_img
