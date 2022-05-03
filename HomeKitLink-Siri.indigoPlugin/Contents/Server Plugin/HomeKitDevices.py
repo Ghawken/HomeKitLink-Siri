@@ -357,10 +357,7 @@ class ContactSensor(Accessory):
             logger.debug(f"{char_values}")
 
 class Fanv2(Accessory):
-    """Fake Fan, only logs whatever the client set."""
-
     category = CATEGORY_FAN
-
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
@@ -399,18 +396,55 @@ class Fanv2(Accessory):
                 logger.debug('Active / or RotationSpeed changed to: {}, sending to Indigo'.format( char_values))
             self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
 
-
-class Fan(Accessory):
-    """Fake Fan, only logs whatever the client set."""
+class FanSimple(Accessory):
+    ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_FAN
 
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        self.activate_only = self.is_activate(indigodeviceid)
+        serv_switch = self.add_preload_service('Fan')
+        self.char_on = serv_switch.configure_char( 'On', value=False, getter_callback=self.get_switch)
+        serv_switch.setter_callback = self.set_switch ## Setter for everything
 
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def is_activate(self, deviceid):
+        """Check if entity is activate only. == Action Groups"""
+        return self.plugin.check_activateOnly(deviceid)
+
+    def set_switch(self, char_values):
+        if self.plugin.debug6:
+            logger.debug(f"Set Fan Values:{char_values}")
+        if self.activate_only and char_values["On"]==0:
+            if self.plugin.debug6:
+                logger.debug("DeviceId: {}: Ignoring turn_off call as activate_only".format(self.indigodeviceid))
+            return
+        #value is True False here not a list
+        self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
+        ## then set switch to False if activate only
+        if self.activate_only: ## Doesn't matter On or OFF is activate only, acbove has been run and then seto off immediatelly./ and char_values["On"]==0:
+            self.char_on.set_value(False)
+
+    def get_switch(self):
+        if self.activate_only:
+            return False
+        value = self.plugin.Plugin_getter_callback(self, "onOffState")
+        return value
+
+class Fan_old(Accessory):
+
+    category = CATEGORY_FAN
+    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
+        super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         # Add the fan service. Also add optional characteristics to it.
         serv_fan = self.add_preload_service('Fanv2', chars=['RotationSpeed', 'RotationDirection'])
-
         self.char_on = serv_fan.configure_char('On', getter_callback=self.on_getter)
         self.char_rotation_speed = serv_fan.configure_char( 'RotationSpeed')
         self.char_rotation_direction = serv_fan.configure_char( 'RotationDirection')

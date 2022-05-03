@@ -131,7 +131,7 @@ class Plugin(indigo.PluginBase):
 
         self.subTypesSupported = ["HueLightBulb", "Lock", "LightBulb", "MotionSensor", "GarageDoor", "Fan", "TemperatureSensor", "Switch", "Outlet", "OccupancySensor", "ContactSensor", "CarbonDioxideSensor", "BlueIrisCamera"]
 
-        self.homeKitSubTypes = {"service_Switch": [ "Switch", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor",],
+        self.homeKitSubTypes = {"service_Switch": [ "Switch", "Fan", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor",],
                                 "service_Camera": ["BlueIrisCamera", "SecuritySpyCamera"],
                                 "service_LockMechanism": ["Lock"],
                                 "service_Fanv2": ["Fan"],
@@ -548,8 +548,13 @@ class Plugin(indigo.PluginBase):
                         deviceType = "LightBulb_switch"
                     if self.debug1:
                         self.logger.debug("LightBulb Device Found and assessed.  Accessory will be a {} type of LightBulb".format(deviceType))
-                # TODO remove error ###################################################################
-
+                if str(deviceType) == "Fan":
+                    if type(device) == indigo.SpeedControlDevice:
+                        deviceType = "Fan"
+                    elif "brightnessLevel" in device.states:
+                        deviceType = "Fan"
+                    else:
+                        deviceType = "Fan_switch"
                 devicesensor = device_props.get("HomeKit_deviceSensor", "")
                 deviceBridgeID = device_props.get("HomeKit_bridgeUniqueID", 99)
                 if type(device) == indigo.ActionGroup:
@@ -656,6 +661,8 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.Lock(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Fan":
                         accessory = HomeKitDevices.Fanv2(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "Fan_switch":
+                        accessory = HomeKitDevices.FanSimple(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Thermostat":
                         accessory = HKThermostat.Thermostat(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "BlueIrisCamera":
@@ -1576,7 +1583,7 @@ class Plugin(indigo.PluginBase):
                         if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
                             brightness = updated_device.states["brightnessLevel"]
                             if self.debug2:
-                                self.logger.debug("This is a Fan: Butf ound a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
+                                self.logger.debug("This is a Fan: But found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
                             if isinstance(brightness, int):
                                 self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(brightness)
                     elif type(updated_device) == indigo.SpeedControlDevice:

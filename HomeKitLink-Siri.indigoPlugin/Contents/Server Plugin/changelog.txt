@@ -71,8 +71,10 @@ Simply Setter and DeviceUpdated
 0.2.19
 Renaming - more problematic than I thought it would be...
 Renaming completed
+More Lock testing/fine tuning...
 Add support for GarageDoors - on list but never actually supported.
-
+Add support for Fanv2 and Fan (simple) -- plugin choosens either Fanv2 (if speedControl device or brightness) or Fan Simple if simple switch
+(Can always select Switch and then within App change Icon to Fan as required)
 
 TODO
 Fan support, Fan_switch option and Fanv2 support.
