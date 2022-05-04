@@ -8,7 +8,7 @@ This plugin (HKLS) aims to allow you to create HomeKit Bridges, which you add yo
 
 **First install**
 
-**Need Python 3 version of Indigo 2021.2.0+**
+**Need Python3 supporting version of Indigo 2022.1+**
 
 Download latest and greatest indigoplugin file
 
