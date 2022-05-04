@@ -2949,7 +2949,10 @@ class Plugin(indigo.PluginBase):
                 devicename = device_props.get("homekit-name", "")
                 deviceType = device_props.get("HomeKit_deviceSubtype", "")
                 devicesensor = device_props.get("HomeKit_deviceSensor", "")
-                deviceBridgeID = device_props.get("HomeKit_bridgeUniqueID", 99)
+                try:
+                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+                except ValueError:
+                    deviceBridgeID = 99
                 devicedoorbell = device_props.get("HomeKit_doorbellId", "-1")
                 if str(devicedoorbell) == "-1":
                     devicedoorbell = "- None Selected -"
@@ -2958,7 +2961,8 @@ class Plugin(indigo.PluginBase):
                     datatoappend = datatoappend + " {0:<20}".format(devicesensor)
                 elif devicedoorbell != "":
                     datatoappend = datatoappend + " {0:<20}".format(devicedoorbell)
-                endpoint_list.append((int(deviceBridgeID), datatoappend))  # tuple
+                if deviceBridgeID !=99:
+                    endpoint_list.append((int(deviceBridgeID), datatoappend))  # tuple
             except:
                 self.logger.exception("Exception in Show Devices")
 
