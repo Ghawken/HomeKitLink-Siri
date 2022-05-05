@@ -538,7 +538,10 @@ class Plugin(indigo.PluginBase):
                     else:
                         deviceType = "Fan_switch"
                 devicesensor = device_props.get("HomeKit_deviceSensor", "")
-                deviceBridgeID = device_props.get("HomeKit_bridgeUniqueID", 99)
+                try:
+                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99)  )
+                except ValueError:
+                    deviceBridgeID = 99
                 if type(device) == indigo.ActionGroup:
                     devicemodel = "Action Group"
                     manufacturerName = "Indigo Domotics"
@@ -1221,12 +1224,15 @@ class Plugin(indigo.PluginBase):
                     if deleted_device.id in self.device_list_internal_idonly:
                         self.device_list_internal_idonly.remove(deleted_device.id)
                 self.logger.error("Device: {} ,just deleted published and has active accessory within Homekit currently (!)".format(deleted_device.name))
-                bridgeID = deleted_device.pluginProps.get("HomeKit_bridgeUniqueID", 99)
+                try:
+                    bridgeID = int(deleted_device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+                except ValueError:
+                    bridgeID = 99
                 if bridgeID != 99:
                     self.logger.info("Deleted Device appears to be running of Bridge {}.  Attempting to restart Bridge and reset all Accessories.".format(bridgeID))
                     for device in indigo.devices.iter("self"):
                         # if device.enabled:  ## enabled or disabled if exists want to save state file
-                        uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+                        uniqueID = device.pluginProps.get("bridgeUniqueID", 99)
                         if int(uniqueID) == int(bridgeID):
                             # matching device found
                             indigo.device.enable(device.id, False)
@@ -2273,7 +2279,10 @@ class Plugin(indigo.PluginBase):
             try:
                 device = self.return_deviceorAG(device_id)
                 device_props = dict(device.pluginProps)
-                deviceBridgeID = device_props.get("HomeKit_bridgeUniqueID", 99)
+                try:
+                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+                except:
+                    deviceBridgeID = 99
                 ## no checks here - basically can select any device to debug - even those that are no active in Homekit.
                 ## Even if not active will still be able to debug the DeviceUpdate state info.
                 endpoint_list.append((int(device.id), device.name))  # tuple
@@ -2303,7 +2312,7 @@ class Plugin(indigo.PluginBase):
                         device_name = device.name
                         ## is assigned to a bridgeget bridge it is assigned to
                         try:
-                            bridgeassigned = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                            bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
                         except ValueError:
                             bridgeassigned = 99
                         if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
@@ -2935,7 +2944,10 @@ class Plugin(indigo.PluginBase):
         # Write all published devices to the event log with their friendly name
         listofallBridges = []  # list of devices which exists, enabled or otherwise.
         for device in indigo.devices.iter("self"):
-            uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+            try:
+                uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+            except ValueError:
+                uniqueID = 99
             if uniqueID != 99:
                 if int(uniqueID) not in listofallBridges:
                     listofallBridges.append(int(uniqueID))
@@ -2993,28 +3005,40 @@ class Plugin(indigo.PluginBase):
         ## Not disabled bridges for example
         listofallBridges = []
         for device in indigo.devices.iter("self"):
-            uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+            try:
+                uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+            except ValueError:
+                uniqueID = 99
             if uniqueID != 99:
                 if int(uniqueID) not in listofallBridges:
                     listofallBridges.append(int(uniqueID))
+        ## current list of self bridge ID.  Now scan the full device_list
+        isolated_device_found = False
         for device_id in self.device_list:
             try:
                 device = self.return_deviceorAG(device_id)
                 device_props = dict(device.pluginProps)
                 devicename = device_props.get("homekit-name", "")
-                deviceBridgeID = device_props.get("HomeKit_bridgeUniqueID", 99)
+                try:
+                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+                except ValueError:
+                    continue
+                    # move to next device as this one blank
                 if deviceBridgeID not in listofallBridges:  ## Current Bridge not enabled, deleted or stopped
-                    deviceBridgeID = 99
-                if deviceBridgeID == 99:
+                    isolated_device_found = True
                     self.logger.warning("Isolated Device Found and HomeKit linkage to be removed. Device Name {} ".format(devicename))
                     device_props["HomeKit_publishDevice"] = False
                     device_props["HomeKit_bridgeUniqueID"] = ""
                     device_props["HomeKit_deviceSubtype"] = ""
                     device_props["HomeKit_deviceSensor"] = ""
-                    # device_props["homekit-name"] = ""  # keep homekit name there
+                    device_props["homekit-name"] = devicename   ## leave name same.
                     device.replacePluginPropsOnServer(indigo.Dict(device_props))
             except:
                 self.logger.exception("Problem with delete / unlinking isolated devices")
+
+        if isolated_device_found == False:
+            self.logger.info("No orphaned devices found to have HomeKit linkage removed.  Full list follows below.")
+
         self.update_deviceList()
         self.show_device_publications()
 
@@ -3023,7 +3047,10 @@ class Plugin(indigo.PluginBase):
         listofstateids = []
         for device in indigo.devices.iter("self"):
             # if device.enabled:  ## enabled or disabled if exists want to save state file
-            uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+            try:
+                uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
+            except ValueError:
+                uniqueID = 99
             if uniqueID != 99:
                 listofstateids.append(str(uniqueID))
         self.logger.debug("Found devices with these matching IDs:{}".format(listofstateids))
