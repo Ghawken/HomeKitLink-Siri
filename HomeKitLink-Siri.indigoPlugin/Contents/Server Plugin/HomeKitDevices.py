@@ -1103,8 +1103,8 @@ class GarageDoor(Accessory):
 
         serv_garage_door = self.add_preload_service("GarageDoorOpener", )
         self.char_current_state = serv_garage_door.configure_char(
-            "CurrentDoorState", value=0, getter_callback=self.get_state
-        )
+            "CurrentDoorState", value=0 )# getter_callback=self.get_state)
+
         self.char_target_state = serv_garage_door.configure_char(
             "TargetDoorState", value=0, setter_callback=self._set_chars
         )
@@ -1113,6 +1113,12 @@ class GarageDoor(Accessory):
         # )
         # Could be like Doorbell and Camera - obstruction sensor - except this type Sensor True/False
         # TODO add support - will need config changes/menu
+
+        # add state from start and set.
+        currentstate = self.get_state()
+        if currentstate is not None:
+            self.char_target_state.set_value(currentstate)
+            self.char_current_state.set_value(currentstate)
 
         serv_garage_door.setter_callback = self._set_chars  ## Setter for everything
 
@@ -1131,7 +1137,7 @@ class GarageDoor(Accessory):
         if self.activate_only:
             #logger.debug("Active Only switch setting to False")
             return False
-        value = self.plugin.Plugin_getter_callback(self, "onOffState")
+        value = self.plugin.Plugin_getter_callback(self, "garageDoorState")
         return value
 
     def _set_chars(self, char_values):

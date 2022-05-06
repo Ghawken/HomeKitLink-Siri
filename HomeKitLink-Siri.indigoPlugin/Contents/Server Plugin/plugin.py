@@ -1451,7 +1451,7 @@ class Plugin(indigo.PluginBase):
 
                                 self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
 
-                elif str(updateddevice_subtype) in ( "Lock", "GarageDoor") :  ## example of one way sesnor
+                elif str(updateddevice_subtype) == "Lock" :  ## example of one way sesnor
                     # if type(original_device) == indigo.RelayDevice:
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
@@ -1473,6 +1473,28 @@ class Plugin(indigo.PluginBase):
                             self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                         self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
                         self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
+
+                elif str(updateddevice_subtype) == "GarageDoor":
+                    if "onOffState" in updated_device.states:  ## if onOffexists use that preferentially
+                        if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                            newstate = updated_device.states["onOffState"]
+                            if self.debug2:
+                                self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                            if this_is_debug_device:
+                                self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                            self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
+                            self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
+                            return
+                    elif "binaryInput1" in updated_device.states:
+                        if updated_device.states["binaryInput1"] !=original_device.states["binaryInput1"]:
+                            newstate = updated_device.states["binaryInput1"]
+                            if self.debug2:
+                                self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                            if this_is_debug_device:
+                                self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                            self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
+                            self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
+                            return
 
                 elif str(updateddevice_subtype) == "Valve":  ## example of one way sesnor
                     # if type(original_device) == indigo.RelayDevice:
@@ -1837,6 +1859,14 @@ class Plugin(indigo.PluginBase):
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
                                 indigo.actionGroup.execute(accessoryself.indigodeviceid)
+                    elif type(indigodevice) == indigo.MultiIODevice:
+                        ## Insteon likely Garage Door device
+                        ## How are we getter value
+                        if "On" in valuetoSet:
+                            if valuetoSet["On"] == 1:
+                                indigo.device.setBinaryOutput(accessoryself.indigodeviceid, index=1, value=True)
+                            elif valuetoSet["On"] == 0:  ## As currently stands this should never run as devices lacking onOffStates are recorded as activate only
+                                indigo.device.setBinaryOutput(accessoryself.indigodeviceid, index=1, value=False)
                     else:
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
@@ -1942,6 +1972,17 @@ class Plugin(indigo.PluginBase):
                     if self.debug4:
                         self.logger.debug("Found onOffState using that..")
                     return indigodevice.states["onOffState"]
+
+            elif statetoGet == "garageDoorState":
+                # attempt to get onOffState first..
+                if "onOffState" in indigodevice.states:
+                    if self.debug4:
+                        self.logger.debug("Found onOffState using that..")
+                    return indigodevice.states["onOffState"]
+                elif "binaryInput1" in indigodevice.states:
+                    if self.debug4:
+                        self.logger.debug("Found a binaryInput State using that..")
+                    return indigodevice.states["binaryInput1"]
 
             elif statetoGet == "lockState":
                 if "onOffState" in indigodevice.states:

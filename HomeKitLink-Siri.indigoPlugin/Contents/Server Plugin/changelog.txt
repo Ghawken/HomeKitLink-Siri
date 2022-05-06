@@ -76,6 +76,14 @@ Add support for GarageDoors - on list but never actually supported.
 Add support for Fanv2 and Fan (simple) -- plugin choosens either Fanv2 (if speedControl device or brightness) or Fan Simple if simple switch
 (Can always select Switch and then within App change Icon to Fan as required)
 
+
+0.2.24
+Add dual binary ffmpeg suppporting M1 and x86 Macs
+Add support for MultiIO Garage Door Insteon device - pending testing
+Fix for empty pluginProps not being integer.
+
+
+
 TODO
 add warning and block greater than 95 accessories being added Per Bridge..
 

@@ -26,3 +26,5 @@
 /venv/
 /HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/QRCode.html
 /.idea
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/ffmpeg/ffmpeg-arm
+/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/ffmpeg/ffmpeg-x86
