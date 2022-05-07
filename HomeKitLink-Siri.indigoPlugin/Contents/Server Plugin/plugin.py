@@ -1864,9 +1864,9 @@ class Plugin(indigo.PluginBase):
                         ## How are we getter value
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
-                                indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=1, value=True)
+                                indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=0, value=True)
                             elif valuetoSet["On"] == 0:  ## As currently stands this should never run as devices lacking onOffStates are recorded as activate only
-                                indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=1, value=False)
+                                indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=0, value=False)
                     else:
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
