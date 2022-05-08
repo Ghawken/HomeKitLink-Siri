@@ -83,6 +83,13 @@ Add support for MultiIO Garage Door Insteon device - pending testing
 Fix for empty pluginProps not being integer.
 
 
+0.2.27
+Add BatteryService for all Sensor types.
+TODO add low Battery level to pluginConfig  - currently hardset at 10%
+
+Beginning of Window Covering support.  Basic device created, and selectable, including inverse.
+Non-functional currently... TODO
+
 
 TODO
 add warning and block greater than 95 accessories being added Per Bridge..

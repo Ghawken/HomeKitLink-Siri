@@ -79,7 +79,10 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If one =
 				<Label/>
 				<Description>Enable to Select Fahrenheit</Description>
 			</Field>
-
+			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will inverse Controls ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind">
+				<Label/>
+				<Description>Enable to Inverse Controls</Description>
+			</Field>
 			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will select Audio ." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" >
 				<Label/>
 				<Description>Support Audio</Description>

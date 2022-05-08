@@ -44,7 +44,28 @@ class TemperatureSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('TemperatureSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2            )
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0        )
+
         self.char_temp = serv_temp.configure_char('CurrentTemperature',  getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -73,7 +94,30 @@ class LightSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
+
         serv_temp = self.add_preload_service('LightSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2            )
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0        )
+
+
         self.char_temp = serv_temp.configure_char('CurrentAmbientLightLevel',  getter_callback=self.get_sensor)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -102,7 +146,29 @@ class CarbonDioxideSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('CarbonDioxideSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2            )
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0        )
+
+
         self.char_on = serv_temp.configure_char('CarbonDioxideDetected',  getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -136,7 +202,29 @@ class CarbonMonoxideSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('CarbonMonoxideSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2)
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0)
+
+
         self.char_on = serv_temp.configure_char('CarbonMonoxideDetected',  getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -171,7 +259,29 @@ class LeakSensor(Accessory):
         super().__init__(driver, plugin, indigodeviceid, display_name, aid)  # *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('LeakSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2)
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0)
+
+
         self.char_on = serv_temp.configure_char('LeakDetected', getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -200,7 +310,29 @@ class GenericSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('TemperatureSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2)
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0)
+
+
         self.char_temp = serv_temp.configure_char('CurrentTemperature',  getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -229,11 +361,31 @@ class HumiditySensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('HumiditySensor')
         ## leave this as char_temp -- would make more sense to change all to char_setdevicevalue or something similiar
         ## but basically deviceupdated should be same for both temp and humidity - so in deviceupdate can call char_temp.setvalue
         # for both temperature device and humidity device and should be fine.
         # will need to test values..
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2            )
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0        )
 
         self.char_temp = serv_temp.configure_char('CurrentRelativeHumidity',  getter_callback=self.get_humid)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
@@ -260,7 +412,30 @@ class SmokeSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
+
         serv_temp = self.add_preload_service('SmokeSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2            )
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0        )
+
+
         #      "ValidValues": {
        #  "OccupancyDetected": 1,
        #  "OccupancyNotDetected": 0
@@ -298,7 +473,29 @@ class OccupancySensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('OccupancySensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2)
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0)
+
+
         #      "ValidValues": {
        #  "OccupancyDetected": 1,
        #  "OccupancyNotDetected": 0
@@ -336,7 +533,29 @@ class ContactSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('ContactSensor')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2)
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0)
+
+
         self.char_on = serv_temp.configure_char('ContactSensorState',  getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
@@ -1101,7 +1320,7 @@ class GarageDoor(Accessory):
 
         self.activate_only = self.is_activate(indigodeviceid)
 
-        serv_garage_door = self.add_preload_service("GarageDoorOpener", )
+        serv_garage_door = self.add_preload_service("GarageDoorOpener")
         self.char_current_state = serv_garage_door.configure_char(
             "CurrentDoorState", value=0 )# getter_callback=self.get_state)
 
@@ -1162,6 +1381,82 @@ class GarageDoor(Accessory):
                     logger.debug("Char Values converted from TargetDoorState to On/off.  New char_values : {}".format(char_values))
                 self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?senmd
 
+class WindowCovering(Accessory):
+
+    category = CATEGORY_WINDOW_COVERING
+
+    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
+        super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+
+        self.activate_only = self.is_activate(indigodeviceid)
+        indigodevice = indigo.devices[indigodeviceid]
+
+        self._inverse = False
+        ## get temperature unit we are using
+        inverseSelector = indigodevice.pluginProps.get("HomeKit_inverseSelector", False)  ## True if F
+        if inverseSelector:
+            logger.debug("Inverse Controls Enabled. Inverse Selection: {}".format(inverseSelector))
+            self._inverse = True
+        else:
+            logger.debug("Inverse Controls Not enabled. Inverse Selection:  {}".format(inverseSelector))
+            self._inverse = False
+
+        serv_window_covering = self.add_preload_service("WindowCovering")
+
+        self.char_current_position = serv_window_covering.configure_char(
+            "CurrentPosition", value=0 )# getter_callback=self.get_state)
+
+        self.char_target_position  = serv_window_covering.configure_char(
+            "TargetPosition", value=0, setter_callback=self._set_chars
+        )
+        self.char_position_state = serv_window_covering.configure_char(
+            "PositionState", value=2
+        )
+
+        # add state from start and set.
+        currentstate = self.get_state()
+        if currentstate is not None:
+            self.char_target_state.set_value(currentstate)
+            self.char_current_state.set_value(currentstate)
+
+        serv_window_covering.setter_callback = self._set_chars  ## Setter for everything
+
+    def is_activate(self, deviceid):
+        """Check if entity is activate only."""
+        return self.plugin.check_activateOnly(deviceid)
+        # check for absence of onOffState or whether active group - probably reverse logic
+
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def get_state(self):
+        # logger.debug("Bulb value: %s", value)
+        if self.activate_only:
+            #logger.debug("Active Only switch setting to False")
+            return False
+        value = self.plugin.Plugin_getter_callback(self, "windowCovering")
+        return value
+
+    def set_covering_state(self, values):
+        if self.plugin.debug6:
+            logger.debug("set covering state called with values {}, and inverse {}".format(values, self._inverse))
+
+
+    def _set_chars(self, char_values):
+        """This will be called every time the value of one of the
+        characteristics on the service changes.
+        """
+        #if self.plugin.debug6:
+        logger.info(f"_Set_Chars received : {char_values}")
+        logger.info("Sorry Blinds still unsupported.  Won't be long..")
+
+        if isinstance(char_values,dict):
+            if "TargetPosition" in char_values:
+                pass
+                #self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?senmd
+
 
 class MotionSensor(Accessory):
 
@@ -1171,8 +1466,28 @@ class MotionSensor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)# *args, **kwargs)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+
+        ## Add below for all Sensor Device Types
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        # add battery service to each Sensor - prelim below
+        indigodevice = indigo.devices[indigodeviceid]
+        batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
+        if batterySupported:
+            if "batteryLevel" in indigodevice.states:
+                batteryLevel = indigodevice.states["batteryLevel"]
+
         serv_temp = self.add_preload_service('MotionSensor')
-     #   self.char_motion = serv_temp.configure_char('MotionDetected')
+
+        if batterySupported:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=int(batteryLevel))
+            self._char_charging = serv_battery.configure_char(
+                "ChargingState", value=2            )
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=0            )
+
         self.char_on = serv_temp.configure_char( 'MotionDetected', value=False) # set to false at startupgetter_callback=self.get_bulb)
         serv_temp.setter_callback = self._set_chars
 

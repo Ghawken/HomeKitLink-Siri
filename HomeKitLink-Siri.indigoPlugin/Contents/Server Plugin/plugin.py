@@ -118,7 +118,7 @@ class Plugin(indigo.PluginBase):
         self.pluginId = pluginId
         self.pluginVersion = pluginVersion
         self.pluginIndigoVersion = indigo.server.version
-
+        self.low_battery_threshold = 10
         self.pluginPath = os.getcwd()
         self.listofenabledcameras = []
         self.camera_snapShot_Requested_que = UniqueQueue()  # queue.Queue()
@@ -144,7 +144,8 @@ class Plugin(indigo.PluginBase):
                                 "service_Thermostat": ["Thermostat"],
                                 "service_TemperatureSensor": ["TemperatureSensor"],
                                 "service_HumiditySensor": ["HumiditySensor"],
-                                "service_Lightbulb": ["LightBulb", "LightBulb_switch"]
+                                "service_Lightbulb": ["LightBulb", "LightBulb_switch"],
+                                "service_WindowCovering" : ["Blind"]
                                 }
 
         self.driver_multiple = []
@@ -628,6 +629,8 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.SmokeSensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Switch":
                         accessory = HomeKitDevices.SwitchSimple(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "Blind":
+                        accessory = HomeKitDevices.WindowCovering(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Outlet":
                         accessory = HomeKitDevices.Outlet(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "CarbonDioxideSensor":
@@ -1371,16 +1374,17 @@ class Plugin(indigo.PluginBase):
                         if sensortouse != "sensorValue":
                             if sensortouse != "":
                                 if sensortouse in updated_device.states:
-                                    sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
-                                    if type(sensorvalue) in (float, int):
-                                        if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
-                                            sensorvalue = 100000
-                                    if self.debug2:
-                                        self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                    if this_is_debug_device:
-                                        self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-
-                                    self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+                                    ## add below check for this state after changed
+                                    if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                                        sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
+                                        if type(sensorvalue) in (float, int):
+                                            if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
+                                                sensorvalue = 100000
+                                        if self.debug2:
+                                            self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                        if this_is_debug_device:
+                                            self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                        self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
                         else:
                             if "sensorValue" in updated_device.states:
                                 if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
@@ -1402,19 +1406,32 @@ class Plugin(indigo.PluginBase):
                         sensortouse = self.device_list_internal[checkindex]["devicesensor"]
                         if sensortouse != "":
                             if sensortouse in updated_device.states:
-                                sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
-                                if type(sensorvalue) in (float, int):
-                                    if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
-                                        sensorvalue = 100000
-                                if self.debug2:
-                                    self.logger.debug(
-                                        "Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
-                                            updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                                    sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
+                                    if type(sensorvalue) in (float, int):
+                                        if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
+                                            sensorvalue = 100000
+                                    if self.debug2:
+                                        self.logger.debug(
+                                            "Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
+                                                updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
 
-                                if this_is_debug_device:
-                                    self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
-                                        updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)
+                                    if this_is_debug_device:
+                                        self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
+                                            updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                    self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)
+                    # sensor type updated and check Battery
+                    if "batteryLevel" in updated_device.states:
+                        if not self.device_list_internal[checkindex]["accessory"]._char_battery or not self.device_list_internal[checkindex]["accessory"]._char_low_battery:
+                            if updated_device.states["batteryLevel"] != original_device["batteryLevel"]:
+                                batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
+                                if batteryLevel is not None:
+                                    self.device_list_internal[checkindex]["accessory"]._char_battery.set_value(batteryLevel)
+                                    is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
+                                    self._char_low_battery.set_value(is_low_battery)
+                                    if self.debug2:
+                                        self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
+
 
                 elif str(updateddevice_subtype) in ("LeakSensor", "OccupancySensor", "SmokeSensor", "ContactSensor", "CarbonMonoxideSensor", "CarbonDioxideSensor"):  ## example of one way sesnor
                     if type(original_device) == indigo.SensorDevice:
@@ -1422,12 +1439,13 @@ class Plugin(indigo.PluginBase):
                         if sensortouse != "sensorValue":
                             if sensortouse != "":
                                 if sensortouse in updated_device.states:
-                                    sensorvalue = updated_device.states[sensortouse]
-                                    if self.debug2:
-                                        self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                    if this_is_debug_device:
-                                        self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                    self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
+                                    if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                                        sensorvalue = updated_device.states[sensortouse]
+                                        if self.debug2:
+                                            self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                        if this_is_debug_device:
+                                            self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
                         else:
                             if "sensorValue" in updated_device.states:
                                 if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
@@ -1443,13 +1461,25 @@ class Plugin(indigo.PluginBase):
                         sensortouse = self.device_list_internal[checkindex]["devicesensor"]
                         if sensortouse != "":
                             if sensortouse in updated_device.states:
-                                sensorvalue = updated_device.states[sensortouse]
-                                if self.debug2:
-                                    self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                if this_is_debug_device:
-                                    self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                                    sensorvalue = updated_device.states[sensortouse]
+                                    if self.debug2:
+                                        self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                    if this_is_debug_device:
+                                        self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
 
-                                self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
+                                    self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
+                    # sensor type updated and check Battery
+                    if "batteryLevel" in updated_device.states:
+                        if not self.device_list_internal[checkindex]["accessory"]._char_battery or not self.device_list_internal[checkindex]["accessory"]._char_low_battery:
+                            if updated_device.states["batteryLevel"] != original_device["batteryLevel"]:
+                                batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
+                                if batteryLevel is not None:
+                                    self.device_list_internal[checkindex]["accessory"]._char_battery.set_value(batteryLevel)
+                                    is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
+                                    self._char_low_battery.set_value(is_low_battery)
+                                    if self.debug2:
+                                        self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
 
                 elif str(updateddevice_subtype) == "Lock" :  ## example of one way sesnor
                     # if type(original_device) == indigo.RelayDevice:
@@ -2510,6 +2540,9 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == "com.pennypacker.indigoplugin.senseme":
                 return "service_Fanv2"
 
+            if dev.model == "BlindsT1234":
+                return "service_WindowCovering"
+
             if dev.pluginId == "com.fogbert.indigoplugin.fantasticwWeather":
                 if dev.deviceTypeId == 'Weather': return "service_TemperatureSensor"
                 if dev.deviceTypeId == 'Daily': return "service_HumiditySensor"
@@ -2681,6 +2714,7 @@ class Plugin(indigo.PluginBase):
             values_dict["deviceSensor"] = device.pluginProps.get("HomeKit_deviceSensor", "")  ## unless sensor device this isn't used. I believe. Hope.
             values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
             values_dict["tempSelector"] = device.pluginProps.get("HomeKit_tempSelector", False)
+            values_dict["inverseSelector"] = device.pluginProps.get("HomeKit_inverseSelector",False)
             values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", False)
 
             ## auto select correct subtype
@@ -2770,6 +2804,10 @@ class Plugin(indigo.PluginBase):
                     if device_props.get("HomeKit_tempSelector") != tempSelector:
                         device_props["HomeKit_tempSelector"] = tempSelector
 
+                if values_dict["inverseSelector"] != "":
+                    inverseSelector = values_dict['inverseSelector']
+                    if device_props.get("HomeKit_inverseSelector") != inverseSelector:
+                        device_props["HomeKit_inverseSelector"] = inverseSelector
                         ## add temp selector
                 if values_dict["audioSelector"] != "":
                     audioSelector = values_dict['audioSelector']
@@ -2795,6 +2833,7 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_deviceSensor"] = ""
                 device_props["homekit-name"] = ""
                 device_props["HomeKit_tempSelector"] = ""
+                device_props["HomeKit_inverseSelector"] = ""
                 device_props["HomeKit_audioSelector"] = ""
                 try:
                     self.device_list.remove(device.id)  ## not good to just remove here and internal list no longer deleted.
