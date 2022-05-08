@@ -83,12 +83,16 @@ Add support for MultiIO Garage Door Insteon device - pending testing
 Fix for empty pluginProps not being integer.
 
 
-0.2.27
+0.2.28
 Add BatteryService for all Sensor types.
-TODO add low Battery level to pluginConfig  - currently hardset at 10%
+Add low Battery Level alert setting to PluginConfig Menu - can be set there
+Add support for Window Blinds - add Inverse control when adding each individual device to HomeKit
+(Support onOff devices, and dimmer devices currently - allowing position setting; reverse I believe working)
+Seems to function well in my currently limited testing.
+No support for Tilt/other aspects as yet.
 
-Beginning of Window Covering support.  Basic device created, and selectable, including inverse.
-Non-functional currently... TODO
+
+
 
 
 TODO

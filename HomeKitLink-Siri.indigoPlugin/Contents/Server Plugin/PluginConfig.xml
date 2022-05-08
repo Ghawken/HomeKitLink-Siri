@@ -75,6 +75,12 @@
             <Option value="50">Critical Errors Only</Option>
         </List>
     </Field>
+    <Field id="separater24" type="separator"/>
+        <Field id="batterylow"
+           type="textfield"
+           tooltip="Enter batterylowLevel" defaultValue="20"  alwaysUseInDialogHeightCalc="true">
+        <Label>Battery Percentage Low:</Label>
+    </Field>
     <Field id="sepaer4" type="separator"/>
     <Field id="advanced" type="checkbox" tooltip="Enabling will show advanced options." alwaysUseInDialogHeightCalc="true">
         <Label>Use with care, only updated on plugin Start/Restart.</Label>

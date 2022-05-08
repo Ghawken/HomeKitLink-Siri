@@ -80,7 +80,7 @@ class Plugin(indigo.PluginBase):
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%Y-%m-%d %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
         try:
-            self.logLevel = int(self.pluginPrefs[u"showDebugLevel"])
+            self.logLevel = int(self.pluginPrefs["showDebugLevel"])
         except:
             self.logLevel = logging.DEBUG
         try:
@@ -118,7 +118,7 @@ class Plugin(indigo.PluginBase):
         self.pluginId = pluginId
         self.pluginVersion = pluginVersion
         self.pluginIndigoVersion = indigo.server.version
-        self.low_battery_threshold = 10
+
         self.pluginPath = os.getcwd()
         self.listofenabledcameras = []
         self.camera_snapShot_Requested_que = UniqueQueue()  # queue.Queue()
@@ -181,6 +181,8 @@ class Plugin(indigo.PluginBase):
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
 
+        self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20))
+
         self.debugDeviceid = -3  ## always set this to not on after restart.
 
         self.ffmpeg_lastCommand = []
@@ -208,6 +210,12 @@ class Plugin(indigo.PluginBase):
             self.debug8 = valuesDict.get('debug8', False)
             self.debug9 = valuesDict.get('debug9', False)
             self.logClientConnected = valuesDict.get("logClientConnected", True)
+            try:
+                self.low_battery_threshold = int (valuesDict.get("batterylow",20))
+            except ValueError:
+                self.low_battery_threshold = 20
+                valuesDict['batterylow'] = 20
+
             try:
                 self.debugDeviceid = int(valuesDict.get("debugDeviceid", -3))
             except ValueError:
@@ -1583,6 +1591,23 @@ class Plugin(indigo.PluginBase):
                             if isinstance(speedLevel, int):
                                 self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(speedLevel)
 
+                elif str(updateddevice_subtype) == "Blind":
+                    if "brightnessLevel" in updated_device.states:
+                        if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
+                            brightness = updated_device.states["brightnessLevel"]
+                            if self.debug2:
+                                self.logger.debug("Blind: Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
+                            if isinstance(brightness, int):
+                                self.device_list_internal[checkindex]["accessory"].set_covering_state(brightness, None)
+                    elif "onOffState" in updated_device.states:
+                        ## use brightness and calculate onOff first, if no brightness because of device - use on off and 100/0
+                        ## Inverse can be actioned at the accessory level
+                        if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                            newstate = updated_device.states["onOffState"]
+                            if self.debug2:
+                                self.logger.debug("Blind: Defaulting to onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                            self.device_list_internal[checkindex]["accessory"].set_covering_state(None, updated_device.states["onOffState"])
+
                 if str(updateddevice_subtype) in ("HueLightBulb", "LightBulb", "ColorTempLightBulb"):
                     if "brightnessLevel" in updated_device.states:
                         if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
@@ -1635,7 +1660,7 @@ class Plugin(indigo.PluginBase):
                                         self.device_list_internal[checkindex]["accessory"].Saturation.notify()
                                         self.device_list_internal[checkindex]["accessory"].char_color_temp.notify()
 
-                if "onOffState" in updated_device.states:
+                if "onOffState" in updated_device.states and str(updateddevice_subtype) != "Blind":   ## work around to remnove this TODO
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
                         if self.debug2:
@@ -2003,6 +2028,17 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Found onOffState using that..")
                     return indigodevice.states["onOffState"]
 
+            elif statetoGet == "windowCovering":
+                if "brightnessLevel" in indigodevice.states:
+                    if self.debug4:
+                        self.logger.debug("Found a brightnessLevel state try using that, for WindowCovering..")
+                    return indigodevice.states["brightnessLevel"],None
+                elif "onOffState" in indigodevice.states:
+                    newstate = indigodevice.states["onOffState"]
+                    if self.debug4:
+                        self.logger.debug("Blind: Defaulting to onOffState using onOffState {} ".format(newstate))
+                    return None,newstate
+
             elif statetoGet == "garageDoorState":
                 # attempt to get onOffState first..
                 if "onOffState" in indigodevice.states:
@@ -2109,6 +2145,8 @@ class Plugin(indigo.PluginBase):
                         return 0  ## 3 = Auto
         except:
             self.logger.exception("Plugin Setter Exception")
+
+
         ## aim of this routine is to be run once with creation of the HomeKit Bridge
         ## sending back the accessory details to be stored in Dict of HomeKit devices
         ## This then can be called back to accessory
