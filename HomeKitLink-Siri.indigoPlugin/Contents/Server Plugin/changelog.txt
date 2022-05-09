@@ -91,7 +91,9 @@ Add support for Window Blinds - add Inverse control when adding each individual 
 Seems to function well in my currently limited testing.
 No support for Tilt/other aspects as yet.
 
-
+0.2.29
+Add support for Windows
+TODO security systems..
 
 
 
@@ -101,8 +103,6 @@ add warning and block greater than 95 accessories being added Per Bridge..
 
 TODO
 Security System
-*Window Coverings/Blinds/and there is a Slat device -  also not implemented
-Documentation - yucky.
 Camera Device - manual entry options.. maybe... - again yucky working well for BI and likely SS
 SS as final bit of SS support - need motion in SS devices - hopefully Perry is able to do
 

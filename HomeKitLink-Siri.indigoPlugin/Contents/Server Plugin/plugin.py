@@ -145,7 +145,8 @@ class Plugin(indigo.PluginBase):
                                 "service_TemperatureSensor": ["TemperatureSensor"],
                                 "service_HumiditySensor": ["HumiditySensor"],
                                 "service_Lightbulb": ["LightBulb", "LightBulb_switch"],
-                                "service_WindowCovering" : ["Blind"]
+                                "service_WindowCovering" : ["Blind"],
+                                "service_Window" : ["Window"]
                                 }
 
         self.driver_multiple = []
@@ -639,6 +640,8 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.SwitchSimple(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Blind":
                         accessory = HomeKitDevices.WindowCovering(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "Window":
+                        accessory = HomeKitDevices.Window(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Outlet":
                         accessory = HomeKitDevices.Outlet(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "CarbonDioxideSensor":
@@ -1591,12 +1594,12 @@ class Plugin(indigo.PluginBase):
                             if isinstance(speedLevel, int):
                                 self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(speedLevel)
 
-                elif str(updateddevice_subtype) == "Blind":
+                elif str(updateddevice_subtype) in ("Blind", "Window"):
                     if "brightnessLevel" in updated_device.states:
                         if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
                             brightness = updated_device.states["brightnessLevel"]
                             if self.debug2:
-                                self.logger.debug("Blind: Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
+                                self.logger.debug("Blind/Window: Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
                             if isinstance(brightness, int):
                                 self.device_list_internal[checkindex]["accessory"].set_covering_state(brightness, None)
                     elif "onOffState" in updated_device.states:
@@ -1605,7 +1608,7 @@ class Plugin(indigo.PluginBase):
                         if updated_device.states['onOffState'] != original_device.states['onOffState']:
                             newstate = updated_device.states["onOffState"]
                             if self.debug2:
-                                self.logger.debug("Blind: Defaulting to onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                                self.logger.debug("Blind/Window: Defaulting to onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                             self.device_list_internal[checkindex]["accessory"].set_covering_state(None, updated_device.states["onOffState"])
 
                 if str(updateddevice_subtype) in ("HueLightBulb", "LightBulb", "ColorTempLightBulb"):
@@ -1660,7 +1663,7 @@ class Plugin(indigo.PluginBase):
                                         self.device_list_internal[checkindex]["accessory"].Saturation.notify()
                                         self.device_list_internal[checkindex]["accessory"].char_color_temp.notify()
 
-                if "onOffState" in updated_device.states and str(updateddevice_subtype) != "Blind":   ## work around to remnove this TODO
+                if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window"):   ## work around to remnove this TODO
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
                         if self.debug2:
@@ -2037,6 +2040,17 @@ class Plugin(indigo.PluginBase):
                     newstate = indigodevice.states["onOffState"]
                     if self.debug4:
                         self.logger.debug("Blind: Defaulting to onOffState using onOffState {} ".format(newstate))
+                    return None,newstate
+
+            elif statetoGet == "windowAlone":
+                if "brightnessLevel" in indigodevice.states:
+                    if self.debug4:
+                        self.logger.debug("Window: Found a brightnessLevel state try using that, for WindowCovering..")
+                    return indigodevice.states["brightnessLevel"],None
+                elif "onOffState" in indigodevice.states:
+                    newstate = indigodevice.states["onOffState"]
+                    if self.debug4:
+                        self.logger.debug("Window: Defaulting to onOffState using onOffState {} ".format(newstate))
                     return None,newstate
 
             elif statetoGet == "garageDoorState":
@@ -2580,6 +2594,8 @@ class Plugin(indigo.PluginBase):
 
             if dev.model == "BlindsT1234":
                 return "service_WindowCovering"
+            elif "Shutter" in dev.model:
+                return "service_WindowCovering"
 
             if dev.pluginId == "com.fogbert.indigoplugin.fantasticwWeather":
                 if dev.deviceTypeId == 'Weather': return "service_TemperatureSensor"
@@ -2775,7 +2791,7 @@ class Plugin(indigo.PluginBase):
 
     ########################################
     def toggle_publish(self, values_dict, type_id="", dev_id=None):
-        self.logger.debug(u"toggle_publish called")
+        self.logger.debug("toggle_publish called")
         if values_dict["isDeviceSelected"] and values_dict["HomeKit_publishDevice_2"]:
             values_dict["enablePublishFields"] = True
         else:

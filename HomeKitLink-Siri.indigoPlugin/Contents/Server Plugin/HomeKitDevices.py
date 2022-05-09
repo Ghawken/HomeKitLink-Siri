@@ -1485,7 +1485,6 @@ class WindowCovering(Accessory):
                         brightness = 100
                 return brightness
 
-
     def set_covering_state(self, brightness, onOffStatevalue):
         if self.plugin.debug6:
             logger.debug("Blind: set covering state called with values {}, onOffState {}, and inverse {}".format(brightness, onOffStatevalue, self._inverse))
@@ -1546,6 +1545,144 @@ class WindowCovering(Accessory):
 
                 self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?senmd
 
+class Window(Accessory):
+
+    category = CATEGORY_WINDOW
+
+    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
+        super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+
+        self.activate_only = self.is_activate(indigodeviceid)
+        indigodevice = indigo.devices[indigodeviceid]
+
+        self._inverse = False
+        ## get temperature unit we are using
+        inverseSelector = indigodevice.pluginProps.get("HomeKit_inverseSelector", False)  ## True if F
+        if inverseSelector:
+            logger.debug("Inverse Controls Enabled. Inverse Selection: {}".format(inverseSelector))
+            self._inverse = True
+        else:
+            logger.debug("Inverse Controls Not enabled. Inverse Selection:  {}".format(inverseSelector))
+            self._inverse = False
+
+        serv_window_covering = self.add_preload_service("Window")
+
+        self.char_current_position = serv_window_covering.configure_char(
+            "CurrentPosition", value=0 )# getter_callback=self.get_state)
+
+        self.char_target_position  = serv_window_covering.configure_char(
+            "TargetPosition", value=0, setter_callback=self._set_chars
+        )
+        self.char_position_state = serv_window_covering.configure_char(
+            "PositionState", value=2
+        )
+
+        # add state from start and set.
+        currentstate = self.get_state()
+        if currentstate is not None:
+            self.char_target_position.set_value(currentstate)
+            self.char_current_position.set_value(currentstate)
+
+        serv_window_covering.setter_callback = self._set_chars  ## Setter for everything
+
+    def is_activate(self, deviceid):
+        """Check if entity is activate only."""
+        return self.plugin.check_activateOnly(deviceid)
+        # check for absence of onOffState or whether active group - probably reverse logic
+
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Window: Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def get_state(self):
+        # logger.debug("Bulb value: %s", value)
+        if self.activate_only:
+            #logger.debug("Active Only switch setting to False")
+            return False
+
+        ## use tuple here
+        brightness,onOffStatevalue = self.plugin.Plugin_getter_callback(self, "windowAlone")
+
+        if brightness is not None:
+            if self._inverse == False:
+                brightness = brightness
+            else:
+                brightness =  100 - brightness
+            return brightness
+        else:  ## onOffState
+            if onOffStatevalue is not None:
+                if self._inverse == False:
+                    if onOffStatevalue:
+                        brightness = 100
+                    else:
+                        brightness = 0
+                else:
+                    if onOffStatevalue:
+                        brightness = 0
+                    else:
+                        brightness = 100
+                return brightness
+
+    def set_covering_state(self, brightness, onOffStatevalue):
+        if self.plugin.debug6:
+            logger.debug("Window: set Window state called with values {}, onOffState {}, and inverse {}".format(brightness, onOffStatevalue, self._inverse))
+        if brightness is not None:
+            if self._inverse == False:
+                self.char_target_position.set_value(brightness)
+                self.char_current_position.set_value(brightness)
+            else:
+                brightness =  100 - brightness
+                self.char_target_position.set_value(brightness)
+                self.char_current_position.set_value(brightness)
+        else:  ## onOffState
+            if onOffStatevalue is not None:
+                if self._inverse == False:
+                    if onOffStatevalue:
+                        self.char_target_position.set_value(100)
+                        self.char_current_position.set_value(100)
+                    else:
+                        self.char_target_position.set_value(0)
+                        self.char_current_position.set_value(0)
+                else:
+                    if onOffStatevalue:
+                        self.char_target_position.set_value(0)
+                        self.char_current_position.set_value(0)
+                    else:
+                        self.char_target_position.set_value(100)
+                        self.char_current_position.set_value(100)
+
+    def _set_chars(self, char_values):
+        """This will be called every time the value of one of the
+        characteristics on the service changes.
+        """
+        if self.plugin.debug6:
+            logger.debug(f"Window: _set_Chars received : {char_values}")
+
+        if isinstance(char_values,dict):
+            if "TargetPosition" in char_values:
+                if self.plugin.debug6:
+                    logger.debug('TargetPosition wished to be {}, converted to and sending to Indigo'.format( char_values))
+                if self._inverse == False:
+                    if int(char_values['TargetPosition']) == 0:
+                        char_values["On"] = 0
+                    elif int(char_values["TargetPosition"]) == 100:
+                        char_values['On'] = 1
+                    char_values["Brightness"] = char_values.pop("TargetPosition")  ## replace targetdoorstate with On and send through onOffRelay actioning..
+                    if self.plugin.debug6:
+                        logger.debug("Char Values converted from TargetPosition to Brightness.  New char_values : {}".format(char_values))
+                else:
+                    if int(char_values['TargetPosition']) == 100:
+                        char_values["On"] = 0
+                    elif int(char_values["TargetPosition"]) == 0:
+                        char_values['On'] = 1
+                    char_values["Brightness"] = char_values.pop("TargetPosition")
+                    char_values["Brightness"] = int(100 - char_values["Brightness"])
+                    ## replace targetdoorstate with On and send through onOffRelay actioning..
+                    if self.plugin.debug6:
+                        logger.debug("Inverse: Char Values converted from TargetPosition to Brightness.  New char_values : {}".format(char_values))
+
+                self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
 
 class MotionSensor(Accessory):
 
