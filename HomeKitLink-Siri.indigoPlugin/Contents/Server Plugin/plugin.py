@@ -1131,7 +1131,7 @@ class Plugin(indigo.PluginBase):
                 config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}/stream?cameraNum={}&width={}".format(ssURL_rtsp, ssCameraNum, ssWidth)
 
             else:  # Yikes not a camera
-                self.logger.error("This device ID {} CANNOT be a camera device in HomeKit. Please remove".format(indigodeviceid))
+                self.logger.error("This device ID {} with Name {} ** CANNOT ** be a camera device in HomeKit. Please remove and update. ".format(indigodeviceid, indigo.devices[indigodeviceid].name))
                 return None
             # Create Default Image for Accessory at beginning to avoid filenotfound exception (caught)
             # later on.
