@@ -93,7 +93,9 @@ No support for Tilt/other aspects as yet.
 
 0.2.29
 Add support for Windows
-TODO security systems..
+
+0.2.31
+Reject anything other than a Camera tried to be setup as a Camera...
 
 
 
