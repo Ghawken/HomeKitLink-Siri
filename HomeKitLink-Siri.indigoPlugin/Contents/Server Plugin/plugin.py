@@ -47,6 +47,7 @@ try:
 except:
     pass
 
+import HKSecuritySystem
 import HomeKitDevices
 import HKConstants
 import HKDevicesCamera
@@ -146,7 +147,8 @@ class Plugin(indigo.PluginBase):
                                 "service_HumiditySensor": ["HumiditySensor"],
                                 "service_Lightbulb": ["LightBulb", "LightBulb_switch"],
                                 "service_WindowCovering" : ["Blind"],
-                                "service_Window" : ["Window"]
+                                "service_Window" : ["Window"],
+                                "service_Security" :["Security"]
                                 }
 
         self.driver_multiple = []
@@ -638,6 +640,8 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.SmokeSensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Switch":
                         accessory = HomeKitDevices.SwitchSimple(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "Security":
+                        accessory = HKSecuritySystem.SecuritySystem(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Blind":
                         accessory = HomeKitDevices.WindowCovering(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Window":
@@ -1517,6 +1521,15 @@ class Plugin(indigo.PluginBase):
                             self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                         self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
                         self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
+
+                elif str(updateddevice_subtype) == "Security":
+                    if updated_device.states != original_device.states:
+                        if self.debug2:
+                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
+                        if this_is_debug_device:
+                            self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
+                        self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
+                        return
 
                 elif str(updateddevice_subtype) == "GarageDoor":
                     if "onOffState" in updated_device.states:  ## if onOffexists use that preferentially
@@ -2594,6 +2607,11 @@ class Plugin(indigo.PluginBase):
 
             if dev.pluginId == "com.pennypacker.indigoplugin.senseme":
                 return "service_Fanv2"
+
+            if dev.pluginId in ("com.perceptiveautomation.indigoplugin.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm"):
+                return "service_Security"
+
+
 
             if dev.model == "BlindsT1234":
                 return "service_WindowCovering"
