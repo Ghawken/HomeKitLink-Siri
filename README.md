@@ -1,6 +1,6 @@
 # HomeKitLink 
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png)
 
 
 This plugin (HKLS) aims to allow you to create HomeKit Bridges, which you add your indigo devices to and allows control from within Homekit and Siri control of your setup Apps.
