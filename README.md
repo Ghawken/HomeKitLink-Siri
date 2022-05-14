@@ -1,6 +1,6 @@
 # HomeKitLink Plugin
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png?raw=true)
 
 
 This plugin (HKLS) aims to allow you to create HomeKit Bridges, which you add your indigo devices to and allows control from within Homekit and Siri control of your setup Apps.
@@ -146,7 +146,7 @@ In the aim of keeping the options completely open - you can select anything ....
 
 This is the HomeKitLink Bridge Edit Page.  
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig1.png?raw=true)
 
 The first menu is a Indigo Device Selection menu -
 all Indigo Devices lists ALL indigo devices.
@@ -157,7 +157,7 @@ The **Show All Options** option selection enables you to select any HomeKit devi
 
 The Show QR Code button will show the QR code, for adding this bridge to HomeKit for the current HomeKitLink Bridge device.
 The bridge needs to be running for this to function, so add devices, Save - check no errors and return to Show QR code. 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/HomeKit.png?raw=true)
 
 From within your HomeKit app:
 Add Accessory - scan QR Code - and use this code.
@@ -175,19 +175,19 @@ If you are changing HomeKit device - Light to MotionSensor that will be an issue
 Remove it first, Save, Save config and alllow bridge to restart.
 Check in HomeKit app device is gone and then readd as new device type.
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig2.png?raw=true)
 
 
 Below is an example of the device list menu - it shows devices published to this HomeKitLink Bridge, and greyed-out devices published to other HomeKitLink Bridges
 To Edit the devices you need to edit the appropriate HomeKitLink Bridge.
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig3.png?raw=true)
 
 
 Below are the currently supported device types.  These are automatically guessed by HKLS, but can be selected by ShowAll option.
 Most should be funcitioning close to 100%
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/DeviceConfig4.png?raw=true)
 
 
 
@@ -203,12 +203,12 @@ Other cameras - basically aren't supported, and you would be better off running 
 
 ## Menu Items:
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png?raw=true)
 
 ### Show Device Publications
 This shows in indigos log all current devices wished to be published to HomeKit.
 Such as (updated since this photo)
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/logDevices.png?raw=true)
 
 If HomeKitLink Bridge is disabled - will show as warning.  
 If HomeKitLink Bridge does not exist at all (deleted) it will show red
