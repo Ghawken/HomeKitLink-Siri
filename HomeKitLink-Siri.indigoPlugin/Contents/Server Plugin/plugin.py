@@ -1402,7 +1402,15 @@ class Plugin(indigo.PluginBase):
                                             self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
                                         if this_is_debug_device:
                                             self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                        self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+
+                                        if str(updateddevice_subtype) == "TemperatureSensor":
+                                            if this_is_debug_device:
+                                                self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
+                                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
+                                        else:
+                                            if this_is_debug_device:
+                                                self.logger.warning("Humidty or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                            self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
                         else:
                             if "sensorValue" in updated_device.states:
                                 if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
@@ -1418,7 +1426,16 @@ class Plugin(indigo.PluginBase):
                                             updated_device.name, sensorvalue, type(sensorvalue)))
                                     if self.debug1:
                                         self.logger.debug("Found a Sensor value, using that")
-                                    self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)  ##CurrentTemperature is chartemp
+                                    if str(updateddevice_subtype) == "TemperatureSensor":
+                                        if this_is_debug_device:
+                                            self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
+                                        self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
+                                    else:
+                                        if this_is_debug_device:
+                                            self.logger.warning("Humidty or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                        self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+
+                                    #self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)  ##CurrentTemperature is chartemp
                         ## else check internal list for sensor State that we wish to return back
                     else:
                         sensortouse = self.device_list_internal[checkindex]["devicesensor"]
@@ -1437,7 +1454,15 @@ class Plugin(indigo.PluginBase):
                                     if this_is_debug_device:
                                         self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
                                             updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                    self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)
+                                    if str(updateddevice_subtype) == "TemperatureSensor":
+                                        if this_is_debug_device:
+                                            self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
+                                        self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
+                                    else:
+                                        if this_is_debug_device:
+                                            self.logger.warning("Humidty or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                        self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+
                     # sensor type updated and check Battery
                     if "batteryLevel" in updated_device.states:
                         if not self.device_list_internal[checkindex]["accessory"]._char_battery or not self.device_list_internal[checkindex]["accessory"]._char_low_battery:

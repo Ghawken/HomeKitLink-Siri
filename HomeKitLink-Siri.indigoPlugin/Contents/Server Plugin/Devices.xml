@@ -67,11 +67,6 @@
 				<Label>Select an available HomeKit Device Type. Try show ALl Options if correct option doesn't auto select	</Label>
 			</Field>
 
-			<Field id="deviceSubtype_warningLabel" type="label" fontColor="black" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="HomeKit_publishDevice_2" visibleBindingValue="true">
-				<Label>If changing a device type - PLEASE unpublish,
-** Save Device ** Button, Save config, review in HomeKit App and then re-publish	</Label>
-			</Field>
-
 			<Field id="deviceSubtype_LightInfo" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="LightBulb">
 				<Label>LightBulb - This really refers to 3 devices within HomeKit.
 1. Simple switch on/off which is a bulb, this can be changed in app to any other switch icon.
@@ -81,9 +76,12 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If one =
 				</Label>
 			</Field>
 
-			<Field id="tempSelector" type="checkbox" tooltip="Enabling will select Fahrenheit ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat">
+			<Field id="tempSelector" type="checkbox" tooltip="Enabling will select Fahrenheit ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor">
 				<Label/>
 				<Description>Enable to Select Fahrenheit</Description>
+			</Field>
+			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor" alwaysUseInDialogHeightCalc="true">
+				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
 			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will inverse Controls ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window">
 				<Label/>
@@ -136,6 +134,11 @@ If incorrect, hopefully won't break bridge and update with this selector.  If us
 or close this dialog without saving first !
 Plus the Publish checkbox must be enabled if you wish device in HomeKit</Label>
 			</Field>
+			<Field id="deviceSubtype_warningLabel" type="label" fontColor="black" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="HomeKit_publishDevice_2" visibleBindingValue="true">
+				<Label>If changing a device type - PLEASE unpublish,
+** Save Device ** Button, Save config, review in HomeKit App and then re-publish	</Label>
+			</Field>
+
 			<Field id="saveDisabledLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="false">
 				<Label>You must first select a device.
 				</Label>

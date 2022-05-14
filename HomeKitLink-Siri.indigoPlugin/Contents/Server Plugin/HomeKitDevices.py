@@ -50,7 +50,17 @@ class TemperatureSensor(Accessory):
         self._char_charging = None
         self._char_low_battery = None
         batteryLevel = None
-        
+        self._unit =TEMP_CELSIUS
+        indigodevice = indigo.devices[indigodeviceid]
+        ## get temperature unit we are using
+        tempSelector = indigodevice.pluginProps.get("HomeKit_tempSelector", False)  ## True if F
+        if tempSelector:
+            logger.debug("{} Unit Selected".format(TEMP_FAHRENHEIT))
+            self._unit = TEMP_FAHRENHEIT
+        else:
+            logger.debug("{} unit Selected".format(TEMP_CELSIUS))
+            self._unit = TEMP_CELSIUS
+
         # add battery service to each Sensor - prelim below
         indigodevice = indigo.devices[indigodeviceid]
         batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
@@ -70,7 +80,17 @@ class TemperatureSensor(Accessory):
                 "StatusLowBattery", value=is_low_battery   )
 
         self.char_temp = serv_temp.configure_char('CurrentTemperature',  getter_callback=self.get_temp)
+        # Display units characteristic
+
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
+
+    def _temperature_to_homekit(self, temp):
+        return HKutils.temperature_to_homekit(temp, self._unit)
+
+    def set_temperature(self, temperature):
+        if self.plugin.debug6:
+            logger.debug(f"Updating Temp: {temperature} and setting Converted value {self._temperature_to_homekit(temperature)}")
+        self.char_temp.set_value(self._temperature_to_homekit(temperature))
 
     async def run(self):
         if self.plugin.debug6:
@@ -79,7 +99,7 @@ class TemperatureSensor(Accessory):
 
     def get_temp(self):
         value = self.plugin.Plugin_getter_callback(self, "temperature")
-        return HKutils.convert_to_float(value)
+        return self._temperature_to_homekit(HKutils.convert_to_float(value))
 
     def _set_chars(self, char_values):
         """This will be called every time the value of one of the
