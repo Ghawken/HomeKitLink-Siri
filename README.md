@@ -1,4 +1,4 @@
-# HomeKitLink 
+# HomeKitLink Plugin
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png)
 
@@ -12,18 +12,13 @@ This plugin (HKLS) aims to allow you to create HomeKit Bridges, which you add yo
 
 Download latest and greatest indigoplugin file
 
-Recommend install the one library dependencies before enabling.
+Recommended to install the one library dependencies before enabling.
 
 In a terminal window enter:
 #### `sudo pip3 install cryptography`
 
 Then:
-Double click to install
-
-If see some immediate error messages as will need install this one package (if you haven't already done so above):
-
-Either after or before in a terminal window
-#### `sudo pip3 install cryptography`
+Double click download release file to install
 
 Restart, or double click enable the plugin.
 
@@ -42,6 +37,7 @@ NB: As the version of indigo increases please update the 2022.1 to the most rele
 Only one indigo device, once only, can be published to any HomeKit Bridge.  
 
 Each bridge has a maximum of 95 devices published within it.  Currently this is not enforced.  This is on TODO list.
+
 Add new HomeKitLink bridge devices as needed to increase device count, or to manage devices 
 eg. Some users have a bridge per room for example.
 Multiple bridges for the sake of it - likely best avoided, but shouldn't add to much overhead.
@@ -68,33 +64,52 @@ Check in HomeKit app that the switch is gone (should just disappear...) and then
 
 1. Create a HomeKitLink Bridge device within Indigo - Create New, Select HomeKitLink and the Bridge type (there is only one option)
 
-2. Select a Indigo device to publish on this Bridge to HomeKit.   For this simple example lets just pick a Light Device
-Click the Checkbox Publish Device
+2. Select a Indigo device to publish on this Bridge to HomeKit.
+
+For this simple example lets just pick a Light Device
+Click the Checkbox Publish Device 
+
 Name the Device.  This is the HomeKit name - Homekit automatically removes the Room name from front of device.  Decide on your naming.
+
 Select the HomeKit device Type.  "Lightbulb".  HomeKitLink will decide what type of Light your device should be automatically (from Color, to Dimmer, to switch only)
+
 Please Button:  ** Save Device **
+
 Indigo's log - will communicate that device has been published.
-Please SAVE in the Config Dialog.  (This will stop, start the HomeKitLink Bridge)
+
+Please SAVE in the Device's Config Dialog.  (This will stop, start the HomeKitLink Bridge)
+
 Name your newly created HomeKitLink Bridge something e.g HomeKitLink Bridge Lights
 
-3. Go to HomeKit app in iOS device
+4. Go to HomeKit app in iOS device
+
 Use you existing Home, or create a new one
+
 Press the Top Left + button
+
 Select "Add Accessory"
 
 Go to HomeKitLink Bridge Device above "HomeKitLink Bridge Lights"
+
 Edit the Device
+
 Click the Show QR Code button. 
+
 This should open a Webpage with a QR Code
+
 Scan this QR Code on the HomeKit iOS App.
+
 Name and setup you Bridge and Light.
 
 & Done.
-Setup within HomeKit
+
+This device should now be Setup within HomeKit
+
 Siri - can control - turn on Light-name, turn on Room lights etc.  Close/Open Blinds etc.etc
 
 To add Additional Devices (up to 95 per Indigo HomeKitLink Bridge) go to Edit and repeat Step 2.
 You can add as many devices as wished at once, before closing the Config Dialog and restarting Bridge with Save
+
 
 Note:
 When adding devices later to a existing bridge the new device just appear in the HomeKit app.  
