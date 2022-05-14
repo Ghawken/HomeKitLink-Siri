@@ -1,4 +1,4 @@
-# HomeKitLink Siri 
+# HomeKitLink 
 
 ![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon.png](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon.png)
 
@@ -12,16 +12,20 @@ This plugin (HKLS) aims to allow you to create HomeKit Bridges, which you add yo
 
 Download latest and greatest indigoplugin file
 
+Recommend install the one library dependencies before enabling.
 
-Double click to install
-
-Expect to see some immediate error messages as will need to download and install one package:
-
-Either after or before in a terminal window
-
+In a terminal window enter:
 #### `sudo pip3 install cryptography`
 
-Restart the plugin.
+Then:
+Double click to install
+
+If see some immediate error messages as will need install this one package (if you haven't already done so above):
+
+Either after or before in a terminal window
+#### `sudo pip3 install cryptography`
+
+Restart, or double click enable the plugin.
 
 Return to the terminal window and copy and paste the below
 
@@ -35,11 +39,14 @@ NB: As the version of indigo increases please update the 2022.1 to the most rele
 
 ### Limitations
 
-Only one indigo device, once, can be published to any HomeKit Bridge.  
+Only one indigo device, once only, can be published to any HomeKit Bridge.  
 
-Each bridge has  a maximum of 95 devices published.  Currently this is not enforced.  This is on TODO list.
+Each bridge has a maximum of 95 devices published within it.  Currently this is not enforced.  This is on TODO list.
+Add new HomeKitLink bridge devices as needed to increase device count, or to manage devices 
+eg. Some users have a bridge per room for example.
+Multiple bridges for the sake of it - likely best avoided, but shouldn't add to much overhead.
 
-Seperate indigo devices but one physical device = **no problem eg. motion, light sensors**.
+If you wish to publish seperate indigo devices but one physical device = **no problem eg. motion, light sensors**.
 If you wish the exactly same device eg. 2 dimmer devices to be available in homekit - potentially under different names this is not possible without some simple help.
 Simply use Masquerade plugin, or virtual devices and copy the device wished into a new device - use this new device within this plugin.  Repeat as many times as wished.
 
@@ -50,21 +57,67 @@ These details are also saved within Indigo, so migrate and move with indigo with
 
 If you break HomeKit by your poor device option - in the normal course of events you simply remove the device from the HomeKit bridge and start again..
 
-### Setup: Next
+**Important**:
+If you are changing a already published HomeKit device - eg. Switch to a Blind.
+That will cause issues with the HomeKit app who will expect the old device.
+You MUST remove the Switch device first, unpublish, Save, Save config and alllow bridge to restart.
+Check in HomeKit app that the switch is gone (should just disappear...) and then readd again as new device type.
 
-Create a HomeKitLink-Siri (HKLS) Bridge device.
+
+### Quick, Basic Setup
+
+1. Create a HomeKitLink Bridge device within Indigo - Create New, Select HomeKitLink and the Bridge type (there is only one option)
+
+2. Select a Indigo device to publish on this Bridge to HomeKit.   For this simple example lets just pick a Light Device
+Click the Checkbox Publish Device
+Name the Device.  This is the HomeKit name - Homekit automatically removes the Room name from front of device.  Decide on your naming.
+Select the HomeKit device Type.  "Lightbulb".  HomeKitLink will decide what type of Light your device should be automatically (from Color, to Dimmer, to switch only)
+Please Button:  ** Save Device **
+Indigo's log - will communicate that device has been published.
+Please SAVE in the Config Dialog.  (This will stop, start the HomeKitLink Bridge)
+Name your newly created HomeKitLink Bridge something e.g HomeKitLink Bridge Lights
+
+3. Go to HomeKit app in iOS device
+Use you existing Home, or create a new one
+Press the Top Left + button
+Select "Add Accessory"
+
+Go to HomeKitLink Bridge Device above "HomeKitLink Bridge Lights"
+Edit the Device
+Click the Show QR Code button. 
+This should open a Webpage with a QR Code
+Scan this QR Code on the HomeKit iOS App.
+Name and setup you Bridge and Light.
+
+& Done.
+Setup within HomeKit
+Siri - can control - turn on Light-name, turn on Room lights etc.  Close/Open Blinds etc.etc
+
+To add Additional Devices (up to 95 per Indigo HomeKitLink Bridge) go to Edit and repeat Step 2.
+You can add as many devices as wished at once, before closing the Config Dialog and restarting Bridge with Save
+
+Note:
+When adding devices later to a existing bridge the new device just appear in the HomeKit app.  
+It appears in the Default Room of the Bridge.
+
+
+### Setup
+
+Create a HomeKitLink ('HKLS') Bridge device.
 Select the devices you wish to publish,  and select what device it should be, enable Checkbox Publish and click save.
 Repeat this as often as needed.   Please SAVE within the Config Dialog when done.
 
-Once SAVE is pressed the Bridge will be stopped and restarted.  If this isn't need press cancel.
+Once Config Dialog SAVE is pressed the Bridge will be stopped and restarted.  If this isn't need press cancel.
 
 Here the options need explaining:
 
 You can select any available HomeKit device (if Show-all selected) - for the selected Indigo Device
 If you are setting up a sensor device - this is a device that returns sensor information to HomeKit - the plugin will give you an option of what deviceState to use.
 
-Typically this should be sensorValue - this is the standard value of any sensor.   Sometimes if you are selecting a plugin device to be a sensor device 
-eg. piBeacon sensors, or RFXCOM plugins - you should choose the best state fitting the usage.
+Typically this should be sensorValue - this is the standard value of any sensor.   
+
+Sometimes if you are selecting a plugin device to be a sensor device 
+eg. piBeacon sensors, or RFXCOM plugins - you should choose the best state fitting the usage, but it must be compatible otherwise will not work.
 To aid this choose the config menu will show the most recent value for this state.
 
 Importantly for most On/Off Motion/Occupancy Sensors this should be true/False state.
@@ -82,7 +135,7 @@ This is the HomeKitLink Bridge Edit Page.
 
 The first menu is a Indigo Device Selection menu -
 all Indigo Devices lists ALL indigo devices.
-Everything else just shorten this list to devices you may be more interested in - eg. Sensors, or Lights etc.
+Everything else just aims to shorten this list to devices you may be more interested in - eg. Sensors, or Lights etc.
 This only makes it easier to find devices.   These are duplicated in the all list - just harder to find if you have hundreds of devices.
 
 The **Show All Options** option selection enables you to select any HomeKit device for the currently selected indigo device.  (as per the warnings)
@@ -206,6 +259,22 @@ Largely supported.  Main still be some fine tuning needed
 ### Contact Sensor
 Above rules apply, either defaults to Sensorvalue or can select another state to be used..
 
+### Blinds
+### Windows
+
+Both with option to reverse logic of closing.  End On = closed, or On = open.  Plus reversal of % closed.  End 20% closed, or 20% open
+
+### Security Systems
+
+(Beta only)
+Security System is a slightly different entity to the above as it has no device within Indigo that is vaguely similar.
+I have a added a reasonably extendable approach to security systems - so hopefully can add other devices as needed/reported.
+
+Currently partially supporting VSS devices (basic security system device only), Paradox/Magellan/SP7000 alarm, and DSC Keypad.
+This is not complete as testing devices is difficult lacking the actual hardware or ability to trigger.
+Further Alarm systems should be able to be added.
+
+
 ## When will this happen?
 
 Good question.
@@ -225,9 +294,11 @@ Bug fixing these devices and adding features will be the priority.
 
 Please add a issue to Github - and based on the above principals that will guide priority
 
-TODO list - hopefully done before end of Beta
-Security System Support
-Window Covering Support
+## This isn't the previous plugin HomeKit-Bridge plugin
+
+Its quite different in its implementation and there is nothing underneath the surface doing the hardwork except the plugin itself.
+Requests that start with HomeKit-Bridge supported this, or did this etc.etc.... or the like will drop considerably in any prioritisation :)
+
 
 
 
