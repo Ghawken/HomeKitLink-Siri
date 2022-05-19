@@ -68,17 +68,17 @@ DSC_TO_HOMEKIT_TARGET = {
     "disarmed": HK_ALARM_DISARMED,
 }
 VSS_TO_HOMEKIT_CURRENT = {
-    "0": HK_ALARM_STAY_ARMED,
-    "1": HK_ALARM_AWAY_ARMED,
-    "2": HK_ALARM_NIGHT_ARMED,
-    "3": HK_ALARM_DISARMED,
-    "4": HK_ALARM_TRIGGERED
+    "stay": HK_ALARM_STAY_ARMED,
+    "away": HK_ALARM_AWAY_ARMED,
+    "night": HK_ALARM_NIGHT_ARMED,
+    "disarm": HK_ALARM_DISARMED,
+    "triggered": HK_ALARM_TRIGGERED
 }
 VSS_TO_HOMEKIT_TARGET = {
-    "0": HK_ALARM_STAY_ARMED,
-    "1": HK_ALARM_AWAY_ARMED,
-    "2": HK_ALARM_NIGHT_ARMED,
-    "3": HK_ALARM_DISARMED
+    "stay": HK_ALARM_STAY_ARMED,
+    "away": HK_ALARM_AWAY_ARMED,
+    "night": HK_ALARM_NIGHT_ARMED,
+    "disarm": HK_ALARM_DISARMED
 }
 
 class SecuritySystem(Accessory):
@@ -97,7 +97,7 @@ class SecuritySystem(Accessory):
         self.indigodeviceid = indigodeviceid
         device = indigo.devices[self.indigodeviceid]
         self.plugin_inuse  = device.pluginId
-        if self.plugin_inuse == "com.perceptiveautomation.indigoplugin.vss":
+        if self.plugin_inuse == "com.boisypitre.vss":
             logger.debug("Setting VSS Conversion")
             self.SET_TO_USE_CURRENT = VSS_TO_HOMEKIT_CURRENT
             self.SET_TO_USE_TARGET = VSS_TO_HOMEKIT_TARGET
@@ -141,7 +141,7 @@ class SecuritySystem(Accessory):
             basePlugin = indigo.server.getPlugin(self.plugin_inuse)
             logger.debug(f"Plugin in Use: {self.plugin_inuse}")
             if basePlugin.isEnabled():
-                if self.plugin_inuse == "com.perceptiveautomation.indigoplugin.vss":
+                if self.plugin_inuse == "com.boisypitre.vss":
                     basePlugin.executeAction("setSecuritySystemState", deviceId=self.indigodeviceid, props={"securitySystemState": str(char_values)} )
                 elif self.plugin_inuse == "com.GlennNZ.indigoplugin.ParadoxAlarm":
                     partition= indigodevice.globalProps["com.GlennNZ.indigoplugin.ParadoxAlarm"]["zonePartition"]
@@ -189,7 +189,7 @@ class SecuritySystem(Accessory):
             logger.debug("get_Security Called")
             indigodevice = indigo.devices[self.indigodeviceid]
 
-            if self.plugin_inuse in ( "com.perceptiveautomation.indigoplugin.vss","com.GlennNZ.indigoplugin.ParadoxAlarm"):
+            if self.plugin_inuse in ( "com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm"):
                 logger.debug(f"Using VSS and ParadoxAlarm, and device_current_state == {self.device_current_state}")
                 if str(self.device_current_state) in indigodevice.states:
                     #logger.debug(f"IndigoDevice\n {indigodevice.states}")

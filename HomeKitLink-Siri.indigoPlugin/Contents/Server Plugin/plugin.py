@@ -2633,7 +2633,7 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == "com.pennypacker.indigoplugin.senseme":
                 return "service_Fanv2"
 
-            if dev.pluginId in ("com.perceptiveautomation.indigoplugin.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm"):
+            if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm"):
                 return "service_Security"
 
 
