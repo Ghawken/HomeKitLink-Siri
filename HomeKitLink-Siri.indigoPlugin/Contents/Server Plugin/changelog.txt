@@ -94,10 +94,17 @@ No support for Tilt/other aspects as yet.
 0.2.29
 Add support for Windows
 
-0.2.32
+0.2.31
 Reject anything other than a Camera tried to be setup as a Camera...
 Support for SecuritySystem - supporting Paradox alarm, VSS, and DSC alarms currently
 .. some finetuning needed as hard to test non-existent devices/alarms
+
+0.2.32
+Bug fixing for Thermostat
+Bug fix for left over F to C conversion issue
+Manage Setpoint Heat/Cool independently when mode changes
+Change details for VSS given change in states
+
 
 
 TODO

@@ -166,6 +166,7 @@ class Thermostat(Accessory):
                 # default of 0.1 in order to have enough precision to convert
                 # temperature units and avoid setting to 73F will result in 74F
                 properties={PROP_MIN_VALUE: hc_min_temp, PROP_MAX_VALUE: hc_max_temp},
+                getter_callback=self.get_target_temp
             )
             # Display units characteristic
             if self._unit and self._unit in UNIT_TO_HOMEKIT:
@@ -229,8 +230,30 @@ class Thermostat(Accessory):
         #logger.debug("set_tempcalled by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
         if type == "current":
             self.char_current_temp.set_value(self._temperature_to_homekit(temperature))
-        # if type == "setpointCool":
-        #     self.char_current_temp.set_value(self._temperature_to_homekit(temperature))
+        elif type == "target":
+            self.char_target_temp.set_value(self._temperature_to_homekit(temperature))
+        elif type == "coolthresh":
+            self.char_cooling_thresh_temp.set_value(self._temperature_to_homekit(temperature))
+        elif type == "heatthresh":
+            self.char_heating_thresh_temp.set_value(self._temperature_to_homekit(temperature))
+        elif type in ("setpointCool", "setpointHeat"):
+            hc_hvac_mode = self.char_target_heat_cool.value
+            if hc_hvac_mode == 1 or hc_hvac_mode == 2:  ## HEAT  or ## Cool
+                self.char_target_temp.set_value(self._temperature_to_homekit(temperature))
+            elif hc_hvac_mode == 3: ## AUTO
+                if type =="setpointCool":
+                    self.char_cooling_thresh_temp.set_value(self._temperature_to_homekit(temperature))
+                elif type == "setpointHeat":
+                    self.char_heating_thresh_temp.set_value(self._temperature_to_homekit(temperature))
+
+
+    def update_all_temperatures(self):
+        logger.debug("update_all_temperatures called by plugin")
+        indigodevice = indigo.devices[self.indigodeviceid]
+
+
+
+
 
     def _set_fan_active(self, char_values):
         """This will be called every time the value of one of the
@@ -268,9 +291,22 @@ class Thermostat(Accessory):
                 logger.debug("Current Temp State:{}".format(value))
             if value == None:
                 value =0
-            return value
+            return self._temperature_to_homekit(value)
+            #
         except:
             logger.exception("Exception in get temp")
+
+    def get_target_temp(self):
+        try:
+            value = self.plugin.Plugin_getter_callback(self, "Thermostat_target_temp")
+            if self.plugin.debug6:
+                logger.debug("Current Target Temp State:{}".format(value))
+            if value == None:
+                value =0
+            return self._temperature_to_homekit(value)
+            #
+        except:
+            logger.exception("Exception in get target temp")
 
     def get_currentState(self):
         try:
@@ -535,11 +571,13 @@ class ThermostatZone(Accessory):
     def get_temp(self):
         try:
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_temp")
+
             if self.plugin.debug6:
                 logger.debug("Current Temp State:{}".format(value))
             if value == None:
                 value =0
-            return value
+            return self._temperature_to_homekit(value)
+           # return value
         except:
             logger.exception("Exception in get temp")
 

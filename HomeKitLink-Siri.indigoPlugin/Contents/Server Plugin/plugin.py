@@ -1368,8 +1368,27 @@ class Plugin(indigo.PluginBase):
                                     self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
                             if this_is_debug_device:
                                 self.logger.warning("Setting Target and Current Mode of Hvac. Mode Wished. {}".format(homekitModeWished))
+                            if self.debug5:
+                                self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
+                            ## Mode has been changed need to update target and range for HomeKit
+                            if 'setpointCool' in updated_device.states:
+                                setpointcool = updated_device.states['setpointCool']
+                                setpointheat = updated_device.states['setpointHeat']
+                                if updated_device.hvacMode == indigo.kHvacMode.Off:
+                                    pass
+                                elif updated_device.hvacMode == indigo.kHvacMode.Heat:
+                                    ## set targettemp to setpointHeat
+                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "target")
+                                elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                                    ## set targettemp to setpointHeat
+                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "target")
+                                elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
+                                    ## set targettemp to setpointHeat
+                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "coolthresh")
+                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
 
-                    if hasattr(updated_device, "setpointCool"):
+                    if "setpointCool" in updated_device.states:
+                        self.logger.debug(f"setpointCool Found: Original: {original_device.states['setpointCool']} and updated:  {updated_device.states['setpointCool']} ")
                         if original_device.states["setpointCool"] != updated_device.states["setpointCool"]:
                             setpointCool = updated_device.states["setpointCool"]
                             if self.debug2:
@@ -1377,7 +1396,7 @@ class Plugin(indigo.PluginBase):
                             if this_is_debug_device:
                                 self.logger.warning("Updating setpointCool to {}".format(setpointCool))
                             self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointCool), "setpointCool")
-                    if hasattr(updated_device, "setpointHeat"):
+                    if "setpointHeat" in updated_device.states:
                         if original_device.states["setpointHeat"] != updated_device.states["setpointHeat"]:
                             setpointHeat = updated_device.states["setpointHeat"]
                             if self.debug2:
@@ -1767,15 +1786,39 @@ class Plugin(indigo.PluginBase):
                         indigomodewished = listHvacModes[modewished]
                         # 0 = off, 1- heat, 2 cool, 3 auto
                         if self.debug5:
-                            self.logger.debug("CurrentMode: {}, and wised Mode:{} and indigo Mode {} ".format(currentMode, modewished, indigomodewished))
+                            self.logger.debug("CurrentMode: {}, and wised Mode:{} and indigo Mode: {} ".format(currentMode, modewished, indigomodewished))
+                        modechange = False
                         if currentMode == indigo.kHvacMode.Off and modewished in (1, 2, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
+                            modechange = True
                         elif currentMode == indigo.kHvacMode.Cool and modewished in (0, 1, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
+                            modechange = True
                         elif currentMode == indigo.kHvacMode.Heat and modewished in (0, 2, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
+                            modechange = True
                         elif currentMode == indigo.kHvacMode.HeatCool and modewished in (0, 1, 2):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
+                            modechange = True
+                        ## call Thermostat device to update target and values
+                        if modechange:
+                            if self.debug5:
+                                self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
+                            if 'setpointCool' in indigodevice.states:
+                                setpointcool = indigodevice.states['setpointCool']
+                                setpointheat = indigodevice.states['setpointHeat']
+                                if indigomodewished == indigo.kHvacMode.Off:
+                                    pass
+                                elif indigomodewished == indigo.kHvacMode.Heat:
+                                    ## set targettemp to setpointHeat
+                                    accessoryself.set_temperature(HKutils.convert_to_float(setpointheat), "target")
+                                elif indigomodewished == indigo.kHvacMode.Cool:
+                                    ## set targettemp to setpointHeat
+                                    accessoryself.set_temperature(HKutils.convert_to_float(setpointcool), "target")
+                                elif indigomodewished == indigo.kHvacMode.HeatCool:
+                                    ## set targettemp to setpointHeat
+                                    accessoryself.set_temperature(HKutils.convert_to_float(setpointcool), "coolthresh")
+                                    accessoryself.set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
 
                     if "TargetTemperature" in valuetoSet:
                         target_temp = valuetoSet['TargetTemperature']
@@ -2157,7 +2200,7 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug(f"Checking Thermostat temp (found temperatures) against device: {indigodevice.name}")  ## double check here in
                     listtemps = indigodevice.temperatures
                     if self.debug4:
-                        self.logger.debug(f"Checking Thermostat temp Lis tempets: {listtemps}")  ## double check here in
+                        self.logger.debug(f"Checking Thermostat temp List temperatures: {listtemps}")  ## double check here in
                     if isinstance(listtemps, list):
                         temptosend = sum(listtemps) / len(listtemps)  ##average of all values
                     elif isinstance(listtemps, (float, int)):
@@ -2166,6 +2209,28 @@ class Plugin(indigo.PluginBase):
                         temptosend = 1.3
                     if self.debug4:
                         self.logger.debug("Updating Temperature to {}".format(temptosend))
+                    return temptosend
+
+            elif statetoGet == "Thermostat_target_temp":
+                if "hvacOperationModeIsAuto" in indigodevice.states:
+                    if indigodevice.states["hvacOperationModeIsAuto"]:
+                        if self.debug4:
+                            self.logger.debug("hvacOperationMode Auto Thermostat.")
+                        temp1 = indigodevice.states['setpointCool']
+                        temp2 = indigodevice.states['setpointHeat']
+                        temptosend = (HKutils.convert_to_float(temp1)+HKutils.convert_to_float(temp2)) / 2
+                        if self.debug4:
+                            self.logger.debug("Updating Mode Auto: Target Temperature to {}".format(temptosend))
+                        return temptosend
+                    if indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacCoolMode or indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacCooling:
+                        # setpointCool
+                        if 'setpointCool' in indigodevice.states:
+                            temptosend = indigodevice.states['setpointCool']
+                    elif indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacHeatMode or indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacHeating:
+                        if 'setpointHeat' in indigodevice.states:
+                            temptosend = indigodevice.states['setpointHeat']
+                    if self.debug4:
+                        self.logger.debug("Updating Target Temperature to {}".format(temptosend))
                     return temptosend
 
             elif statetoGet in ("Thermostat_targetState", "Thermostat_currentState"):
@@ -2633,7 +2698,7 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == "com.pennypacker.indigoplugin.senseme":
                 return "service_Fanv2"
 
-            if dev.pluginId in ("com.perceptiveautomation.indigoplugin.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm"):
+            if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm"):
                 return "service_Security"
 
 
