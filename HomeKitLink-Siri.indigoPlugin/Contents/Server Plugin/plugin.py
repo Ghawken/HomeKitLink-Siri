@@ -1076,8 +1076,10 @@ class Plugin(indigo.PluginBase):
                 if ssServer.ownerProps["password"] == "": ssuPw = ""
                 ssURL = u"http://{}{}:{}".format(ssuPw, ssServer.ownerProps["xaddress"], ssServer.ownerProps["port"])
                 ssURL_rtsp = "rtsp://{}{}:{}".format(ssuPw, ssServer.ownerProps["xaddress"], ssServer.ownerProps["port"])
-                if ssServer.ownerProps["xaddress"] == "": ssURL = u"http://{}{}".format(ssuPw, ssServer.ownerProps["address"])
-
+                if ssServer.ownerProps["xaddress"] == "":
+                    ssURL = u"http://{}{}".format(ssuPw, ssServer.ownerProps["address"])
+                    ssURL_rtsp = "rtsp://{}{}:{}".format(ssuPw, ssServer.ownerProps["address"], ssServer.ownerProps["port"])
+                    
                 ssSystem = u"{}/++systemInfo".format(ssURL)
                 try:
                     response = requests.get(ssSystem, timeout=5)  # Pull XML data

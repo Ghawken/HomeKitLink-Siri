@@ -99,13 +99,14 @@ Reject anything other than a Camera tried to be setup as a Camera...
 Support for SecuritySystem - supporting Paradox alarm, VSS, and DSC alarms currently
 .. some finetuning needed as hard to test non-existent devices/alarms
 
-0.2.32
+0.3.2
 Bug fixing for Thermostat
 Bug fix for left over F to C conversion issue
 Manage Setpoint Heat/Cool independently when mode changes
 Change details for VSS given change in states
 
-
+0.3.3
+Use address if xaddress not available in SS Cameras
 
 TODO
 add warning and block greater than 95 accessories being added Per Bridge..
