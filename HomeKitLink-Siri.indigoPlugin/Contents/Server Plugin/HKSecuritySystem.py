@@ -181,6 +181,16 @@ class SecuritySystem(Accessory):
                 if self.plugin.debug6:
                     logger.debug(f"New CurrentState == {currentstate}, and TargetState == {targetstate}")
 
+            ## Attempt to fix DSC with no logs or information
+            if self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
+                # Use Armed stated to alter current and target to fit with DSC
+                # Appears that don't need to worry about converse.
+                if "ArmedState" in states:
+                    armedstate = states["ArmedState"]
+                    if armedstate in ("away","stay"):
+                        currentstate = currentstate + "_"+str(armedstate)
+                        targetstate = targetstate + "_"+str(armstate)
+
             if (currentstate := self.SET_TO_USE_CURRENT.get(currentstate)) is not None:
                 self.char_current_state.set_value(currentstate)
                 if self.plugin.debug6:
