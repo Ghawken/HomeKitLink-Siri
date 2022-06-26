@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <PluginConfig>
-    <Field id="infoLabel0" type="label" fontSize='large' fontColor="black">
+    <Field id="infoLabel0" type="label" fontSize='large' fontColor="blue">
         <Field id="sep7c" type="separator"/>
 
         <Label>HomeKitLink Plugin</Label>
     </Field>
-    <Field id="space0" type="label" fontColor="black">
+    <Field id="space0" type="label" fontColor="blue">
         <Label>Developed by: GlennNZ</Label>
     </Field>
 

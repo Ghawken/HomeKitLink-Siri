@@ -3,7 +3,7 @@
 	<Device type="custom" id="homeKitBridgeDevice">
 		<Name>HomeKitLink-Siri Bridge</Name>
 		<ConfigUI>
-			<Field id="deviceIdlabel" type="label" fontColor="indigo" fontSize="large" >
+			<Field id="deviceIdlabel" type="label" fontColor="blue" fontSize="large" >
 				<Label>Select the device you wish to publish (or edit) to HomeKit.</Label>
 			</Field>
 			<Field id="selectdevice_or_AG" type="menu" defaultValue="device" >
@@ -120,7 +120,7 @@ If incorrect, hopefully won't break bridge and update with this selector.  If us
 				</Label>
 			</Field>
 
-			<Field id="save" type="button"  alignWithControl="true" fontSize="large"  enabledBindingId="isDeviceSelected">
+			<Field id="save" type="button"  alignWithControl="true" fontSize="large" fontColor="red" enabledBindingId="isDeviceSelected">
 				<Label>Click Here to Save: </Label>
 				<Title>**        Save Device      **</Title>
 				<CallbackMethod>save</CallbackMethod>
@@ -129,7 +129,7 @@ If incorrect, hopefully won't break bridge and update with this selector.  If us
 			<Field id="saveLabel" type="label" fontColor="black" fontSize="large" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
 				<Label>Click to save the publication information.</Label>
 			</Field>
-			<Field id="saveWarningLabel" type="label" fontColor="orange" fontSize="small" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+			<Field id="saveWarningLabel" type="label" fontColor="blue" fontSize="small" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
 				<Label>NB: Changes are not saved if you switch devices
 or close this dialog without saving first !
 Plus the Publish checkbox must be enabled if you wish device in HomeKit</Label>

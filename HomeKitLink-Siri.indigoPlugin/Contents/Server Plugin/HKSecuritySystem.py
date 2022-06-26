@@ -189,7 +189,7 @@ class SecuritySystem(Accessory):
                     armedstate = states["ArmedState"]
                     if armedstate in ("away","stay"):
                         currentstate = currentstate + "_"+str(armedstate)
-                        targetstate = targetstate + "_"+str(armstate)
+                        targetstate = targetstate + "_"+str(armedstate)
 
             if (currentstate := self.SET_TO_USE_CURRENT.get(currentstate)) is not None:
                 self.char_current_state.set_value(currentstate)
