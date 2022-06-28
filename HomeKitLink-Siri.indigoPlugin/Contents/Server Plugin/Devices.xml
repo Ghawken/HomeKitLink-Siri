@@ -110,7 +110,7 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If one =
 				<Label>This shows the state and == its current value to help guide the correct state to choose.
 
 If you are selecting a Sensor select the device State to send to homeKit.  If Temperature Sensor - device needs to be number without text C/F etc.
-If incorrect, hopefully won't break bridge and update with this selector.  If using an Relay device, this can be BLANK without harm.
+If incorrect, hopefully won't break bridge and update with this selector.   For many other devices, this should be BLANK without harm.
 				</Label>
 			</Field>
 			<Field id="saveLabelSpacing" type="label" fontColor="black" fontSize="large" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">

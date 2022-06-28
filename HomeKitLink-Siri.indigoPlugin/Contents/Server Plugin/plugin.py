@@ -2930,10 +2930,15 @@ class Plugin(indigo.PluginBase):
                 # so when I refactored to a Device approach everything crapped out.  Was because the  Plugin Config XML device had publish_Device
                 # as did the actual device selected!  Took forever to find out why!
                 if values_dict["altName"] != "":
-                    alternate_name = values_dict["altName"]
+                    alternate_name = HKutils.cleanup_name_for_homekit(values_dict["altName"])
                     if device_props.get("homekit-name", "") != alternate_name:
                         device_props["homekit-name"] = alternate_name
-
+                else:
+                    ## Blank HomeKit Name
+                    blankname = device.name
+                    values_dict["altName"] = HKutils.cleanup_name_for_homekit(device.name)
+                    if device_props.get("homekit-name", "") != blankname:
+                        device_props["homekit-name"] = blankname
                 if values_dict["deviceSubtype"] != "":
                     alternate_subtype = values_dict['deviceSubtype']
                     if device_props.get("HomeKit_deviceSubtype") != alternate_subtype:
