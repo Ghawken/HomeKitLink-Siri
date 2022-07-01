@@ -2233,8 +2233,7 @@ class Plugin(indigo.PluginBase):
                         if 'setpointHeat' in indigodevice.states:
                             temptosend = indigodevice.states['setpointHeat']
                             return temptosend
-                        if self.debug4:
-                            self.logger.debug("Updating Target Temperature to {}".format(temptosend))
+            
                     #return temptosend
 
             elif statetoGet in ("Thermostat_targetState", "Thermostat_currentState"):
