@@ -2228,12 +2228,14 @@ class Plugin(indigo.PluginBase):
                         # setpointCool
                         if 'setpointCool' in indigodevice.states:
                             temptosend = indigodevice.states['setpointCool']
+                            return temptosend
                     elif indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacHeatMode or indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacHeating:
                         if 'setpointHeat' in indigodevice.states:
                             temptosend = indigodevice.states['setpointHeat']
-                    if self.debug4:
-                        self.logger.debug("Updating Target Temperature to {}".format(temptosend))
-                    return temptosend
+                            return temptosend
+                        if self.debug4:
+                            self.logger.debug("Updating Target Temperature to {}".format(temptosend))
+                    #return temptosend
 
             elif statetoGet in ("Thermostat_targetState", "Thermostat_currentState"):
                 if "hvacOperationModeIsAuto" in indigodevice.states:
