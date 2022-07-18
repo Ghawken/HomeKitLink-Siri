@@ -1871,14 +1871,14 @@ class Plugin(indigo.PluginBase):
                                     if self.debug5:
                                         self.logger.debug("Device On and wishes to be Unlocked turning Off.")
                                     indigo.device.turnOff(accessoryself.indigodeviceid)
-                                    accessoryself.char_target_state.set_value(1)
+                                    accessoryself.char_target_state.set_value(0)
                                     #accessoryself.char_current_state.set_value(1)
                         elif isinstance(valuetoSet, int):
                             if valuetoSet == 1:
                                 if self.debug5:
                                     self.logger.debug("Settter.  Lockstate: Int Device already Locked. But Given Lock will send command.")
                                 indigo.device.turnOn(accessoryself.indigodeviceid)
-                                accessoryself.char_target_state.set_value(1)
+                                accessoryself.char_target_state.set_value(1)  #
                                 #accessoryself.char_current_state.set_value(1)
                             else:  # ==0 presumably exisits here
                                 if self.debug5:
@@ -1890,24 +1890,29 @@ class Plugin(indigo.PluginBase):
                             if "LockTargetState" in valuetoSet:
                                 if valuetoSet["LockTargetState"] == 1:
                                     if self.debug5:
-                                        self.logger.debug("Device Unlocked, command to Lock")
+                                        self.logger.debug("Device command to Lock")
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
+                                else:
+                                    if self.debug5:
+                                        self.logger.debug("Device Unlocked and wishes to be Unlocked. Repeating.")
+                                    indigo.device.turnOff(accessoryself.indigodeviceid)
+                                    accessoryself.char_target_state.set_value(0)
                             else:
                                 if self.debug5:
-                                    self.logger.debug("Device Unlocked and wishes to be Unlocked. Ignore")
-                                accessoryself.char_target_state.set_value(0)
+                                    self.logger.debug(f"No LockTargetState found skipping.  vaLuetoSet: {valuetoSet}")
                         elif isinstance(valuetoSet, int):
                             ## 1 or 0 just set
                             if valuetoSet == 1:
                                 if self.debug5:
-                                    self.logger.debug("Setter. Lockstaate. Int. Device Unlocked, command to Lock")
+                                    self.logger.debug("Setter. Lockstate. Int. Device Unlocked, command to Lock")
                                 indigo.device.turnOn(accessoryself.indigodeviceid)
                                 accessoryself.char_target_state.set_value(1)
                                 #accessoryself.char_current_state.set_value(1)
-                        else:
-                            if self.debug5:
-                                self.logger.debug("Device Unlocked and wishes to be Unlocked. Ignore")
-                            accessoryself.char_target_state.set_value(0)
+                            else:
+                                if self.debug5:
+                                    self.logger.debug("Device Unlocked and wishes to be Unlocked. Repeating")
+                                indigo.device.turnOff(accessoryself.indigodeviceid)
+                                accessoryself.char_target_state.set_value(0)
                 else:
                     if self.debug5:
                         self.logger.debug("No onOffState within Lock.. Not sure what to set.  Ending.")
@@ -1957,7 +1962,9 @@ class Plugin(indigo.PluginBase):
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
                                 if self.debug5:
-                                    self.logger.debug("Device already On.  Ignoring that command.")
+                                    self.logger.debug("Device already On.  Turning On regardless.")
+                                if brightnessSet == False:
+                                    indigo.device.turnOn(accessoryself.indigodeviceid)
                             elif valuetoSet["On"] == 0:
                                 if self.debug5:
                                     self.logger.debug("Device On and wishes to be Off turning Off.")
@@ -1965,7 +1972,9 @@ class Plugin(indigo.PluginBase):
                         elif "Active" in valuetoSet:
                             if valuetoSet["Active"] == 1:
                                 if self.debug5:
-                                    self.logger.debug("Device already On.  Ignoring that command.")
+                                    self.logger.debug("Device already On.  Turning On regardless.")
+                                if brightnessSet == False:
+                                    indigo.device.turnOn(accessoryself.indigodeviceid)
                             elif valuetoSet["Active"] == 0:
                                 if self.debug5:
                                     self.logger.debug("Device On and wishes to be Off turning Off.")
@@ -1982,6 +1991,10 @@ class Plugin(indigo.PluginBase):
                                 if brightnessSet == False:  ## Negative logic so those no brightness devices still turnOn
                                     ## If I have just set Brightness to greater than 0 don't turn on as that setts brightness to 100%
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
+                            else:
+                                if self.debug5:
+                                    self.logger.debug("Device Off and wishes to be Off. Repeat")
+                                indigo.device.turnOff(accessoryself.indigodeviceid)
                         elif "Active" in valuetoSet:
                             if valuetoSet["Active"] == 1:
                                 if self.debug5:
@@ -1991,7 +2004,8 @@ class Plugin(indigo.PluginBase):
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
                             else:
                                 if self.debug5:
-                                    self.logger.debug("Device Off and wishes to be Off. Ignore")
+                                    self.logger.debug("Device Off and wishes to be Off. Repeat")
+                                indigo.device.turnOff(accessoryself.indigodeviceid)
 
                 else:  ## Button switchs action groups etc
                     ## asked to return onOffState but doesn't exist in IndigoDevice states
@@ -2233,7 +2247,7 @@ class Plugin(indigo.PluginBase):
                         if 'setpointHeat' in indigodevice.states:
                             temptosend = indigodevice.states['setpointHeat']
                             return temptosend
-            
+
                     #return temptosend
 
             elif statetoGet in ("Thermostat_targetState", "Thermostat_currentState"):
