@@ -537,6 +537,8 @@ class Plugin(indigo.PluginBase):
                         deviceType = "HueLightBulb"
                     elif "brightnessLevel" in device.states and "brightness" in dir(device):
                         deviceType = "LightBulb"   ## Dimmer variety
+                    elif type(device) == indigo.DimmerDevice:
+                        deviceType = "LightBulb"  ## Dimmer variety
                     else:
                         ## simple switch
                         deviceType = "LightBulb_switch"
