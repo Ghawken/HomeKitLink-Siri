@@ -1963,9 +1963,9 @@ class Plugin(indigo.PluginBase):
                     if indigodevice.onState:  # device already On
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
-                                if self.debug5:
-                                    self.logger.debug("Device already On.  Turning On regardless.")
                                 if brightnessSet == False:
+                                    if self.debug5:
+                                        self.logger.debug("Device already On.  Turning On regardless.")
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
                             elif valuetoSet["On"] == 0:
                                 if self.debug5:
@@ -1973,9 +1973,9 @@ class Plugin(indigo.PluginBase):
                                 indigo.device.turnOff(accessoryself.indigodeviceid)
                         elif "Active" in valuetoSet:
                             if valuetoSet["Active"] == 1:
-                                if self.debug5:
-                                    self.logger.debug("Device already On.  Turning On regardless.")
                                 if brightnessSet == False:
+                                    if self.debug5:
+                                        self.logger.debug("Device already On.  Turning On regardless.")
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
                             elif valuetoSet["Active"] == 0:
                                 if self.debug5:
@@ -1988,10 +1988,10 @@ class Plugin(indigo.PluginBase):
                         ## Indigo Device is OFF
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
-                                if self.debug5:
-                                    self.logger.debug("Device Off, command to turn on")
                                 if brightnessSet == False:  ## Negative logic so those no brightness devices still turnOn
                                     ## If I have just set Brightness to greater than 0 don't turn on as that setts brightness to 100%
+                                    if self.debug5:
+                                        self.logger.debug("Device Off, command to turn on")
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
                             else:
                                 if self.debug5:
@@ -1999,10 +1999,10 @@ class Plugin(indigo.PluginBase):
                                 indigo.device.turnOff(accessoryself.indigodeviceid)
                         elif "Active" in valuetoSet:
                             if valuetoSet["Active"] == 1:
-                                if self.debug5:
-                                    self.logger.debug("Device Off, command to turn on")
                                 if brightnessSet == False:  ## Negative logic so those no brightness devices still turnOn
                                     ## If I have just set Brightness to greater than 0 don't turn on as that setts brightness to 100%
+                                    if self.debug5:
+                                        self.logger.debug("Device Off, command to turn on")
                                     indigo.device.turnOn(accessoryself.indigodeviceid)
                             else:
                                 if self.debug5:
