@@ -184,7 +184,7 @@ class Plugin(indigo.PluginBase):
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
 
-        self.previousVersion = self.pluginPrefs.get("previousVersion","0.0")
+        self.previousVersion = self.pluginPrefs.get("previousVersion","0.0.1")
 
         self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20))
 
@@ -2346,6 +2346,8 @@ class Plugin(indigo.PluginBase):
         if type(indigodevice) == indigo.ActionGroup:  ## can't select these as yet.. coming
             return True
         if "onOffState" in indigodevice.states:
+            return False
+        if indigodevice.model == "I/O-Linc Controller":
             return False
         else:
             return True

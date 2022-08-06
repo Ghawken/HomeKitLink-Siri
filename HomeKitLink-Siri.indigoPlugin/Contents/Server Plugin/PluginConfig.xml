@@ -104,7 +104,7 @@
     </Field>
         <Field id="previousVersion"
            type="textfield"
-           defaultValue="0.0" hidden="true">
+           defaultValue="0.0.1" hidden="true">
         <Label></Label>
     </Field>
 </PluginConfig>
