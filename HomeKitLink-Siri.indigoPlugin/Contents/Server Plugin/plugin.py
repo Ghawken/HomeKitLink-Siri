@@ -2157,14 +2157,14 @@ class Plugin(indigo.PluginBase):
 
             elif statetoGet == "garageDoorState":
                 # attempt to get onOffState first..
-                if "onOffState" in indigodevice.states:
-                    if self.debug4:
-                        self.logger.debug("Found onOffState using that..")
-                    return indigodevice.states["onOffState"]
-                elif "binaryInput1" in indigodevice.states:
+                if "binaryInput1" in indigodevice.states:
                     if self.debug4:
                         self.logger.debug("Found a binaryInput State using that..")
                     return indigodevice.states["binaryInput1"]
+                elif "onOffState" in indigodevice.states:
+                    if self.debug4:
+                        self.logger.debug("Found onOffState using that..")
+                    return indigodevice.states["onOffState"]
 
             elif statetoGet == "lockState":
                 if "onOffState" in indigodevice.states:
