@@ -85,7 +85,6 @@
     <Field id="advanced" type="checkbox" tooltip="Enabling will show advanced options." alwaysUseInDialogHeightCalc="true">
         <Label>Use with care, only updated on plugin Start/Restart.</Label>
         <Description>Show Advanced Options</Description>
-
     </Field>
     <Field id="basePortnumber"
            type="textfield"
@@ -95,13 +94,17 @@
     <Field id="sepaer4another" type="separator"/>
     <Field id="password"
            type="textfield"
-           tooltip="Enter system Password" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+           tooltip="Enter system Password" defaultValue="" visibleBindingId="advanced" hidden="true" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>Enter System Password:</Label>
     </Field>
-    <Field id="runSystem" type="button" fontSize="large" visibleBindingId="advanced" visibleBindingValue="true">
+    <Field id="runSystem" type="button" fontSize="large" visibleBindingId="advanced" hidden="true" visibleBindingValue="true">
         <Label/>
         <Title>unQuarantine files</Title>
         <CallbackMethod>runSystem</CallbackMethod>
     </Field>
-
+        <Field id="previousVersion"
+           type="textfield"
+           defaultValue="0.0" hidden="true">
+        <Label></Label>
+    </Field>
 </PluginConfig>

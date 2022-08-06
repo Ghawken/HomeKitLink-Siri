@@ -1424,7 +1424,7 @@ class GarageDoor(Accessory):
                 char_values["On"] = char_values.pop("TargetDoorState")  ## replace targetdoorstate with On and send through onOffRelay actioning..
                 if self.plugin.debug6:
                     logger.debug("Char Values converted from TargetDoorState to On/off.  New char_values : {}".format(char_values))
-                self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?senmd
+                self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?send
 
 class WindowCovering(Accessory):
 

@@ -34,6 +34,7 @@ from os.path import isfile, join
 
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
+from packaging import version
 
 try:
     import indigo
@@ -42,7 +43,6 @@ except:
 
 try:
     import pydevd_pycharm
-
     pydevd_pycharm.settrace('localhost', port=5678, stdoutToServer=True, stderrToServer=True, suspend=False)
 except:
     pass
@@ -184,6 +184,8 @@ class Plugin(indigo.PluginBase):
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
 
+        self.previousVersion = self.pluginPrefs.get("previousVersion","0.0")
+
         self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20))
 
         self.debugDeviceid = -3  ## always set this to not on after restart.
@@ -194,6 +196,18 @@ class Plugin(indigo.PluginBase):
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
+
+        try:
+            if version.parse(pluginVersion) != version.parse(self.previousVersion):
+                self.logger.info("HomeKitLink Updated Version Detected.  Please run xattr command as below (copy & paste to terminal)")
+                self.logger.info("")
+                self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
+                self.logger.info(u"{0:=^130}".format(" End of Setup "))
+                self.pluginPrefs['previousVersion']= pluginVersion
+        except:
+            pass
+
+
 
     def closedPrefsConfigUi(self, valuesDict, userCancelled):
         self.debugLog(u"closedPrefsConfigUi() method called.")
