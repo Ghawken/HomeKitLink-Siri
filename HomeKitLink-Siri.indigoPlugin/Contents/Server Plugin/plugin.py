@@ -84,6 +84,7 @@ class Plugin(indigo.PluginBase):
             self.logLevel = int(self.pluginPrefs["showDebugLevel"])
         except:
             self.logLevel = logging.DEBUG
+
         try:
             import cryptography
         except ImportError:
@@ -2343,7 +2344,7 @@ class Plugin(indigo.PluginBase):
         if self.debug4:
             self.logger.debug("checking whether activate only nature of switch")
         indigodevice = self.return_deviceorAG(deviceid)  # indigo.devices[deviceid]
-        if type(indigodevice) == indigo.ActionGroup:  ## can't select these as yet.. coming
+        if type(indigodevice) == indigo.ActionGroup:
             return True
         if "onOffState" in indigodevice.states:
             return False
@@ -2828,8 +2829,13 @@ class Plugin(indigo.PluginBase):
             subtype_list = []
             if showALL:  ## return every subtype
                 subtypestoReturn = list(self.homeKitSubTypes.values())
-                flat_list = [val for sublist in subtypestoReturn for val in sublist]
-                return flat_list
+                flat_list_duplicates = [val for sublist in subtypestoReturn for val in sublist]
+                subtypestoReturnnoDuplicates = []
+                for value in flat_list_duplicates:
+                    if value not in subtypestoReturnnoDuplicates:
+                       subtypestoReturnnoDuplicates.append(value)
+                #flat_list = [val for sublist in subtypestoReturnnoDuplicates for val in sublist]
+                return subtypestoReturnnoDuplicates
 
             if "deviceId" in values_dict:
                 if values_dict["deviceId"] != "":
