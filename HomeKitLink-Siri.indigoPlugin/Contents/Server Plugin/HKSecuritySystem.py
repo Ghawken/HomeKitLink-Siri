@@ -56,7 +56,7 @@ DSC_TO_HOMEKIT_CURRENT = {
     "armed": HK_ALARM_STAY_ARMED,
     "armed_stay":HK_ALARM_STAY_ARMED,
     "armed_away": HK_ALARM_AWAY_ARMED,
-    "exitDelay": HK_ALARM_DISARMED,
+   # "exitDelay": HK_ALARM_DISARMED,
     "disarmed": HK_ALARM_DISARMED,
     "tripped": HK_ALARM_TRIGGERED,
 }
@@ -64,7 +64,7 @@ DSC_TO_HOMEKIT_TARGET = {
     "armed": HK_ALARM_STAY_ARMED,
     "armed_stay":HK_ALARM_STAY_ARMED,
     "armed_away": HK_ALARM_AWAY_ARMED,
-    "exitDelay": HK_ALARM_DISARMED,
+  #  "exitDelay": HK_ALARM_DISARMED,
     "disarmed": HK_ALARM_DISARMED,
 }
 VSS_TO_HOMEKIT_CURRENT = {
@@ -157,6 +157,8 @@ class SecuritySystem(Accessory):
                     if int(char_values) == HK_ALARM_DISARMED:
                         basePlugin.executeAction("actionDisarm", deviceId=self.indigodeviceid)
                     elif int(char_values) == HK_ALARM_STAY_ARMED:
+                        basePlugin.executeAction("actionArmStay", deviceId=self.indigodeviceid)
+                    elif int(char_values) == HK_ALARM_NIGHT_ARMED:
                         basePlugin.executeAction("actionArmStay", deviceId=self.indigodeviceid)
                     elif int(char_values) == HK_ALARM_AWAY_ARMED:
                         basePlugin.executeAction("actionArmAway", deviceId=self.indigodeviceid)
