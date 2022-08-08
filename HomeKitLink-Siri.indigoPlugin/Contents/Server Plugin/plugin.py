@@ -2038,10 +2038,14 @@ class Plugin(indigo.PluginBase):
                         ## Insteon likely Garage Door device
                         ## How are we getter value
                         if "On" in valuetoSet:
-                            if valuetoSet["On"] == 1:
+                            if valuetoSet["On"] == 1:  ## This runs when garage door is open, i.e. binaryInput1 = off
+                                if self.debug5:
+                                    self.logger.debug("I/O Device valuetoSet is 1")
                                 indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=0, value=True)
-                            elif valuetoSet["On"] == 0:  ## As currently stands this should never run as devices lacking onOffStates are recorded as activate only
-                                indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=0, value=False)
+                            elif valuetoSet["On"] == 0:  ## This runs when garage door is closed, i.e. binaryInput1 = on
+                                if self.debug5:
+                                    self.logger.debug("I/O Device valuetoSet is 0")
+                                indigo.iodevice.setBinaryOutput(accessoryself.indigodeviceid, index=0, value=True)
                     else:
                         if "On" in valuetoSet:
                             if valuetoSet["On"] == 1:
