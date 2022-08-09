@@ -1351,44 +1351,15 @@ class Plugin(indigo.PluginBase):
 
                     if hasattr(updated_device, "hvacMode"):  ## double check here in
                         if original_device.hvacMode != updated_device.hvacMode:
+                            ## set target mode when hvacMode changes
                             newmode = updated_device.hvacMode
                             listHvacModes = {indigo.kHvacMode.Off: 0,
                                              indigo.kHvacMode.Heat: 1,
                                              indigo.kHvacMode.Cool: 2,
                                              indigo.kHvacMode.HeatCool: 3}
                             homekitModeWished = listHvacModes[newmode]
-
                             self.device_list_internal[checkindex]["accessory"].char_target_heat_cool.set_value(homekitModeWished)
-                            ## current allowed 0,1,2 only
-                            ## target allowed
-                            '''
-                            Current
-                                 "Cool": 2,
-                                 "Heat": 1,
-                                 "Off": 0
-                            Target
-                                "Auto": 3,
-                                "Cool": 2,
-                                "Heat": 1,
-                                "Off": 0
-                            '''
-                            if homekitModeWished != 3:
-                                # if not auto set to heat or cool or 0
-                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(homekitModeWished)
-                                # Crashed Home Kit with no error message
-                            else:
-                                # if auto - is the hvac heating or cooling currently..  Use Image selector...
-                                if updated_device.displayStateImageSel == indigo.kStateImageSel.HvacCoolMode or updated_device.displayStateImageSel == indigo.kStateImageSel.HvacCooling:
-                                    ## Cool =2
-                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
-                                elif updated_device.displayStateImageSel == indigo.kStateImageSel.HvacHeatMode or updated_device.displayStateImageSel == indigo.kStateImageSel.HvacHeating:
-                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
-                                else:  # off would include fan only modes
-                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                            if this_is_debug_device:
-                                self.logger.warning("Setting Target and Current Mode of Hvac. Mode Wished. {}".format(homekitModeWished))
-                            if self.debug5:
-                                self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
+
                             ## Mode has been changed need to update target and range for HomeKit
                             if 'setpointCool' in updated_device.states:
                                 setpointcool = updated_device.states['setpointCool']
@@ -1405,6 +1376,96 @@ class Plugin(indigo.PluginBase):
                                     ## set targettemp to setpointHeat
                                     self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "coolthresh")
                                     self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
+                            ## Given mode change also change the current setting depending on heater cooler mode immediately
+                            if updated_device.hvacMode == indigo.kHvacMode.Off:
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == Off")
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                            elif updated_device.hvacMode == indigo.kHvacMode.Heat:
+                                ## set targettemp to setpointHeat
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == Heat and current Heater is {updated_device.states['hvacHeaterIsOn']}")
+                                if updated_device.states["hvacHeaterIsOn"]==False:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                                else:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
+                            elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
+                                if updated_device.states["hvacCoolerIsOn"] == False:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                                else:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)  #cooling
+                            elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
+                                ## set targettemp to setpointHeat
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == HeatCool and current Cooler is {updated_device.states['hvacCoolerIsOn']}, and Heater is {updated_device.states['hvacHeaterIsOn']}")
+                                if updated_device.states["hvacCoolerIsOn"] == True:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
+                                elif updated_device.states["hvacHeaterIsOn"] == True:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)  #cooling
+                                else:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+
+                            if this_is_debug_device:
+                                self.logger.warning("Setting Target and Current Mode of Hvac. Mode Wished. {}".format(homekitModeWished))
+                            if self.debug2:
+                                self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
+
+                        if updated_device.states["hvacHeaterIsOn"] != original_device.states["hvacHeaterIsOn"] or updated_device.states["hvacCoolerIsOn"] != original_device.states["hvacCoolerIsOn"] :
+                            ## current allowed 0,1,2 only
+                            ## target allowed
+                            if self.debug2:
+                                self.logger.debug("Thermostat Device Heater On or Cooler On has changed.  Updating.")
+                            '''
+                            Current
+                                 "Cool": 2,
+                                 "Heat": 1,
+                                 "Off": 0
+                            Target
+                                "Auto": 3,
+                                "Cool": 2,
+                                "Heat": 1,
+                                "Off": 0
+                            '''
+                            # if homekitModeWished != 3:
+                            #     # if not auto set to heat or cool or 0
+                            #     self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(homekitModeWished)
+                            #     # Crashed Home Kit with no error message
+                            #     # add ability for fan idle if temp reached - well attempt to.  Seems from this and below code block doesn't occur in auto modes
+                            #
+                            # else:
+                                # if auto - is the hvac heating or cooling currently..  Use Image selector...
+                            if updated_device.hvacMode == indigo.kHvacMode.Off:
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == Off")
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                            elif updated_device.hvacMode == indigo.kHvacMode.Heat:
+                                ## set targettemp to setpointHeat
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == Heat and current Heater is {updated_device.states['hvacHeaterIsOn']}")
+                                if updated_device.states["hvacHeaterIsOn"]==False:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                                else:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
+                            elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
+                                if updated_device.states["hvacCoolerIsOn"] == False:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                                else:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)  #cooling
+                            elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
+                                ## set targettemp to setpointHeat
+                                if self.debug2:
+                                    self.logger.debug(f"hvacMode == HeatCool and current Cooler is {updated_device.states['hvacCoolerIsOn']}, and Heater is {updated_device.states['hvacHeaterIsOn']}")
+                                if updated_device.states["hvacCoolerIsOn"] == True:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
+                                elif updated_device.states["hvacHeaterIsOn"] == True:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)  #cooling
+                                else:
+                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+
 
                     if "setpointCool" in updated_device.states:
                         self.logger.debug(f"setpointCool Found: Original: {original_device.states['setpointCool']} and updated:  {updated_device.states['setpointCool']} ")
