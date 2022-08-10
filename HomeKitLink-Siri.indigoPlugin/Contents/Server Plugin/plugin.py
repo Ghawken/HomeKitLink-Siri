@@ -2332,21 +2332,13 @@ class Plugin(indigo.PluginBase):
 
                     #return temptosend
 
-            elif statetoGet in ("Thermostat_targetState", "Thermostat_currentState"):
+            elif statetoGet in ("Thermostat_targetState",):
                 if "hvacOperationModeIsAuto" in indigodevice.states:
                     if statetoGet == "Thermostat_targetState":
                         if indigodevice.states["hvacOperationModeIsAuto"]:
                             if self.debug4:
                                 self.logger.debug("hvacOperationMode Auto Thermostat.  Returning 3")
                             return 3  ## 3 = Auto
-                    else:  ## must be current - need to check
-                        if indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacCoolMode or indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacCooling:
-                            ## Cool =2
-                            return 2
-                        elif indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacHeatMode or indigodevice.displayStateImageSel == indigo.kStateImageSel.HvacHeating:
-                            return 1
-                        else:  # off would include fan only modes
-                            return 0
                 if "hvacOperationModeIsCool" in indigodevice.states:
                     if indigodevice.states["hvacOperationModeIsCool"]:
                         if self.debug4:
@@ -2362,6 +2354,43 @@ class Plugin(indigo.PluginBase):
                         if self.debug4:
                             self.logger.debug("hvacOperationMode OFF Thermostat.  Returning 0")
                         return 0  ## 3 = Auto
+
+            elif statetoGet in ("Thermostat_currentState"):
+                if "hvacOperationModeIsOff" in indigodevice.states:
+                    if indigodevice.states["hvacOperationModeIsOff"]:
+                        if self.debug4:
+                            self.logger.debug(f"Getter: hvacMode == Off, returning 0")
+                        return 0
+                if "hvacOperationModeIsAuto" in indigodevice.states:
+                    if indigodevice.states["hvacOperationModeIsAuto"]:
+                        if self.debug4:
+                            self.logger.debug("Getter: hvacOperationMode Auto Thermostat.  Checking Fans")
+                        if "hvacCoolerIsOn" in indigodevice.states:
+                            if indigodevice.states["hvacCoolerIsOn"] == True:
+                                return 2
+                        if "hvacHeaterIsOn" in indigodevice.states:
+                            if indigodevice.states["hvacHeaterIsOn"] == True:
+                                return 1 # cooling
+                            else:
+                                return 0 # idle
+                if "hvacOperationModeIsHeat" in indigodevice.states:
+                    if indigodevice.states["hvacOperationModeIsHeat"]:
+                        if self.debug4:
+                            self.logger.debug(f"Getter: hvacMode == Heat and current Heater is {indigodevice.states['hvacHeaterIsOn']}")
+                        if indigodevice.states["hvacHeaterIsOn"] == False:
+                            return 0
+                        else:
+                            return 1
+                if "hvacOperationModeIsCool" in indigodevice.states:
+                    if indigodevice.states["hvacOperationModeIsCool"]:
+                        if self.debug4:
+                            self.logger.debug(f"Getter: hvacMode == Cool and current Cooler is {indigodevice.states['hvacCoolerIsOn']}")
+                        if indigodevice.states["hvacCoolerIsOn"] == False:
+                            return 0
+                        else:
+                            return 2
+
+
         except:
             self.logger.exception("Plugin Setter Exception")
 
