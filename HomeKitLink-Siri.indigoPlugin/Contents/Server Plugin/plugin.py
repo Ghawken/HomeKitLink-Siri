@@ -1652,7 +1652,13 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
                         if this_is_debug_device:
                             self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
-                        self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
+
+                        if self.device_list_internal[checkindex]['manufacturername'] == "com.frightideas.indigoplugin.dscAlarm":
+                            if "state" in updated_device.states:
+                                if updated_device.states['state'] != original_device.states['state']:  # focusing only on changes of 'state' (not LED, Time etc)
+                                    self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
+                        else:
+                            self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
                         return
 
                 elif str(updateddevice_subtype) == "GarageDoor":

@@ -54,17 +54,15 @@ PARADOX_TO_HOMEKIT_TARGET = {
 }
 DSC_TO_HOMEKIT_CURRENT = {
     "armed": HK_ALARM_STAY_ARMED,
-    "armed_stay":HK_ALARM_STAY_ARMED,
-    "armed_away": HK_ALARM_AWAY_ARMED,
-   # "exitDelay": HK_ALARM_DISARMED,
+    "armedStay":HK_ALARM_STAY_ARMED,
+    "armedAway": HK_ALARM_AWAY_ARMED,
     "disarmed": HK_ALARM_DISARMED,
     "tripped": HK_ALARM_TRIGGERED,
 }
 DSC_TO_HOMEKIT_TARGET = {
     "armed": HK_ALARM_STAY_ARMED,
-    "armed_stay":HK_ALARM_STAY_ARMED,
-    "armed_away": HK_ALARM_AWAY_ARMED,
-  #  "exitDelay": HK_ALARM_DISARMED,
+    "armedStay":HK_ALARM_STAY_ARMED,
+    "armedAway": HK_ALARM_AWAY_ARMED,
     "disarmed": HK_ALARM_DISARMED,
 }
 VSS_TO_HOMEKIT_CURRENT = {
@@ -112,7 +110,7 @@ class SecuritySystem(Accessory):
         elif self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
             self.SET_TO_USE_CURRENT = DSC_TO_HOMEKIT_CURRENT
             self.SET_TO_USE_TARGET = DSC_TO_HOMEKIT_TARGET
-            self.device_current_state = "state"
+            self.device_current_state = "state"  # can be disarmed, armedAway, armedStay, entryDelay, exitDelay, tripped
         else:
             ## set a default in case of user selection error
             self.SET_TO_USE_CURRENT = PARADOX_TO_HOMEKIT_CURRENT
@@ -160,6 +158,7 @@ class SecuritySystem(Accessory):
                         basePlugin.executeAction("actionArmStay", deviceId=self.indigodeviceid)
                     elif int(char_values) == HK_ALARM_NIGHT_ARMED:
                         basePlugin.executeAction("actionArmStay", deviceId=self.indigodeviceid)
+                        # basePlugin.executeAction("actionArmStayForce", deviceId=self.indigodeviceid) # all open zones are bypassed
                     elif int(char_values) == HK_ALARM_AWAY_ARMED:
                         basePlugin.executeAction("actionArmAway", deviceId=self.indigodeviceid)
                 else:
@@ -183,15 +182,15 @@ class SecuritySystem(Accessory):
                 if self.plugin.debug6:
                     logger.debug(f"New CurrentState == {currentstate}, and TargetState == {targetstate}")
 
-            ## Attempt to fix DSC with no logs or information
-            if self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
-                # Use Armed stated to alter current and target to fit with DSC
-                # Appears that don't need to worry about converse.
-                if "ArmedState" in states:
-                    armedstate = states["ArmedState"]
-                    if armedstate in ("away","stay"):
-                        currentstate = currentstate + "_"+str(armedstate)
-                        targetstate = targetstate + "_"+str(armedstate)
+            ## Move check here otherwise - to much backwards and forwards into this thread and plugin thread
+            #if self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
+            #     # Use Armed stated to alter current and target to fit with DSC
+            #     # Appears that don't need to worry about converse.
+            #     if "ArmedState" in states:
+            #         armedstate = states["ArmedState"]
+            #         if armedstate in ("away","stay"):
+            #             currentstate = currentstate + "_"+str(armedstate)
+            #             targetstate = targetstate + "_"+str(armedstate)
 
             if (currentstate := self.SET_TO_USE_CURRENT.get(currentstate)) is not None:
                 self.char_current_state.set_value(currentstate)
@@ -220,19 +219,11 @@ class SecuritySystem(Accessory):
                     logger.debug(f"Returning value of {value}, using state of {state}")
 
             elif self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
-                logger.debug("Using dscAlarm")
+                logger.debug("Using dscAlarm for get_security")
                 if "state" in indigodevice.states:
-                    state = indigodevice.states["state"]
-                    if indigodevice.states["ArmedState.disarmed"]:
-                        value = self.SET_TO_USE_CURRENT.get(state)
-                    elif indigodevice.states["ArmedState.away"]:
-                        state= state+"_away"
-                        value = self.SET_TO_USE_CURRENT.get(state)
-                    elif indigodevice.states["ArmedState.stay"]:
-                        state= state+"_stay"
-                        value = self.SET_TO_USE_CURRENT.get(state)
-                    else:
-                        value = self.SET_TO_USE_CURRENT.get(state)
+                    state = indigodevice.states["state"]   # can be disarmed, armedAway, armedStay, entryDelay, exitDelay, tripped
+                    value = self.SET_TO_USE_CURRENT.get(state)
+                    logger.debug(f"Returning value of {value}, using state of {state} for DSC Alarm")
             else:
                 value = HK_ALARM_DISARMED
 
