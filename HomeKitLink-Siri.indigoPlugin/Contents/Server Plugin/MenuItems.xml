@@ -16,7 +16,6 @@
         <CallbackMethod>restartBridge</CallbackMethod>
     </MenuItem>
 
-
     <MenuItem id="sep2"/>
     <MenuItem id="sep3"/>
     <MenuItem id="deleteIsolatedDevices">
