@@ -652,6 +652,9 @@ class AccessoryDriver:
                 tmp_filename = file_handle.name
                 self.encoder.persist(file_handle, self.state)
             os.replace(tmp_filename, self.persist_file)
+        except:
+            logger.exception("Failed to persist accessory state")
+            raise
         finally:
             if tmp_filename and os.path.exists(tmp_filename):
                 os.remove(tmp_filename)
@@ -682,7 +685,9 @@ class AccessoryDriver:
         :return: Whether the pairing is successful.
         :rtype: bool
         """
-        logger.info("Paired with %s.", client_uuid)
+        logger.info(
+            "Paired with %s with permissions %s.", client_uuid, client_permissions
+        )
         self.state.add_paired_client(client_uuid, client_public, client_permissions)
         self.async_persist()
         return True

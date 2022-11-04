@@ -417,7 +417,11 @@ class HAPServerHandler:
         cipher = ChaCha20Poly1305(encryption_key)
         aead_message = bytes(cipher.encrypt(self.PAIRING_5_NONCE, bytes(message), b""))
 
-        client_uuid = uuid.UUID(str(client_username, "utf-8"))
+        client_username_str = str(client_username, "utf-8")
+        client_uuid = uuid.UUID(client_username_str)
+        logger.debug(
+            "Finishing pairing with admin %s uuid=%s", client_username_str, client_uuid
+        )
         should_confirm = self.accessory_handler.pair(
             client_uuid, client_ltpk, HAP_PERMISSIONS.ADMIN
         )
@@ -672,9 +676,18 @@ class HAPServerHandler:
         """Update client information."""
         logger.debug("%s: Adding client pairing.", self.client_address)
         client_username = tlv_objects[HAP_TLV_TAGS.USERNAME]
+        client_username_str = str(client_username, "utf-8")
         client_public = tlv_objects[HAP_TLV_TAGS.PUBLIC_KEY]
         permissions = tlv_objects[HAP_TLV_TAGS.PERMISSIONS]
-        client_uuid = uuid.UUID(str(client_username, "utf-8"))
+        client_uuid = uuid.UUID(client_username_str)
+        logger.debug(
+            "%s: Adding client pairing for %s uuid=%s with permissions %s.",
+            self.client_address,
+            client_username_str,
+            client_uuid,
+            permissions,
+        )
+
         should_confirm = self.accessory_handler.pair(
             client_uuid, client_public, permissions
         )
@@ -687,10 +700,17 @@ class HAPServerHandler:
 
     def _handle_remove_pairing(self, tlv_objects):
         """Remove pairing with the client."""
-        logger.debug("%s: Removing client pairing.", self.client_address)
         client_username = tlv_objects[HAP_TLV_TAGS.USERNAME]
-        client_uuid = uuid.UUID(str(client_username, "utf-8"))
+        client_username_str = str(client_username, "utf-8")
+        client_uuid = uuid.UUID(client_username_str)
         was_paired = self.state.paired
+        logger.debug(
+            "%s: Removing client pairing (%s) uuid=%s (was previously paired=%s).",
+            self.client_address,
+            client_username_str,
+            client_uuid,
+            was_paired,
+        )
         # If the client does not exist, we must
         # respond with success per the spec
         if client_uuid in self.state.paired_clients:
