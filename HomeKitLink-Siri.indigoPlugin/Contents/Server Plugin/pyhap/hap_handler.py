@@ -735,7 +735,7 @@ class HAPServerHandler:
             response.extend(
                 [
                     HAP_TLV_TAGS.USERNAME,
-                    str(client_uuid).encode("utf-8"),
+                    str(client_uuid).encode("utf-8").upper(),
                     HAP_TLV_TAGS.PUBLIC_KEY,
                     client_public,
                     HAP_TLV_TAGS.PERMISSIONS,
