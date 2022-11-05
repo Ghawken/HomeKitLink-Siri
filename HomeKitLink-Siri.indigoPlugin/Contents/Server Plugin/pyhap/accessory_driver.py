@@ -196,7 +196,6 @@ class AccessoryDriver:
     def __init__(
         self,
         *,
-        indigodeviceid,
         address=None,
         port=51234,
         persist_file="accessory.state",
@@ -276,7 +275,7 @@ class AccessoryDriver:
             self.executor = None
 
         self.loop = loop
-        self.indigodeviceid = indigodeviceid
+       # self.indigodeviceid = indigodeviceid
         self.accessory = None
         self.advertiser = async_zeroconf_instance
         self.zeroconf_server = zeroconf_server

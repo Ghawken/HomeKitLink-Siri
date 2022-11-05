@@ -26,6 +26,8 @@ from pyhap.const import (
 from HKConstants import *
 import HKutils
 
+from HomeKitDevices import HomeAccessory
+
 logger = logging.getLogger("Plugin.HomeKitSpawn")
 logger.setLevel(logging.DEBUG)
 
@@ -79,7 +81,7 @@ VSS_TO_HOMEKIT_TARGET = {
     "disarm": HK_ALARM_DISARMED
 }
 
-class SecuritySystem(Accessory):
+class SecuritySystem(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
     category = CATEGORY_ALARM_SYSTEM
 

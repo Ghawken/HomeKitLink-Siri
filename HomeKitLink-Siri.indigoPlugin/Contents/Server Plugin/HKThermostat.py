@@ -1,7 +1,7 @@
 ## HomeKit Devices
 
 import logging
-
+from HomeKitDevices import HomeAccessory
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import * # (CATEGORY_FAN,
@@ -37,7 +37,7 @@ DEFAULT_MAX_TEMP = 35
 UNIT_TO_HOMEKIT = {TEMP_CELSIUS: 0, TEMP_FAHRENHEIT: 1}
 
 
-class Thermostat(Accessory):
+class Thermostat(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_THERMOSTAT
@@ -355,7 +355,7 @@ class Thermostat(Accessory):
 
     ## Thanks HA!
 
-class ThermostatZone(Accessory):
+class ThermostatZone(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_THERMOSTAT

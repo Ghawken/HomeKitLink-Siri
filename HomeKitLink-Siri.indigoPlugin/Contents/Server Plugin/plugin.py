@@ -12,6 +12,7 @@ import webbrowser
 
 from queue import Queue
 
+
 try:
     import requests
 except:
@@ -34,6 +35,8 @@ from os.path import isfile, join
 
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
+from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
+
 from packaging import version
 
 try:
@@ -47,6 +50,8 @@ try:
 except:
     pass
 
+from HomeKitDevices import HomeAccessory, HomeDriver, HomeBridge
+
 import HKSecuritySystem
 import HomeKitDevices
 import HKConstants
@@ -54,11 +59,13 @@ import HKDevicesCamera
 import HKDevicesCameraSecuritySpy
 import HKThermostat
 import HKutils
-
+logger = logging.getLogger("Plugin.HomeKit_pyHap")
 
 ## overwrite Queue so that can't add duplicats
 ## If cam server down then could have huge number of snapshot
 ## requests
+
+
 
 class UniqueQueue(Queue):
     def put(self, item, block=False, timeout=None):
@@ -159,6 +166,8 @@ class Plugin(indigo.PluginBase):
         self.driverthread = None
         self.prefsUpdated = False
         self.logger.info(u"")
+
+        self.plugin_iidstorage = None
 
         self.logger.info("{0:=^130}".format(" Initializing New Plugin Session "))
         self.logger.info("{0:<30} {1}".format("Plugin name:", pluginDisplayName))
@@ -948,10 +957,10 @@ class Plugin(indigo.PluginBase):
             # currentPortNumber - has now become starting portNumber - shoudl
             nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
             self.logger.debug("Next Port available:{}".format(nextport))
-            self.driver_multiple.append(AccessoryDriver(indigodeviceid=str(uniqueID), port=int(nextport), persist_file=persist_file_location))
+            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_manager=HomeIIDManager(self.plugin_iidstorage), port=int(nextport), persist_file=persist_file_location))
             self.portsinUse.add(nextport)
             self.logger.debug("Sets of Ports Currently in Use: {}".format(self.portsinUse))
-            self.bridge_multiple.append(Bridge(self.driver_multiple[-1], self, uniqueID, 'HomeKitLink Bridge ' + str(uniqueID)))
+            self.bridge_multiple.append(HomeBridge(driver=self.driver_multiple[-1], plugin=self, indigodeviceid=uniqueID, display_name='HomeKitLink Bridge ' + str(uniqueID), iid_manager=HomeIIDManager(self.plugin_iidstorage)))
             self.driver_multiple[-1].add_accessory(accessory=self.get_bridge_multiple(self.driver_multiple[-1], self.bridge_multiple[-1], uniqueID))
             self.driverthread_multiple.append(threading.Thread(name=str(uniqueID), target=self.driver_multiple[-1].start, daemon=True))
             self.driverthread_multiple[-1].start()
@@ -1234,6 +1243,8 @@ class Plugin(indigo.PluginBase):
         self.update_deviceList()
         indigo.devices.subscribeToChanges()
         self.create_deviceList_internal()
+
+        self.plugin_iidstorage = AccessoryIIDStorage(self.pluginId, self.pluginprefDirectory+str("/AccessoryIIDStorage.storage") )
 
     def shutdown(self):
         self.logger.info("Shutting down HomeKitLink")

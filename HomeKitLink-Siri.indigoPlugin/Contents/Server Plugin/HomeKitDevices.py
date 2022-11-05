@@ -3,7 +3,7 @@
 
 import logging
 import math
-
+from typing import Any, cast
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import * # (CATEGORY_FAN,
@@ -25,17 +25,79 @@ from pyhap.const import (
     CATEGORY_SWITCH,
 )
 
+from pyhap.iid_manager import HomeIIDManager
+
 logger = logging.getLogger("Plugin.HomeKitSpawn")
 
 from HKConstants import *
 
+
 import HKutils
 
 #import HKDevicesCamera
+## Move to Library overides - which should have used at
+## beginning
 
 
 
-class TemperatureSensor(Accessory):
+
+class HomeDriver(AccessoryDriver):  # type: ignore[misc]
+    """Adapter class for AccessoryDriver."""
+
+    def __init__(
+        self,
+        indigodeviceid,
+        iid_manager: HomeIIDManager,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize a AccessoryDriver object."""
+        super().__init__(**kwargs)
+        self.indigodeviceid = indigodeviceid
+        self.iid_manager = iid_manager
+
+class HomeBridge(Bridge):  # type: ignore[misc]
+    """Adapter class for Bridge."""
+
+    def __init__(self,  driver, plugin, indigodeviceid, display_name, iid_manager=None) -> None:
+        """Initialize a Bridge object."""
+        super().__init__(driver, display_name, iid_manager=driver.iid_manager)
+        self.indigodeviceid = indigodeviceid
+        self.plugin = plugin
+
+class HomeAccessory(Accessory):  # type: ignore[misc]
+    """Adapter class for Accessory."""
+
+    def __init__(
+        self,
+        driver: HomeDriver,
+        plugin,
+        indigodeviceid,
+        name: str,
+        aid: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize a Accessory object."""
+        super().__init__(
+            driver=driver,
+            display_name=name,
+            aid=aid,
+            iid_manager=driver.iid_manager,
+            *args,
+            **kwargs,
+        )
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        try:
+            if self.plugin.debug3:
+                self.logLevel = logging.DEBUG
+            else:
+                self.logLevel = logging.INFO
+            logger.setLevel(self.logLevel)
+        except:
+            self.logLevel = logging.DEBUG
+
+class TemperatureSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -108,7 +170,7 @@ class TemperatureSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class LightSensor(Accessory):
+class LightSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -162,7 +224,7 @@ class LightSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class CarbonDioxideSensor(Accessory):
+class CarbonDioxideSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -221,7 +283,7 @@ class CarbonDioxideSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class CarbonMonoxideSensor(Accessory):
+class CarbonMonoxideSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -281,7 +343,7 @@ class CarbonMonoxideSensor(Accessory):
             logger.debug(f"{char_values}")
 
 
-class LeakSensor(Accessory):
+class LeakSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -334,7 +396,7 @@ class LeakSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class GenericSensor(Accessory):
+class GenericSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -387,7 +449,7 @@ class GenericSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class HumiditySensor(Accessory):
+class HumiditySensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -440,7 +502,7 @@ class HumiditySensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class SmokeSensor(Accessory):
+class SmokeSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -503,7 +565,7 @@ class SmokeSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class OccupancySensor(Accessory):
+class OccupancySensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -566,7 +628,7 @@ class OccupancySensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class ContactSensor(Accessory):
+class ContactSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 
     category = CATEGORY_SENSOR
@@ -620,7 +682,7 @@ class ContactSensor(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class Fanv2(Accessory):
+class Fanv2(HomeAccessory):
     category = CATEGORY_FAN
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
@@ -660,7 +722,7 @@ class Fanv2(Accessory):
                 logger.debug('Active / or RotationSpeed changed to: {}, sending to Indigo'.format( char_values))
             self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
 
-class FanSimple(Accessory):
+class FanSimple(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_FAN
@@ -702,11 +764,12 @@ class FanSimple(Accessory):
         value = self.plugin.Plugin_getter_callback(self, "onOffState")
         return value
 
-class Fan_old(Accessory):
+class Fan_old(HomeAccessory):
 
     category = CATEGORY_FAN
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+        self.indigodeviceid = indigodeviceid
         # Add the fan service. Also add optional characteristics to it.
         serv_fan = self.add_preload_service('Fanv2', chars=['RotationSpeed', 'RotationDirection'])
         self.char_on = serv_fan.configure_char('On', getter_callback=self.on_getter)
@@ -746,7 +809,7 @@ class Fan_old(Accessory):
                 logger.debug('Hue changed to: {} '.format( char_values["Hue"]))
             self.plugin.Plugin_setter_callback(self, "Hue", char_values)
 
-class LightBulb(Accessory):
+class LightBulb(HomeAccessory):
 ## really use a switch displayed as light bulb
     category = CATEGORY_LIGHTBULB
 
@@ -789,7 +852,7 @@ class LightBulb(Accessory):
 
 
 
-class SwitchSimple(Accessory):
+class SwitchSimple(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_SWITCH
@@ -846,7 +909,7 @@ class SwitchSimple(Accessory):
             logger.debug(f"{char_values}")
 
 
-class Valve(Accessory):
+class Valve(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_SPRINKLER
@@ -906,7 +969,7 @@ class Valve(Accessory):
          # "Showerhead": 2,
          # "Waterfaucet": 3
 
-class Irrigation(Accessory):
+class Irrigation(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_SPRINKLER
@@ -961,7 +1024,7 @@ class Irrigation(Accessory):
         elif value == False:
             return 0
 
-class Showerhead(Accessory):
+class Showerhead(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_SHOWER_HEAD
@@ -1021,7 +1084,7 @@ class Showerhead(Accessory):
          # "Showerhead": 2,
          # "Waterfaucet": 3
 
-class Faucet(Accessory):
+class Faucet(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_FAUCET
@@ -1081,7 +1144,7 @@ class Faucet(Accessory):
          # "Showerhead": 2,
          # "Waterfaucet": 3
 
-class Outlet(Accessory):
+class Outlet(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_OUTLET
@@ -1138,7 +1201,7 @@ class Outlet(Accessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
-class HueLightBulb(Accessory):
+class HueLightBulb(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_LIGHTBULB
@@ -1265,7 +1328,7 @@ class HueLightBulb(Accessory):
             self.plugin.Plugin_setter_callback(self, "ColorTemperature", char_values)
 
 
-class DimmerBulb(Accessory):
+class DimmerBulb(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 
     category = CATEGORY_LIGHTBULB
@@ -1324,7 +1387,7 @@ class DimmerBulb(Accessory):
             ## ignore brightness if On present
 
 
-class Lock(Accessory):
+class Lock(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
     category = CATEGORY_DOOR_LOCK
 
@@ -1356,7 +1419,7 @@ class Lock(Accessory):
         value = self.plugin.Plugin_getter_callback(self, "lockState")
         return value
 
-class GarageDoor(Accessory):
+class GarageDoor(HomeAccessory):
 
     category = CATEGORY_GARAGE_DOOR_OPENER
 
@@ -1364,7 +1427,7 @@ class GarageDoor(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
         self.activate_only = self.is_activate(indigodeviceid)
-
+        self.indigodeviceid = indigodeviceid
         serv_garage_door = self.add_preload_service("GarageDoorOpener")
         self.char_current_state = serv_garage_door.configure_char(
             "CurrentDoorState", value=0 )# getter_callback=self.get_state)
@@ -1426,7 +1489,7 @@ class GarageDoor(Accessory):
                     logger.debug("Char Values converted from TargetDoorState to On/off.  New char_values : {}".format(char_values))
                 self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?send
 
-class WindowCovering(Accessory):
+class WindowCovering(HomeAccessory):
 
     category = CATEGORY_WINDOW_COVERING
 
@@ -1434,6 +1497,7 @@ class WindowCovering(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
         self.activate_only = self.is_activate(indigodeviceid)
+        self.indigodeviceid = indigodeviceid
         indigodevice = indigo.devices[indigodeviceid]
 
         self._inverse = False
@@ -1565,7 +1629,7 @@ class WindowCovering(Accessory):
 
                 self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?senmd
 
-class Window(Accessory):
+class Window(HomeAccessory):
 
     category = CATEGORY_WINDOW
 
@@ -1573,8 +1637,8 @@ class Window(Accessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
         self.activate_only = self.is_activate(indigodeviceid)
+        self.indigodeviceid = indigodeviceid
         indigodevice = indigo.devices[indigodeviceid]
-
         self._inverse = False
         ## get temperature unit we are using
         inverseSelector = indigodevice.pluginProps.get("HomeKit_inverseSelector", False)  ## True if F
@@ -1704,7 +1768,7 @@ class Window(Accessory):
 
                 self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
 
-class MotionSensor(Accessory):
+class MotionSensor(HomeAccessory):
 
     category = CATEGORY_SENSOR
 

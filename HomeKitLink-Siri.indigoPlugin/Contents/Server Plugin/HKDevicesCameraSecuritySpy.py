@@ -2,8 +2,8 @@
 import asyncio
 from datetime import timedelta
 import logging
+from HomeKitDevices import HomeAccessory
 
-import aiofiles
 
 import os
 import time as t
