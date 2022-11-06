@@ -957,7 +957,7 @@ class Plugin(indigo.PluginBase):
             # currentPortNumber - has now become starting portNumber - shoudl
             nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
             self.logger.debug("Next Port available:{}".format(nextport))
-            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_manager=HomeIIDManager(self.plugin_iidstorage), port=int(nextport), persist_file=persist_file_location))
+            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
             self.portsinUse.add(nextport)
             self.logger.debug("Sets of Ports Currently in Use: {}".format(self.portsinUse))
             self.bridge_multiple.append(HomeBridge(driver=self.driver_multiple[-1], plugin=self, indigodeviceid=uniqueID, display_name='HomeKitLink Bridge ' + str(uniqueID), iid_manager=HomeIIDManager(self.plugin_iidstorage)))
@@ -1245,6 +1245,7 @@ class Plugin(indigo.PluginBase):
         self.create_deviceList_internal()
 
         self.plugin_iidstorage = AccessoryIIDStorage(self.pluginId, self.pluginprefDirectory+str("/AccessoryIIDStorage.storage") )
+        self.plugin_iidstorage.startup()
 
     def shutdown(self):
         self.logger.info("Shutting down HomeKitLink")

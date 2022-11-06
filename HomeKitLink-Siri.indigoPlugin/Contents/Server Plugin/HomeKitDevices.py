@@ -25,7 +25,7 @@ from pyhap.const import (
     CATEGORY_SWITCH,
 )
 
-from pyhap.iid_manager import HomeIIDManager
+from pyhap.iid_manager import AccessoryIIDStorage, HomeIIDManager
 
 logger = logging.getLogger("Plugin.HomeKitSpawn")
 
@@ -47,20 +47,20 @@ class HomeDriver(AccessoryDriver):  # type: ignore[misc]
     def __init__(
         self,
         indigodeviceid,
-        iid_manager: HomeIIDManager,
+        iid_storage: AccessoryIIDStorage,
         **kwargs: Any,
     ) -> None:
         """Initialize a AccessoryDriver object."""
         super().__init__(**kwargs)
         self.indigodeviceid = indigodeviceid
-        self.iid_manager = iid_manager
+        self.iid_storage = iid_storage
 
 class HomeBridge(Bridge):  # type: ignore[misc]
     """Adapter class for Bridge."""
 
     def __init__(self,  driver, plugin, indigodeviceid, display_name, iid_manager=None) -> None:
         """Initialize a Bridge object."""
-        super().__init__(driver, display_name, iid_manager=driver.iid_manager)
+        super().__init__(driver, display_name, iid_manager=HomeIIDManager(driver.iid_storage))
         self.indigodeviceid = indigodeviceid
         self.plugin = plugin
 
@@ -82,7 +82,7 @@ class HomeAccessory(Accessory):  # type: ignore[misc]
             driver=driver,
             display_name=name,
             aid=aid,
-            iid_manager=driver.iid_manager,
+            iid_manager=HomeIIDManager(driver.iid_storage),
             *args,
             **kwargs,
         )

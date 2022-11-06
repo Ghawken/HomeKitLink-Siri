@@ -57,7 +57,10 @@
         <Label/>
         <Description>8. Debug Indigo Device Selection</Description>
     </Field>
-
+    <Field id="debug9" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>9. Debug IID Manager IID Allocation</Description>
+    </Field>
     <Field id="debugDeviceid" type="menu" defaultValue="-3" fontColor="orange">
         <Label>Debug Device:</Label>
         <List class="self" method="debug_device_generator" dynamicReload="true"/>

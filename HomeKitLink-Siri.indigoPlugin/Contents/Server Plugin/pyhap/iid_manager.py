@@ -9,10 +9,11 @@ from pyhap.characteristic import Characteristic
 from pyhap.service import Service
 from .util import uuid_to_hap_type
 
-IID_MANAGER_STORAGE_VERSION = 1
+IID_MANAGER_STORAGE_VERSION = 2
 IID_MANAGER_SAVE_DELAY = 2
 
 ALLOCATIONS_KEY = "allocations"
+ACCESSORY_INFORMATION_SERVICE = "3E"
 
 IID_MIN = 1
 IID_MAX = 18446744073709551615
@@ -44,9 +45,10 @@ class IIDManager:
             )
             return
 
-        self.counter += 1
-        self.iids[obj] = self.counter
-        self.objs[self.counter] = obj
+        iid = self.get_iid_for_obj(obj)
+        self.iids[obj] = iid
+        self.objs[iid] = obj
+
 
     def get_obj(self, iid):
         """Get the object that is assigned the given IID."""
@@ -91,16 +93,22 @@ class AccessoryIIDStorage:
 
     def __init__(self, entry_id: str, file_location : str) -> None:
         """Create a new iid store."""
-        self.allocations: dict[str, int] = {}
-        self.allocated_iids: list[int] = []
+        self.allocations: dict[str, dict[str, int]] = {}
+        self.allocated_iids: dict[str, list[int]] = {}
         self.entry_id = entry_id
-        self.file_name = file_location
+        self.file_name = file_location+"_v"+str(IID_MANAGER_STORAGE_VERSION)
+        logger.debug(f"Init of AccessoryIDStorage")
+
+    def startup(self):
         self.allocations = self.load(self.file_name)
         if self.allocations !=None:
-            self.allocated_iids = sorted(self.allocations.values())
+            for aid_str, allocations in self.allocations.items():
+                self.allocated_iids[aid_str] = sorted(allocations.values())
         else:
-            self.allocated_iids = None
-        logger.error(f"OS16.2 Initiated AccessoryIIDStorage {self.allocations}")
+            ## blank file
+            self.allocated_iids: dict[str, list[int]] = {}
+            self.allocations: dict[str, dict[str, int]] = {}
+        logger.debug(f"OS16.2 Initiated AccessoryIIDStorage {self.allocations}")
 
     def get_or_allocate_iid(
         self,
@@ -111,6 +119,7 @@ class AccessoryIIDStorage:
         char_unique_id: str | None,
     ) -> int:
         """Generate a stable iid."""
+
         service_hap_type: str = uuid_to_hap_type(service_uuid)
         char_hap_type: str | None = uuid_to_hap_type(char_uuid) if char_uuid else None
         # Allocation key must be a string since we are saving it to JSON
@@ -118,14 +127,25 @@ class AccessoryIIDStorage:
             f'{aid}_{service_hap_type}_{service_unique_id or ""}_'
             f'{char_hap_type or ""}_{char_unique_id or ""}'
         )
-        logger.error(f"OS16.2 {allocation_key}")
-        if allocation_key in self.allocations:
-            return self.allocations[allocation_key]
-        next_iid = self.allocated_iids[-1] + 1 if self.allocated_iids else 1
-        self.allocations[allocation_key] = next_iid
-        self.allocated_iids.append(next_iid)
+        #logger.error(f"OS16.2 {allocation_key}")
+
+        aid_str = str(aid)
+        accessory_allocation = self.allocations.setdefault(aid_str, {})
+        accessory_allocated_iids = self.allocated_iids.setdefault(aid_str, [])
+        if service_hap_type == ACCESSORY_INFORMATION_SERVICE and char_uuid is None:
+            allocated_iid = 1
+        elif allocation_key in accessory_allocation:
+            return accessory_allocation[allocation_key]
+        elif accessory_allocated_iids:
+            allocated_iid = accessory_allocated_iids[-1] + 1
+        else:
+            allocated_iid = 2
+        accessory_allocation[allocation_key] = allocated_iid
+        accessory_allocated_iids.append(allocated_iid)
+
         self.persist()
-        return next_iid
+        logger.error(F"get or allocate id {allocated_iid}")
+        return allocated_iid
 
     def load(self, file_name):
         try:
@@ -133,7 +153,9 @@ class AccessoryIIDStorage:
                 loaded = json.load(file_handle)
                 logger.error(f"OS16.2 iid_manager: loaded {loaded}")
             if ALLOCATIONS_KEY in loaded:
-                return loaded[ALLOCATIONS_KEY]
+                return loaded
+            else:
+                return {}
         except:
             logger.exception("Exception in load IID files")
             self.persist()
