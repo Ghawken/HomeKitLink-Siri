@@ -960,7 +960,7 @@ class Plugin(indigo.PluginBase):
             self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
             self.portsinUse.add(nextport)
             self.logger.debug("Sets of Ports Currently in Use: {}".format(self.portsinUse))
-            self.bridge_multiple.append(HomeBridge(driver=self.driver_multiple[-1], plugin=self, indigodeviceid=uniqueID, display_name='HomeKitLink Bridge ' + str(uniqueID), iid_manager=HomeIIDManager(self.plugin_iidstorage)))
+            self.bridge_multiple.append(HomeBridge(driver=self.driver_multiple[-1], plugin=self, indigodeviceid=uniqueID, display_name='HomeKitLink Bridge ' + str(uniqueID), iid_manager=HomeIIDManager(self.plugin_iidstorage, self.debug9)))
             self.driver_multiple[-1].add_accessory(accessory=self.get_bridge_multiple(self.driver_multiple[-1], self.bridge_multiple[-1], uniqueID))
             self.driverthread_multiple.append(threading.Thread(name=str(uniqueID), target=self.driver_multiple[-1].start, daemon=True))
             self.driverthread_multiple[-1].start()
@@ -1244,7 +1244,7 @@ class Plugin(indigo.PluginBase):
         indigo.devices.subscribeToChanges()
         self.create_deviceList_internal()
 
-        self.plugin_iidstorage = AccessoryIIDStorage(self.pluginId, self.pluginprefDirectory+str("/AccessoryIIDStorage.storage") )
+        self.plugin_iidstorage = AccessoryIIDStorage(self.pluginId, self.pluginprefDirectory+str("/AccessoryIIDStorage.storage"), self.debug9 )
         self.plugin_iidstorage.startup()
 
     def shutdown(self):

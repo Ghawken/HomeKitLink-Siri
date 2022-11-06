@@ -60,7 +60,7 @@ class HomeBridge(Bridge):  # type: ignore[misc]
 
     def __init__(self,  driver, plugin, indigodeviceid, display_name, iid_manager=None) -> None:
         """Initialize a Bridge object."""
-        super().__init__(driver, display_name, iid_manager=HomeIIDManager(driver.iid_storage))
+        super().__init__(driver, display_name, iid_manager=HomeIIDManager(driver.iid_storage, plugin.debug9))
         self.indigodeviceid = indigodeviceid
         self.plugin = plugin
 
@@ -82,7 +82,7 @@ class HomeAccessory(Accessory):  # type: ignore[misc]
             driver=driver,
             display_name=name,
             aid=aid,
-            iid_manager=HomeIIDManager(driver.iid_storage),
+            iid_manager=HomeIIDManager(driver.iid_storage, plugin.debug9),
             *args,
             **kwargs,
         )

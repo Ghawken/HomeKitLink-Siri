@@ -32,7 +32,6 @@ class IIDManager:
 
     def assign(self, obj):
         """Assign an IID to given object. Print warning if already assigned.
-
         :param obj: The object that will be assigned an IID.
         :type obj: Service or Characteristic
         """
@@ -91,13 +90,16 @@ class AccessoryIIDStorage:
     persist over reboots.
     """
 
-    def __init__(self, entry_id: str, file_location : str) -> None:
+    def __init__(self, entry_id: str, file_location : str, isDebug : bool) -> None:
         """Create a new iid store."""
         self.allocations: dict[str, dict[str, int]] = {}
         self.allocated_iids: dict[str, list[int]] = {}
         self.entry_id = entry_id
+        self.isDebug = isDebug
         self.file_name = file_location+"_v"+str(IID_MANAGER_STORAGE_VERSION)
         logger.debug(f"Init of AccessoryIDStorage")
+        if isDebug:
+            logger.debug("AccessoryIIDStorage Debuging is enabled.  Changed in pluigin Config Debug9")
 
     def startup(self):
         self.allocations = self.load(self.file_name)
@@ -106,6 +108,8 @@ class AccessoryIIDStorage:
                 self.allocated_iids[aid_str] = sorted(allocations.values())
         else:
             ## blank file
+            if self.isDebug:
+                logger.debug("No file found.  Setting everything to empty and reallocating freshly.")
             self.allocated_iids: dict[str, list[int]] = {}
             self.allocations: dict[str, dict[str, int]] = {}
         logger.debug(f"OS16.2 Initiated AccessoryIIDStorage {self.allocations}")
@@ -127,7 +131,9 @@ class AccessoryIIDStorage:
             f'{aid}_{service_hap_type}_{service_unique_id or ""}_'
             f'{char_hap_type or ""}_{char_unique_id or ""}'
         )
-        #logger.error(f"OS16.2 {allocation_key}")
+
+        if self.isDebug:
+            logger.debug(f"IID Get or Allocation:  Allocation Key: {allocation_key}")
 
         aid_str = str(aid)
         accessory_allocation = self.allocations.setdefault(aid_str, {})
@@ -144,14 +150,17 @@ class AccessoryIIDStorage:
         accessory_allocated_iids.append(allocated_iid)
 
         self.persist()
-        logger.error(F"get or allocate id {allocated_iid}")
+        if self.isDebug:
+            logger.debug(f"IID Get or Allocation:  Allocation Key: {allocation_key}, and allocated_iid {allocated_iid}")
+
         return allocated_iid
 
     def load(self, file_name):
         try:
             with open(file_name, "r", encoding="utf8") as file_handle:
                 loaded = json.load(file_handle)
-                logger.error(f"OS16.2 iid_manager: loaded {loaded}")
+                if self.isDebug:
+                    logger.debug(f"iid_manager: loaded file:{file_handle} \n{loaded}")
             if ALLOCATIONS_KEY in loaded:
                 return loaded
             else:
@@ -176,18 +185,18 @@ class AccessoryIIDStorage:
             if tmp_filename and os.path.exists(tmp_filename):
                 os.remove(tmp_filename)
 
-    def _data_to_save(self) -> dict[str, dict[str, int]]:
-        """Return data of entity map to store in a file."""
-        return {ALLOCATIONS_KEY: self.allocations}
 
 class HomeIIDManager(IIDManager):  # type: ignore[misc]
     """IID Manager that remembers IIDs between restarts."""
 
-    def __init__(self, iid_storage: AccessoryIIDStorage) -> None:
+    def __init__(self, iid_storage: AccessoryIIDStorage, isDebug) -> None:
         """Initialize a IIDManager object."""
         super().__init__()
         self._iid_storage = iid_storage
-        logger.error(f"OS16.2 Initated HOMEIIDManager. {iid_storage}")
+        self.isDebug = isDebug
+        logger.debug(f"OS16.2 Initated HOMEIIDManager. {iid_storage}")
+        if isDebug:
+            logger.debug("Home IIDManager Debuging is enabled.  Changed in pluigin Config Debug9")
 
     def get_iid_for_obj(self, obj: Characteristic | Service) -> int:
         """Get IID for object."""
@@ -205,5 +214,4 @@ class HomeIIDManager(IIDManager):  # type: ignore[misc]
             raise RuntimeError(
                 f"Cannot assign IID {iid} to {obj} as it is already in use by: {self.objs[iid]}"
             )
-        logger.error(f"OS16.2 HomeIIDManager return iid {iid}")
         return iid
