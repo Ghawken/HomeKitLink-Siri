@@ -635,13 +635,14 @@ class AccessoryDriver:
         Must be run in the event loop.
         """
         loop = asyncio.get_event_loop()
+        logger.debug("Scheduling write of accessory state to disk")
         asyncio.ensure_future(loop.run_in_executor(None, self.persist))
 
     def persist(self):
         """Saves the state of the accessory.
-
         Must run in executor.
         """
+        logger.debug("Writing of accessory state to disk")
         tmp_filename = None
         try:
             temp_dir = os.path.dirname(self.persist_file)
@@ -651,7 +652,7 @@ class AccessoryDriver:
                 tmp_filename = file_handle.name
                 self.encoder.persist(file_handle, self.state)
             os.replace(tmp_filename, self.persist_file)
-        except:
+        except Exception:  # pylint: disable=broad-except
             logger.exception("Failed to persist accessory state")
             raise
         finally:

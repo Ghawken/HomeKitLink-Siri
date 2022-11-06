@@ -86,7 +86,6 @@ class AccessoryEncoder:
     @staticmethod
     def load_into(fp, state):
         """Load the accessory state from the given file object into the given Accessory.
-
         @see: AccessoryEncoder.persist
         """
         loaded = json.load(fp)
@@ -115,3 +114,36 @@ class AccessoryEncoder:
         state.public_key = ed25519.Ed25519PublicKey.from_public_bytes(
             bytes.fromhex(loaded["public_key"])
         )
+
+    # @staticmethod
+    # def load_into(fp, state):
+    #     """Load the accessory state from the given file object into the given Accessory.
+    #
+    #     @see: AccessoryEncoder.persist
+    #     """
+    #     loaded = json.load(fp)
+    #     state.mac = loaded["mac"]
+    #     state.accessories_hash = loaded.get("accessories_hash")
+    #     state.config_version = loaded["config_version"]
+    #     if "client_properties" in loaded:
+    #         state.client_properties = {
+    #             uuid.UUID(client): props
+    #             for client, props in loaded["client_properties"].items()
+    #         }
+    #     else:
+    #         # If "client_properties" does not exist, everyone
+    #         # before that was paired as an admin
+    #         state.client_properties = {
+    #             uuid.UUID(client): {CLIENT_PROP_PERMS: 1}
+    #             for client in loaded["paired_clients"]
+    #         }
+    #     state.paired_clients = {
+    #         uuid.UUID(client): bytes.fromhex(key)
+    #         for client, key in loaded["paired_clients"].items()
+    #     }
+    #     state.private_key = ed25519.Ed25519PrivateKey.from_private_bytes(
+    #         bytes.fromhex(loaded["private_key"])
+    #     )
+    #     state.public_key = ed25519.Ed25519PublicKey.from_public_bytes(
+    #         bytes.fromhex(loaded["public_key"])
+    #     )
