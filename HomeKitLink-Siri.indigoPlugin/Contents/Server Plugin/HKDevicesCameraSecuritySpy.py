@@ -19,6 +19,8 @@ from pyhap.accessory import Accessory, Bridge
 
 from pyhap.const import CATEGORY_CAMERA
 
+from HomeKitDevices import HomeAccessory
+
 from HKConstants import (
     CHAR_MOTION_DETECTED,
     CHAR_MUTE,
@@ -174,7 +176,7 @@ CONFIG_DEFAULTS = {
 }
 
 
-class SecuritySpyCamera(  PyhapCamera):
+class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
     """Generate a Camera accessory."""
    #def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):#self, *args, **kwargs):
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid, config, *args, **kwargs):
@@ -239,10 +241,9 @@ class SecuritySpyCamera(  PyhapCamera):
             driver=driver,
             plugin=plugin,
             indigodeviceid=indigodeviceid,
-            display_name=display_name,
+            name=display_name,
             aid=aid,
             config=config,
-            category=CATEGORY_CAMERA,
         )
         ## Use BlueIris Camera State - remember this class in BlueIris Camera only reallly now...
         ## Use the Motion state of Device as linked Motion Sensor for camera.

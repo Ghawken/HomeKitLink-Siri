@@ -225,7 +225,7 @@ FFMPEG_CMD = (
 logger = logging.getLogger("Plugin.HomeKit_pyHap")
 
 
-class Camera(Accessory):
+class Camera( Accessory):
     """An Accessory that can negotiated camera stream settings with iOS and start a
     stream.
     """
