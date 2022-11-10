@@ -685,9 +685,7 @@ class AccessoryDriver:
         :return: Whether the pairing is successful.
         :rtype: bool
         """
-        logger.info(
-            "Paired with %s with permissions %s.", client_uuid, client_permissions
-        )
+        logger.info( f"Paired with {client_uuid} with permissions {client_permissions}"     )
         self.state.add_paired_client(client_uuid, client_public, client_permissions)
         self.async_persist()
         return True
