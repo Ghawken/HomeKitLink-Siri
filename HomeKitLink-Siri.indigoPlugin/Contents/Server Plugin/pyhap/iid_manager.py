@@ -166,7 +166,8 @@ class AccessoryIIDStorage:
             else:
                 return {}
         except:
-            logger.exception("Exception in load IID files")
+            logger.debug("Exception in load IID files", exc_info=True)
+            logger.info(f"Creating Storage file for Accessory Characteristic IIDs...  Using Version:  {IID_MANAGER_STORAGE_VERSION}")
             self.persist()
             return None
 
