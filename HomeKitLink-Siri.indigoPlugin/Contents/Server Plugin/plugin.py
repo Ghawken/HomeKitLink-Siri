@@ -8,6 +8,7 @@ Author: GlennNZ
 
 import threading
 import subprocess
+import traceback
 import webbrowser
 
 from queue import Queue
@@ -22,6 +23,7 @@ import time as t
 
 import sys
 import os
+from os import path
 
 import colorsys
 import logging
@@ -36,6 +38,7 @@ from os.path import isfile, join
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
+
 
 from packaging import version
 
@@ -59,13 +62,112 @@ import HKDevicesCamera
 import HKDevicesCameraSecuritySpy
 import HKThermostat
 import HKutils
-logger = logging.getLogger("Plugin.HomeKit_pyHap")
+
+#logger = logging.getLogger("Plugin.HomeKit_pyHap")
+logging.addLevelName(5, "THREADDEBUG")
+logging.THREADDEBUG = 5
+
+## Seems like this is already here:
+class IndigoLogger(logging.Logger):
+    def threaddebug(self, msg, *args, **kwargs):
+        if self.isEnabledFor(logging.THREADDEBUG):
+            self._log(logging.THREADDEBUG, msg, args, **kwargs)
+
+logging.setLoggerClass(IndigoLogger)
 
 ## overwrite Queue so that can't add duplicats
 ## If cam server down then could have huge number of snapshot
 ## requests
 
+################################################################################
+class IndigoFileLogHandler(logging.handlers.TimedRotatingFileHandler):
+    ########################################
+    def emit(self, record, **kwargs):
+        try:
+            pathbase = str(path.basename(record.pathname))
+            funcName = str(record.funcName)
+            lineNo = str(record.lineno)
+            simple_msg = f"{pathbase}:{funcName}:{lineNo}"
+            second_msg = record.msg % record.args
+            combined_msg = simple_msg+" : "+second_msg
+            logmessage = '%s' % combined_msg
+            record.msg =  str(logmessage)
+            record.args = None
 
+        except Exception as ex:
+            indigo.server.log(f"ERROR in FileHandler: {ex}")
+            pass
+
+        logging.FileHandler.emit(self, record)
+
+################################################################################
+class IndigoLogHandler(logging.Handler, object):
+    ########################################
+    """ define a log handler to format log messages by level """
+    def __init__(self, plugin, displayName, level=logging.NOTSET, debug=False):
+        super(IndigoLogHandler, self).__init__(level)
+        self.displayName = displayName
+        self.plugin = plugin
+        self.debug = debug
+        self.loglevel = level
+
+    def setLogLevel(self, loglevel):
+        self.loglevel = loglevel
+        indigo.server.log("Received log level {}".format(self.loglevel))
+
+    def emit(self, record):
+        """ not used by this class; must be called independently by indigo """
+        try:
+            level = record.levelname
+            debug_level = logging.INFO
+            if level == 'THREADDEBUG':
+                debug_level = 5
+            elif level == "DEBUG":
+                debug_level = logging.DEBUG
+            elif level == "WARNING":
+                debug_level = logging.WARNING
+            elif level == "ERROR":
+                debug_level = logging.ERROR
+            is_error = False
+
+            if record.exc_info !=None and level=="ERROR":
+                level = "EXCEPTION"
+
+            if level == 'THREADDEBUG' and self.loglevel == logging.DEBUG:	# 5
+                logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+            elif level == 'DEBUG' and (self.loglevel == 5 or self.loglevel == logging.DEBUG):	# 10
+                logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                if record.exc_info !=None:
+                    etype, value, tb = record.exc_info
+                    tb_string = "".join(traceback.format_tb(tb))
+                    logmessage = logmessage +"\n" + str(record.exc_info) + "\n" + str(tb_string)
+
+            elif level == 'INFO':		# 20
+                logmessage = record.getMessage()
+            elif level == 'WARNING':	# 30
+                logmessage = record.getMessage()
+            elif level == 'ERROR':		# 40
+                logmessage = '({}: Function: {}  line: {}):    Error :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                is_error = True
+            elif level == "EXCEPTION":
+                logmessage = '({}: Function: {}  line: {}):    Exception :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                is_error = True
+                indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=debug_level)
+                if record.exc_info !=None:
+                    etype,value,tb = record.exc_info
+                    tb_string = "".join(traceback.format_tb(tb))
+                    indigo.server.log(f"{tb_string}", type=self.displayName, isError=is_error, level=debug_level)
+
+                indigo.server.log(f"{record.exc_info} \n {record.exc_text} \n {record.stack_info}",type=self.displayName, isError=is_error, level=debug_level)
+                return
+
+            else:
+                logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+        except:
+            indigo.server.log("Error in Logging",type=self.displayName, isError=is_error, level=debug_level)
+       # self.plugin.exceptionLog()
+        indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=debug_level)
+        return
 
 class UniqueQueue(Queue):
     def put(self, item, block=False, timeout=None):
@@ -85,19 +187,55 @@ class UniqueQueue(Queue):
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
-        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%Y-%m-%d %H:%M:%S')
-        self.plugin_file_handler.setFormatter(pfmt)
+
+        self.logger = logging.getLogger("Plugin")
+        self.logger.setLevel(logging.DEBUG)
+
         try:
             self.logLevel = int(self.pluginPrefs["showDebugLevel"])
+            self.fileloglevel = int(self.pluginPrefs["showDebugFileLevel"])
         except:
             self.logLevel = logging.DEBUG
+            self.fileloglevel = logging.DEBUG
+
+        self.logger.removeHandler(self.indigo_log_handler)
+        self.logger.removeHandler(self.plugin_file_handler)
+
+        self.indigo_log_handler = IndigoLogHandler(self, pluginDisplayName, logging.INFO)
+        ifmt = logging.Formatter("%(message)s")
+        self.indigo_log_handler.setFormatter(ifmt)
+
+        self.indigo_log_handler.setLevel(self.logLevel)
+
+
+        self.logger.addHandler(self.indigo_log_handler)
+
+        log_dir = indigo.server.getLogsFolderPath(pluginId)
+        log_dir_exists = os.path.isdir(log_dir)
+
+        if not log_dir_exists:
+            try:
+                os.mkdir(log_dir)
+                log_dir_exists = True
+            except:
+                indigo.server.log(u"unable to create plugin log directory - logging to the system console", isError=True)
+                self.plugin_file_handler = logging.StreamHandler()
+        if log_dir_exists:
+            #self.plugin_file_handler = IndigoFileLogHandler("%s/plugin.log" % log_dir)
+            self.plugin_file_handler = IndigoFileLogHandler("%s/plugin.log" % log_dir, when='midnight', backupCount=5)
+      #  pfmt =  logging.Formatter("%(msg)s")
+
+        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%d-%m-%Y %H:%M:%S')
+        self.plugin_file_handler.setFormatter(pfmt)
+        self.plugin_file_handler.setLevel(self.fileloglevel)
+        self.logger.addHandler(self.plugin_file_handler)
+
 
         try:
             import cryptography
         except ImportError:
             raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting HomeKitLink-Siri Plugin  ", " Missing required Library; Cryptography missing ", " Run 'pip3 install cryptograph' in a Terminal window ", " and then restart plugin. ", "="))
 
-        self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.debug(u"logLevel = " + str(self.logLevel))
         self.reStartBRIDGE = False
         self.portsinUse = set()
@@ -227,6 +365,7 @@ class Plugin(indigo.PluginBase):
             self.debugLog(u"User prefs dialog cancelled.")
         if not userCancelled:
             self.logLevel = int(valuesDict.get("showDebugLevel", '5'))
+            self.fileloglevel = int(valuesDict.get("showDebugFileLevel", '5'))
             self.debug1 = valuesDict.get('debug1', False)
             self.debug2 = valuesDict.get('debug2', False)
             self.debug3 = valuesDict.get('debug3', False)
@@ -249,6 +388,8 @@ class Plugin(indigo.PluginBase):
                 self.debugDeviceid = -3
 
             self.indigo_log_handler.setLevel(self.logLevel)
+            self.plugin_file_handler.setLevel(self.fileloglevel)
+
             self.logger.debug(u"logLevel = " + str(self.logLevel))
             self.logger.debug(u"User prefs saved.")
             self.logger.debug(u"Debugging on (Level: {0})".format(self.logLevel))
@@ -1025,6 +1166,7 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("sorting out camera options for ID:{}".format(indigodeviceid))
         config = {}
 
+
         try:
             if indigo.devices[indigodeviceid].pluginId == "com.GlennNZ.indigoplugin.BlueIris":
                 # config["support_audio"] = True
@@ -1163,7 +1305,7 @@ class Plugin(indigo.PluginBase):
                 config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}/stream?cameraNum={}&width={}".format(ssURL_rtsp, ssCameraNum, ssWidth)
 
             else:  # Yikes not a camera
-                self.logger.error("This device ID {} with Name {} ** CANNOT ** be a camera device in HomeKit. Please remove and update. ".format(indigodeviceid, indigo.devices[indigodeviceid].name))
+                self.logger.warning("This device ID {} with Name {} ** CANNOT ** be a camera device in HomeKit. Please remove and update. ".format(indigodeviceid, indigo.devices[indigodeviceid].name))
                 return None
             # Create Default Image for Accessory at beginning to avoid filenotfound exception (caught)
             # later on.
@@ -2557,8 +2699,8 @@ class Plugin(indigo.PluginBase):
         self.debugLog(u"toggleDebugEnabled() method called.")
         if self.logLevel == logging.INFO:
             self.logLevel = logging.DEBUG
-
             self.indigo_log_handler.setLevel(self.logLevel)
+
             indigo.server.log(u'Set Logging to DEBUG')
         else:
             self.logLevel = logging.INFO

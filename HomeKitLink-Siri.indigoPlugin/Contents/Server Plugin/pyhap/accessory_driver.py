@@ -57,6 +57,7 @@ from pyhap.state import State
 from .const import HAP_SERVER_STATUS
 from .util import callback
 
+#logger = logging.getLogger(__name__)
 logger = logging.getLogger("Plugin.HomeKit_pyHap")
 
 SERVICE_CALLBACK = "callback"
