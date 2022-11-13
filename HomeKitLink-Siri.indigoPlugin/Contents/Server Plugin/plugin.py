@@ -195,7 +195,7 @@ class Plugin(indigo.PluginBase):
             self.logLevel = int(self.pluginPrefs["showDebugLevel"])
             self.fileloglevel = int(self.pluginPrefs["showDebugFileLevel"])
         except:
-            self.logLevel = logging.DEBUG
+            self.logLevel = logging.INFO
             self.fileloglevel = logging.DEBUG
 
         self.logger.removeHandler(self.indigo_log_handler)
