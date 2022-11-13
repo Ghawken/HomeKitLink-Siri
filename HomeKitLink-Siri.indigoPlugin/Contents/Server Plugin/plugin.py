@@ -612,7 +612,7 @@ class Plugin(indigo.PluginBase):
             # move below to individual deviceStart as part of now major refactoring to multiple bridges.
             # self.startBridge()
             if len(self.listofenabledcameras) > 0:
-                self.logger.info("Camera Accessory Found, starting single thread to manage images.")
+                self.logger.debug("Camera Accessory Found, starting single thread to manage images.")
                 self.start_CameraSnapshots()
 
             self.sleep(5)

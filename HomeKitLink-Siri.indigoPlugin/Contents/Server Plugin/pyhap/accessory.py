@@ -20,10 +20,10 @@ from pyhap.iid_manager import AccessoryIIDStorage
 
 from pyhap.service import Service
 
-if SUPPORT_QR_CODE:
-    import base36
-    from pyqrcode import QRCode
-    import webbrowser
+
+import base36
+from pyqrcode import QRCode
+import webbrowser
 
 
 HAP_PROTOCOL_INFORMATION_SERVICE_UUID = UUID("000000A2-0000-1000-8000-0026BB765291")

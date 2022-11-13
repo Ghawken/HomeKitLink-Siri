@@ -27,10 +27,11 @@ from pyhap.const import (
 
 from pyhap.iid_manager import AccessoryIIDStorage, HomeIIDManager
 
-logger = logging.getLogger("Plugin.HomeKitSpawn")
+logger = logging.getLogger("Plugin.HomeKit_Devices")
 
 from HKConstants import *
-
+import base36
+from pyqrcode import QRCode
 
 import HKutils
 
@@ -55,6 +56,8 @@ class HomeDriver(AccessoryDriver):  # type: ignore[misc]
         self.indigodeviceid = indigodeviceid
         self.iid_storage = iid_storage
 
+
+
 class HomeBridge(Bridge):  # type: ignore[misc]
     """Adapter class for Bridge."""
 
@@ -63,6 +66,22 @@ class HomeBridge(Bridge):  # type: ignore[misc]
         super().__init__(driver, display_name, iid_manager=HomeIIDManager(driver.iid_storage, plugin.debug9))
         self.indigodeviceid = indigodeviceid
         self.plugin = plugin
+
+    def setup_message(self):
+        pincode = self.driver.state.pincode.decode()
+        xhm_uri = self.xhm_uri()
+        logger.debug("New Scan the QR code with your HomeKit app on your iOS device:")
+        logger.debug("Select Device QR button to Display QR Code, or use pincode.")
+        #      logger.info(QRCode(xhm_uri).terminal(quiet_zone=2))
+        #  textcode = QRCode(xhm_uri).text(quiet_zone=8)
+        image_as_str = QRCode(xhm_uri).png_as_base64_str(scale=5)
+        html_img = '''<div><h1>HomeKitLink Siri</h1>
+   <p>  Indigo Plugin: Scan this QR Code to add HomeKitLink Siri Bridge to HomeKit</p>
+   <img src="data:image/png;base64,{}" width="600" height="600">'''.format(image_as_str)
+        html_img = html_img + "</div>"
+
+        logger.debug(f"Or enter this code in your HomeKit app on your iOS device: {pincode}")
+        return (html_img, pincode)
 
 class HomeAccessory(Accessory):  # type: ignore[misc]
     """Adapter class for Accessory."""
@@ -96,6 +115,9 @@ class HomeAccessory(Accessory):  # type: ignore[misc]
             logger.setLevel(self.logLevel)
         except:
             self.logLevel = logging.DEBUG
+
+
+
 
 class TemperatureSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
