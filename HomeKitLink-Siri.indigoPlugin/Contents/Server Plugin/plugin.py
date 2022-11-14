@@ -2463,7 +2463,10 @@ class Plugin(indigo.PluginBase):
                     if self.debug4:
                         self.logger.debug(f"Checking Thermostat temp List temperatures: {listtemps}")  ## double check here in
                     if isinstance(listtemps, list):
-                        temptosend = sum(listtemps) / len(listtemps)  ##average of all values
+                        if not listtemps:  ## Check for empty List, Len(listtemps)=0, DivisionZero in that case
+                            return 0  ## return 0 or None.  Getter changes None to 0?
+                        else:
+                            temptosend = sum(listtemps) / len(listtemps)  ##avreturn 0
                     elif isinstance(listtemps, (float, int)):
                         temptosend = listtemps
                     else:
