@@ -92,7 +92,7 @@ class IndigoFileLogHandler(logging.handlers.TimedRotatingFileHandler):
             combined_msg = simple_msg+" : "+second_msg
             logmessage = '%s' % combined_msg
             record.msg =  str(logmessage)
-            record.args = None
+            record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
 
         except Exception as ex:
             indigo.server.log(f"ERROR in FileHandler: {ex}")
@@ -188,6 +188,7 @@ class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 
+
         self.logger = logging.getLogger("Plugin")
         self.logger.setLevel(logging.DEBUG)
 
@@ -229,6 +230,7 @@ class Plugin(indigo.PluginBase):
         self.plugin_file_handler.setFormatter(pfmt)
         self.plugin_file_handler.setLevel(self.fileloglevel)
         self.logger.addHandler(self.plugin_file_handler)
+
 
 
         try:
@@ -338,6 +340,11 @@ class Plugin(indigo.PluginBase):
 
         self.debugDeviceid = -3  ## always set this to not on after restart.
 
+        if self.debug3:
+            logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.DEBUG)
+        else:
+            logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.INFO)
+
         self.ffmpeg_lastCommand = []
 
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
@@ -389,6 +396,11 @@ class Plugin(indigo.PluginBase):
 
             self.indigo_log_handler.setLevel(self.logLevel)
             self.plugin_file_handler.setLevel(self.fileloglevel)
+
+            if self.debug3:
+                logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.DEBUG)
+            else:
+                logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.INFO)
 
             self.logger.debug(u"logLevel = " + str(self.logLevel))
             self.logger.debug(u"User prefs saved.")

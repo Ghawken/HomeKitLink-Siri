@@ -30,7 +30,7 @@
 
     <Field id="debug3" type="checkbox" tooltip="Enabling will result .">
         <Label/>
-        <Description>3. Debug HomeKit Library Verbose</Description>
+        <Description>3. Debug HomeKit Library (Verbose!) </Description>
     </Field>
 
     <Field id="debug4" type="checkbox" tooltip="Enabling will result .">
