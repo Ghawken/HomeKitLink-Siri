@@ -13,6 +13,7 @@ import webbrowser
 
 from queue import Queue
 
+from logging.handlers import TimedRotatingFileHandler
 
 try:
     import requests
@@ -80,7 +81,7 @@ logging.setLoggerClass(IndigoLogger)
 ## requests
 
 ################################################################################
-class IndigoFileLogHandler(logging.handlers.TimedRotatingFileHandler):
+class IndigoFileLogHandler(TimedRotatingFileHandler):
     ########################################
     def emit(self, record, **kwargs):
         try:
@@ -98,7 +99,13 @@ class IndigoFileLogHandler(logging.handlers.TimedRotatingFileHandler):
             indigo.server.log(f"ERROR in FileHandler: {ex}")
             pass
 
-        logging.FileHandler.emit(self, record)
+        try:
+            if self.shouldRollover(record):
+                self.doRollover()
+            logging.FileHandler.emit(self, record)
+        except Exception:
+            self.handleError(record)
+
 
 ################################################################################
 class IndigoLogHandler(logging.Handler, object):
