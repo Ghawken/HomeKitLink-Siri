@@ -11,8 +11,10 @@ import subprocess
 import traceback
 import webbrowser
 
+
 from queue import Queue
 
+import logging
 from logging.handlers import TimedRotatingFileHandler
 
 try:
@@ -64,141 +66,97 @@ import HKDevicesCameraSecuritySpy
 import HKThermostat
 import HKutils
 
-#logger = logging.getLogger("Plugin.HomeKit_pyHap")
-logging.addLevelName(5, "THREADDEBUG")
-logging.THREADDEBUG = 5
-
-## Seems like this is already here:
-class IndigoLogger(logging.Logger):
-    def threaddebug(self, msg, *args, **kwargs):
-        if self.isEnabledFor(logging.THREADDEBUG):
-            self._log(logging.THREADDEBUG, msg, args, **kwargs)
-
-logging.setLoggerClass(IndigoLogger)
-
-## overwrite Queue so that can't add duplicats
-## If cam server down then could have huge number of snapshot
-## requests
-
+################################################################################
+# New Indigo FileHandler, only pass higher message and manage the string formatting issue
+# where for some reason %s not substituted in filehandler, but in log without problem
 ################################################################################
 class IndigoFileLogHandler(TimedRotatingFileHandler):
-    ########################################
     def emit(self, record, **kwargs):
         try:
-            pathbase = str(path.basename(record.pathname))
-            funcName = str(record.funcName)
-            lineNo = str(record.lineno)
-            simple_msg = f"{pathbase}:{funcName}:{lineNo}"
-            second_msg = record.msg % record.args
-            combined_msg = simple_msg+" : "+second_msg
-            logmessage = '%s' % combined_msg
-            record.msg =  str(logmessage)
-            record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
+            levelno = int(record.levelno)
+            if self.level <= levelno:  ## Don't do anything if level display is lower
+                new_msg = f"{path.basename(record.pathname)}:{record.funcName}:{record.lineno}"
+                second_msg = record.msg % record.args
+                record.msg =  str(new_msg+" : "+second_msg)
+                record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
+                try:
+                    if self.shouldRollover(record):
+                        self.doRollover()
+                    logging.FileHandler.emit(self, record)
+                except Exception:
+                    self.handleError(record)
 
         except Exception as ex:
-            indigo.server.log(f"ERROR in FileHandler: {ex}")
+            indigo.server.log(f"Error in Logggin FileHandler: {ex}")
             pass
-
-        try:
-            if self.shouldRollover(record):
-                self.doRollover()
-            logging.FileHandler.emit(self, record)
-        except Exception:
-            self.handleError(record)
-
-
 ################################################################################
-class IndigoLogHandler(logging.Handler, object):
-    ########################################
-    """ define a log handler to format log messages by level """
-    def __init__(self, plugin, displayName, level=logging.NOTSET, debug=False):
-        super(IndigoLogHandler, self).__init__(level)
-        self.displayName = displayName
-        self.plugin = plugin
-        self.debug = debug
-        self.loglevel = level
-
-    def setLogLevel(self, loglevel):
-        self.loglevel = loglevel
-        indigo.server.log("Received log level {}".format(self.loglevel))
+# New Indigo Log Handler - display more useful info when debug logging
+# update to python3 changes
+################################################################################
+class IndigoLogHandler(logging.Handler):
+    def __init__(self, display_name, level=logging.NOTSET):
+        super().__init__(level)
+        self.displayName = display_name
 
     def emit(self, record):
         """ not used by this class; must be called independently by indigo """
+        logmessage = ""
         try:
-            level = record.levelname
-            debug_level = logging.INFO
-            if level == 'THREADDEBUG':
-                debug_level = 5
-            elif level == "DEBUG":
-                debug_level = logging.DEBUG
-            elif level == "WARNING":
-                debug_level = logging.WARNING
-            elif level == "ERROR":
-                debug_level = logging.ERROR
+            levelno = int(record.levelno)
             is_error = False
-
-            if record.exc_info !=None and level=="ERROR":
-                level = "EXCEPTION"
-
-            if level == 'THREADDEBUG' and self.loglevel == logging.DEBUG:	# 5
-                logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
-            elif level == 'DEBUG' and (self.loglevel == 5 or self.loglevel == logging.DEBUG):	# 10
-                logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+            is_exception = False
+            if self.level <= levelno:  ## should display this..
                 if record.exc_info !=None:
-                    etype, value, tb = record.exc_info
-                    tb_string = "".join(traceback.format_tb(tb))
-                    logmessage = logmessage +"\n" + str(record.exc_info) + "\n" + str(tb_string)
+                    is_exception = True
+                if levelno == 5:	# 5
+                    logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                elif levelno == logging.DEBUG:	# 10
+                    logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                elif levelno == logging.INFO:		# 20
+                    logmessage = record.getMessage()
+                elif levelno == logging.WARNING:	# 30
+                    logmessage = record.getMessage()
+                elif levelno == logging.ERROR:		# 40
+                    logmessage = '({}: Function: {}  line: {}):    Error :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                    is_error = True
+                if is_exception:
+                    logmessage = '({}: Function: {}  line: {}):    Exception :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
+                    indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=levelno)
+                    if record.exc_info !=None:
+                        etype,value,tb = record.exc_info
+                        tb_string = "".join(traceback.format_tb(tb))
+                        indigo.server.log(f"Traceback:\n{tb_string}", type=self.displayName, isError=is_error, level=levelno)
+                        indigo.server.log(f"Error in plugin execution:\n\n{traceback.format_exc(30)}", type=self.displayName, isError=is_error, level=levelno)
+                    indigo.server.log(f"\nExc_info: {record.exc_info} \nExc_Text: {record.exc_text} \nStack_info: {record.stack_info}",type=self.displayName, isError=is_error, level=levelno)
+                    return
+                indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=levelno)
+        except Exception as ex:
+            indigo.server.log(f"Error in Logging: {ex}",type=self.displayName, isError=is_error, level=levelno)
 
-            elif level == 'INFO':		# 20
-                logmessage = record.getMessage()
-            elif level == 'WARNING':	# 30
-                logmessage = record.getMessage()
-            elif level == 'ERROR':		# 40
-                logmessage = '({}: Function: {}  line: {}):    Error :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
-                is_error = True
-            elif level == "EXCEPTION":
-                logmessage = '({}: Function: {}  line: {}):    Exception :  Message : {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
-                is_error = True
-                indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=debug_level)
-                if record.exc_info !=None:
-                    etype,value,tb = record.exc_info
-                    tb_string = "".join(traceback.format_tb(tb))
-                    indigo.server.log(f"{tb_string}", type=self.displayName, isError=is_error, level=debug_level)
-
-                indigo.server.log(f"{record.exc_info} \n {record.exc_text} \n {record.stack_info}",type=self.displayName, isError=is_error, level=debug_level)
-                return
-
-            else:
-                logmessage = '({}:{}:{}): {}'.format(path.basename(record.pathname), record.funcName, record.lineno, record.getMessage())
-        except:
-            indigo.server.log("Error in Logging",type=self.displayName, isError=is_error, level=debug_level)
-       # self.plugin.exceptionLog()
-        indigo.server.log(message=logmessage, type=self.displayName, isError=is_error, level=debug_level)
-        return
-
+################################################################################
+# Use uniqueQueue to avoid multiple camera images pending
+################################################################################
 class UniqueQueue(Queue):
     def put(self, item, block=False, timeout=None):
         if item not in self.queue:  # fix join bug
             Queue.put(self, item, block, timeout)
-
     def _init(self, maxsize):
         self.queue = set()
-
     def _put(self, item):
         self.queue.add(item)
-
     def _get(self):
         return self.queue.pop()
+################################################################################
 
-
+################################################################################
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
 
-
-        self.logger = logging.getLogger("Plugin")
+        ################################################################################
+        # Setup Logging
+        ################################################################################
         self.logger.setLevel(logging.DEBUG)
-
         try:
             self.logLevel = int(self.pluginPrefs["showDebugLevel"])
             self.fileloglevel = int(self.pluginPrefs["showDebugFileLevel"])
@@ -208,16 +166,11 @@ class Plugin(indigo.PluginBase):
 
         self.logger.removeHandler(self.indigo_log_handler)
         self.logger.removeHandler(self.plugin_file_handler)
-
-        self.indigo_log_handler = IndigoLogHandler(self, pluginDisplayName, logging.INFO)
+        self.indigo_log_handler = IndigoLogHandler(pluginDisplayName, logging.INFO)
         ifmt = logging.Formatter("%(message)s")
         self.indigo_log_handler.setFormatter(ifmt)
-
         self.indigo_log_handler.setLevel(self.logLevel)
-
-
         self.logger.addHandler(self.indigo_log_handler)
-
         log_dir = indigo.server.getLogsFolderPath(pluginId)
         log_dir_exists = os.path.isdir(log_dir)
 
@@ -229,16 +182,14 @@ class Plugin(indigo.PluginBase):
                 indigo.server.log(u"unable to create plugin log directory - logging to the system console", isError=True)
                 self.plugin_file_handler = logging.StreamHandler()
         if log_dir_exists:
-            #self.plugin_file_handler = IndigoFileLogHandler("%s/plugin.log" % log_dir)
             self.plugin_file_handler = IndigoFileLogHandler("%s/plugin.log" % log_dir, when='midnight', backupCount=5)
-      #  pfmt =  logging.Formatter("%(msg)s")
-
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%d-%m-%Y %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
         self.plugin_file_handler.setLevel(self.fileloglevel)
         self.logger.addHandler(self.plugin_file_handler)
-
-
+        ################################################################################
+        # Finish Logging changes
+        ################################################################################
 
         try:
             import cryptography
@@ -642,6 +593,7 @@ class Plugin(indigo.PluginBase):
             if int(self.count) > int(self.runningAccessoryCount):
                 self.logger.info('Given this difference, please review devices by Select Menu Item, Show Device Publications for more information.')
 
+
             self.sleep(10)
 
             while True:
@@ -952,6 +904,12 @@ class Plugin(indigo.PluginBase):
     def start_CameraSnapshots(self):
         # self.cameraSnapShots = threading.Thread(target=self.thread_cameraSnapShots, daemon=True)
         # add check for already running, in case of runconcurrent restarting
+
+        # try:
+        #     raise TypeError("Testing here")
+        # except TypeError as e:
+        #     raise Exception("I'm not in a good shape") from e
+
         if self.cameraSnapShots.is_alive() == False:
             self.logger.info("Camera Thread is being spooled up to manage camera images")
             self.cameraSnapShots.start()
@@ -3710,6 +3668,9 @@ class Plugin(indigo.PluginBase):
     def Menu_reset_pairing(self, *args, **kwargs):
         self.logger.debug("reset Paired Clients called...")
         self.logger.info("{}".format())
+
+    def Menu_Crash(self, *args, **kwargs):
+        self.logger.debug("Crash Homekit Called... ..")
 
     def Menu_runffmpeg(self, *args, **kwargs):
         self.logger.debug("runffmpeg Called...")
