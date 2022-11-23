@@ -839,6 +839,7 @@ class LightBulb(HomeAccessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
+        self.HomeKitBrightnessLevel = 0
         serv_light = self.add_preload_service('Lightbulb')
         self.char_on = serv_light.configure_char( 'On',  getter_callback=self.get_bulb)
         serv_light.setter_callback = self._set_chars  ## Setter for everything
@@ -1232,7 +1233,7 @@ class HueLightBulb(HomeAccessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
-
+        self.HomeKitBrightnessLevel = 0
         indigodevice = indigo.devices[indigodeviceid]
 
         supportsRGB = indigodevice.supportsRGB
@@ -1306,10 +1307,12 @@ class HueLightBulb(HomeAccessory):
     def set_brightness(self, value):
         # logger.debug("Bulb value: %s", value)
         self.plugin.Plugin_setter_callback(self, "Brightness", value)
+        self.HomeKitBrightnessLevel = value
 
     def get_brightness(self):
         # logger.debug("Bulb value: %s", value)
         value = self.plugin.Plugin_getter_callback(self, "Brightness")
+        self.HomeKitBrightnessLevel = value
         return value
 
     def set_saturation(self, value):
@@ -1361,6 +1364,7 @@ class DimmerBulb(HomeAccessory):
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
         serv_light = self.add_preload_service('Lightbulb', chars=["On", "Brightness"])
+        self.HomeKitBrightnessLevel = 0
         self.char_on = serv_light.configure_char( 'On',  getter_callback=self.get_bulb ) #setter_callback=self.set_bulb,
         #self.Hue = serv_light.configure_char('Hue',  getter_callback=self.get_hue)
         self.Brightness = serv_light.configure_char('Brightness', getter_callback=self.get_brightness ) #,  #setter_callback=self.set_brightness,)

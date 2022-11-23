@@ -1899,6 +1899,7 @@ class Plugin(indigo.PluginBase):
                                 self.logger.debug("Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
                             if isinstance(brightness, int):
                                 self.device_list_internal[checkindex]["accessory"].Brightness.set_value(brightness)
+                                self.device_list_internal[checkindex]["accessory"].HomeKitBrightnessLevel = brightness
 
                 if str(updateddevice_subtype) in ( "HueLightBulb", "ColorTempLightBulb"):
                     # remove specific hue stuff, huelevel wrong and better to go one lower to indigo dimmer
@@ -2274,15 +2275,32 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Returned RGB data: {}".format(rgbReturned))
                         self.logger.debug("RGB:{}".format(rgbReturned))
                     if len(rgbReturned) >= 2:
-                        if "Brightness" in valuetoSet and "colorTemp" in indigodevice.states:
-                            indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, int(valuetoSet["Brightness"]),0,  indigodevice.states["colorTemp"] )
+                        if indigodevice.pluginId == "com.nathansheldon.indigoplugin.HueLights":
+                            ## Change approach as don't like impact elsewhere.  Select for Hue ssues
+                            ## When Hue plugin changes Hue of lights - sets Brightness to maximal value or RG or B
+                            ## see here: https://forums.indigodomo.com/viewtopic.php?t=24035&p=196064
+                            ## Hence everytime HomeKit requests a Hue change alone - brightness becomes annoyingly 100%
+                            if "Brightness" in valuetoSet:
+                                deviceBrightness = int(valuetoSet["Brightness"])
+                            else:
+                                #deviceBrightness = indigodevice.states["brightnessLevel"]
+                                deviceBrightness = accessoryself.HomeKitBrightnessLevel
+                            indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100 )
+                            if self.debug5:
+                                self.logger.debug("HueDeviceFound: Set Color Levels of Device to R:{}  G:{}  B:{}.   Current Device Brightness:{} ".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, deviceBrightness))
+                            if isinstance(deviceBrightness, int):
+                                indigo.dimmer.setBrightness(accessoryself.indigodeviceid, deviceBrightness)
+                                if self.debug5:
+                                    self.logger.debug("HueDeviceFound: Additional Brightness Setting. Set Brightness Seperately to  Brightness:{} ".format( deviceBrightness))
+                            else:  # do same in case of Hue Error/no Brightness given
+                                indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
+                                if self.debug5:
+                                    self.logger.debug("HueDeviceFound: Missing Details, Basic. Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
                         else:
                             indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
-                        if self.debug5:
-                            if "Brightness" in valuetoSet and "colorTemp" in indigodevice.states:
-                                self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}  Brightness:{} colorTemp:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, valuetoSet["Brightness"], indigodevice.states["colorTemp"] ))
-                            else:
+                            if self.debug5:
                                 self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
+
             elif statetoReturn == "ColorTemperature":  ## state and value named the same here..
                 if self.debug5:
                     self.logger.debug("Found a ColorTemperature state try using that..")
