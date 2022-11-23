@@ -2145,6 +2145,7 @@ class Plugin(indigo.PluginBase):
                         if self.debug5:
                             self.logger.debug("Found a brightnessLevel state in IndigoDevice try using that:  ValuetoSet: {}".format(valuetoSet))
                         currentBrightness = indigodevice.states["brightnessLevel"]
+
                         if valuetoSet["Brightness"] != currentBrightness:
                             if self.debug5:
                                 self.logger.debug("Brightness level differs changing..")
@@ -2152,6 +2153,8 @@ class Plugin(indigo.PluginBase):
                                 indigo.dimmer.setBrightness(accessoryself.indigodeviceid, int(valuetoSet["Brightness"]))
                                 if valuetoSet["Brightness"] > 0:
                                     brightnessSet = True
+                        else:  # even if not equal don't TURN ON below
+                            brightnessSet = True
                 if "RotationSpeed" in valuetoSet:  ## fan action, fan also uses active as below
                     if type(indigodevice) == indigo.SpeedControlDevice:
                         ## strange device, hard to test
@@ -2271,9 +2274,15 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Returned RGB data: {}".format(rgbReturned))
                         self.logger.debug("RGB:{}".format(rgbReturned))
                     if len(rgbReturned) >= 2:
-                        indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
+                        if "Brightness" in valuetoSet and "colorTemp" in indigodevice.states:
+                            indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, int(valuetoSet["Brightness"]),0,  indigodevice.states["colorTemp"] )
+                        else:
+                            indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
                         if self.debug5:
-                            self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
+                            if "Brightness" in valuetoSet and "colorTemp" in indigodevice.states:
+                                self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}  Brightness:{} colorTemp:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, valuetoSet["Brightness"], indigodevice.states["colorTemp"] ))
+                            else:
+                                self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
             elif statetoReturn == "ColorTemperature":  ## state and value named the same here..
                 if self.debug5:
                     self.logger.debug("Found a ColorTemperature state try using that..")
