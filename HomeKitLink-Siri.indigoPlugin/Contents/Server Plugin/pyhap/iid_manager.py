@@ -137,7 +137,7 @@ class AccessoryIIDStorage:
 
         aid_str = str(aid)
         accessory_allocation = self.allocations.setdefault(aid_str, {})
-        accessory_allocated_iids = self.allocated_iids.setdefault(aid_str, [])
+        accessory_allocated_iids = self.allocated_iids.setdefault(aid_str, [1])
         if service_hap_type == ACCESSORY_INFORMATION_SERVICE and char_uuid is None:
             return 1
         if allocation_key in accessory_allocation:

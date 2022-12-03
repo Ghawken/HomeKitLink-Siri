@@ -88,6 +88,7 @@ class IndigoFileLogHandler(TimedRotatingFileHandler):
 
         except Exception as ex:
             indigo.server.log(f"Error in Logggin FileHandler: {ex}")
+            indigo.server.log(f"Error in Logging FileHandler execution:\n\n{traceback.format_exc(30)}", isError=False)
             pass
 ################################################################################
 # New Indigo Log Handler - display more useful info when debug logging
