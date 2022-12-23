@@ -32,15 +32,21 @@ logger = logging.getLogger("Plugin.HomeKit_Devices")
 from HKConstants import *
 import base36
 from pyqrcode import QRCode
-
+import tlv8
 import HKutils
-
+import base64
 #import HKDevicesCamera
 ## Move to Library overides - which should have used at
 ## beginning
 
+SUPPORTED_TRANSITION_CONFIGURATION = 1
+CHARACTERISTIC_IID = 1
+TRANSITION_TYPE = 2
+BRIGHTNESS = 1
+COLOR_TEMPERATURE = 2
 
-
+def bytes_to_base64_string(value: bytes) -> str:
+   return base64.b64encode(value).decode('ASCII')
 
 class HomeDriver(AccessoryDriver):  # type: ignore[misc]
     """Adapter class for AccessoryDriver."""
@@ -1255,6 +1261,12 @@ class HueLightBulb(HomeAccessory):
 
         if supportsWhiteTemperature==True and cancelWhiteTemp != True:
             chars_to_use.append("ColorTemperature")
+            ## if colorTemp support automatically support adpative lighting
+            # get back to this!
+            #chars_to_use.append("ActiveTransitionCount")
+            #chars_to_use.append("TransitionControl")
+            #chars_to_use.append("SupportedTransitionConfiguration")
+
 
         serv_light = self.add_preload_service('Lightbulb', chars=chars_to_use)
         self.char_on = serv_light.configure_char( 'On',  getter_callback=self.get_bulb ) #setter_callback=self.set_bulb,
@@ -1273,7 +1285,22 @@ class HueLightBulb(HomeAccessory):
                     "maxValue": math.floor(780),
                 },
             )
-
+            # supported_transitions = [tlv8.Entry(SUPPORTED_TRANSITION_CONFIGURATION, [
+            #     tlv8.Entry(CHARACTERISTIC_IID, self.Brightness.to_HAP()["iid"]),
+            #     tlv8.Entry(TRANSITION_TYPE, BRIGHTNESS),
+            #     tlv8.Entry(CHARACTERISTIC_IID, self.char_color_temp.to_HAP()["iid"]),
+            #     tlv8.Entry(TRANSITION_TYPE, COLOR_TEMPERATURE)
+            # ])]
+            # bytes_data = tlv8.encode(supported_transitions)
+            # b64str = bytes_to_base64_string(bytes_data)
+            #
+            # self.char_atc = serv_light.configure_char(
+            #     'ActiveTransitionCount', setter_callback=self.set_atc)
+            # self.char_tc = serv_light.configure_char(
+            #     'TransitionControl', setter_callback=self.set_tc)
+            # self.char_stc = serv_light.configure_char(
+            #     'SupportedTransitionConfiguration',
+            #     value=b64str)
         ## remove unneccesary self
         serv_light.setter_callback = self._set_chars  ## Setter for everything
 
@@ -1284,6 +1311,19 @@ class HueLightBulb(HomeAccessory):
         if self.plugin.debug6:
             logger.debug("Run called once, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def set_ct(self, value):
+        logging.info("Bulb color temp: %s", value)
+        logger.info(f'ColorTemperature changed to: {value} ')
+
+        self.plugin.Plugin_setter_callback(self, "ColorTemperature", value)
+
+    def set_atc(self, value):
+        logger.info("Write to ActiveTransactionCount: %s", value)
+
+    def set_tc(self, value):
+        logger.info("Write to TransitionControl: %s", value)
+        #logger.info(f"Decoded : {decoded}")
 
     def set_bulb(self, value):
        # if self.plugin.debug6:
@@ -1460,6 +1500,10 @@ class GarageDoor(HomeAccessory):
 
         self.char_target_state = serv_garage_door.configure_char(
             "TargetDoorState", value=0, setter_callback=self._set_chars
+        )
+
+        self.char_obstruction_detected = serv_garage_door.configure_char(
+            "ObstructionDetected", value=False
         )
         # self.char_obstruction_detected = serv_garage_door.configure_char(
         #     "ObstructionDeteced", value=False

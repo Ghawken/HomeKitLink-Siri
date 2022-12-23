@@ -67,30 +67,6 @@ import HKThermostat
 import HKutils
 
 ################################################################################
-# New Indigo FileHandler, only pass higher message and manage the string formatting issue
-# where for some reason %s not substituted in filehandler, but in log without problem
-################################################################################
-class IndigoFileLogHandler(TimedRotatingFileHandler):
-    def emit(self, record, **kwargs):
-        try:
-            levelno = int(record.levelno)
-            if self.level <= levelno:  ## Don't do anything if level display is lower
-                new_msg = f"{path.basename(record.pathname)}:{record.funcName}:{record.lineno}"
-                second_msg = record.msg % record.args
-                record.msg =  str(new_msg+" : "+second_msg)
-                record.args = None  ## This is the old string formatting %s issue.  Need to combine and then delete all args
-                try:
-                    if self.shouldRollover(record):
-                        self.doRollover()
-                    logging.FileHandler.emit(self, record)
-                except Exception:
-                    self.handleError(record)
-
-        except Exception as ex:
-            indigo.server.log(f"Error in Logggin FileHandler: {ex}")
-            indigo.server.log(f"Error in Logging FileHandler execution:\n\n{traceback.format_exc(30)}", isError=False)
-            pass
-################################################################################
 # New Indigo Log Handler - display more useful info when debug logging
 # update to python3 changes
 ################################################################################
@@ -166,28 +142,16 @@ class Plugin(indigo.PluginBase):
             self.fileloglevel = logging.DEBUG
 
         self.logger.removeHandler(self.indigo_log_handler)
-        self.logger.removeHandler(self.plugin_file_handler)
+
         self.indigo_log_handler = IndigoLogHandler(pluginDisplayName, logging.INFO)
         ifmt = logging.Formatter("%(message)s")
         self.indigo_log_handler.setFormatter(ifmt)
         self.indigo_log_handler.setLevel(self.logLevel)
         self.logger.addHandler(self.indigo_log_handler)
-        log_dir = indigo.server.getLogsFolderPath(pluginId)
-        log_dir_exists = os.path.isdir(log_dir)
 
-        if not log_dir_exists:
-            try:
-                os.mkdir(log_dir)
-                log_dir_exists = True
-            except:
-                indigo.server.log(u"unable to create plugin log directory - logging to the system console", isError=True)
-                self.plugin_file_handler = logging.StreamHandler()
-        if log_dir_exists:
-            self.plugin_file_handler = IndigoFileLogHandler("%s/plugin.log" % log_dir, when='midnight', backupCount=5)
-        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(msg)s', datefmt='%d-%m-%Y %H:%M:%S')
+        pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t[%(levelname)8s] %(name)20s.%(funcName)-25s%(message)s', datefmt='%d-%m-%Y %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
         self.plugin_file_handler.setLevel(self.fileloglevel)
-        self.logger.addHandler(self.plugin_file_handler)
         ################################################################################
         # Finish Logging changes
         ################################################################################
@@ -252,7 +216,7 @@ class Plugin(indigo.PluginBase):
                                 "service_Thermostat": ["Thermostat"],
                                 "service_TemperatureSensor": ["TemperatureSensor"],
                                 "service_HumiditySensor": ["HumiditySensor"],
-                                "service_Lightbulb": ["LightBulb", "LightBulb_switch"],
+                                "service_Lightbulb": ["LightBulb", "LightBulb_switch"], #, "LightBulb_Adaptive"],
                                 "service_WindowCovering" : ["Blind"],
                                 "service_Window" : ["Window"],
                                 "service_Security" :["Security"]
@@ -759,7 +723,7 @@ class Plugin(indigo.PluginBase):
                     if item['subtype'] == "LightBulb":
                         accessory = HomeKitDevices.DimmerBulb(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "ColorTempLightBulb":
-                        ## this checks inside HueLightBulb for same aspect making colotemp - slightly out of spec
+                        ## this checks inside HueLightBulb for same aspect making colortemp - slightly out of spec
                         accessory = HomeKitDevices.HueLightBulb(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "LightBulb_switch":
                         accessory = HomeKitDevices.LightBulb(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
@@ -1797,26 +1761,43 @@ class Plugin(indigo.PluginBase):
                         return
 
                 elif str(updateddevice_subtype) == "GarageDoor":
-                    if "onOffState" in updated_device.states:  ## if onOffexists use that preferentially
-                        if updated_device.states['onOffState'] != original_device.states['onOffState']:
-                            newstate = updated_device.states["onOffState"]
-                            if self.debug2:
-                                self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            if this_is_debug_device:
-                                self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
-                            self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
-                            return
-                    elif "binaryInput1" in updated_device.states:
-                        if updated_device.states["binaryInput1"] !=original_device.states["binaryInput1"]:
-                            newstate = updated_device.states["binaryInput1"]
-                            if self.debug2:
-                                self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            if this_is_debug_device:
-                                self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
-                            self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
-                            return
+                    for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
+                        # doorState:    0 -> open, 1 -> closed, 2 -> opening, 3 -> closing, 4 -> stopped, 5 -> reversing
+                        # onOffState:   0 -> open, 1 -> closed
+                        # binaryInput1: 0 -> open, 1 -> closed
+                        if stateName in updated_device.states:  # choose the first match
+                            oldstate = original_device.states[stateName]
+                            newstate = updated_device.states[stateName]
+                            if newstate != oldstate:  # state has changed
+                                # Log Indigo device state change.
+                                # (VGD) debug code for papamac's Virtual Garage Door (VGD) changes
+                                # (VGD) self.logger.warning('Indigo device "{}" {} changed: {} --> {}'.format(updated_device.name, stateName, oldstate, newstate))
+                                if self.debug2:
+                                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                                if this_is_debug_device:
+                                    self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                                accessory = self.device_list_internal[checkindex]["accessory"]
+                                # (VGD) oldChars = self._getGarageDoorCharacteristics(accessory)
+
+                                # Update GarageDoor characteristics based on Indigo device state change.
+
+                                # CurrentDoorState must be 0 -> open, 1 -> closed, 2 -> opening, or 3 -> closing.
+                                currentDoorState = (0, 1, 2, 3, 0, 2)[newstate]
+                                accessory.char_current_state.set_value(currentDoorState)
+
+                                # TargetDoorState must be 0 -> open or 1 -> closed
+                                targetDoorState = (0, 1, 0, 1, 0, 0)[newstate]
+                                accessory.char_target_state.set_value(targetDoorState)
+
+                                # ObstructionDetected must be 0 -> False or 1 -> True
+                                obstructionDetected = (None, 0, None, 0, 1, 1)[newstate]
+                                if obstructionDetected is not None:
+                                    accessory.char_obstruction_detected.set_value(obstructionDetected)
+
+                                # (VGD) newChars = self._getGarageDoorCharacteristics(accessory)
+                                # (VGD) self.logger.warning('GarageDoor characteristics changed by HKLS (c, t, o): {} --> {}'.format(oldChars, newChars))
+                            break
+                    return
 
                 elif str(updateddevice_subtype) == "Valve":  ## example of one way sesnor
                     # if type(original_device) == indigo.RelayDevice:
@@ -2404,15 +2385,11 @@ class Plugin(indigo.PluginBase):
                     return None,newstate
 
             elif statetoGet == "garageDoorState":
-                # attempt to get onOffState first..
-                if "binaryInput1" in indigodevice.states:
-                    if self.debug4:
-                        self.logger.debug("Found a binaryInput State using that..")
-                    return indigodevice.states["binaryInput1"]
-                elif "onOffState" in indigodevice.states:
-                    if self.debug4:
-                        self.logger.debug("Found onOffState using that..")
-                    return indigodevice.states["onOffState"]
+                for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
+                    if stateName in indigodevice.states:  # choose the first match
+                        if self.debug4:
+                            self.logger.debug("Found {} using that..".format(stateName))
+                        return indigodevice.states[stateName]
 
             elif statetoGet == "lockState":
                 if "onOffState" in indigodevice.states:
