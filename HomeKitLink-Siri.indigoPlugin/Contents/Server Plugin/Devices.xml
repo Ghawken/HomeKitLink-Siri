@@ -83,7 +83,7 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If one =
 			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor" alwaysUseInDialogHeightCalc="true">
 				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
-			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will inverse Controls ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window">
+			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will inverse Controls ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window,Door">
 				<Label/>
 				<Description>Enable to Inverse Controls</Description>
 			</Field>

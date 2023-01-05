@@ -203,7 +203,7 @@ class Plugin(indigo.PluginBase):
 
         self.subTypesSupported = ["HueLightBulb", "Lock", "LightBulb", "MotionSensor", "GarageDoor", "Fan", "TemperatureSensor", "Switch", "Outlet", "OccupancySensor", "ContactSensor", "CarbonDioxideSensor", "BlueIrisCamera"]
 
-        self.homeKitSubTypes = {"service_Switch": [ "Switch", "Fan", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor",],
+        self.homeKitSubTypes = {"service_Switch": [ "Switch", "Fan", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor","Door"],
                                 "service_Camera": ["BlueIrisCamera", "SecuritySpyCamera"],
                                 "service_LockMechanism": ["Lock"],
                                 "service_Fanv2": ["Fan"],
@@ -211,7 +211,7 @@ class Plugin(indigo.PluginBase):
                                 "service_LeakSensor": ["LeakSensor"],
                                 "service_LightSensor": ["LightSensor"],
                                 "service_SmokeSensor": ["SmokeSensor", "CarbonDioxideSensor", "CarbonMonoxideSensor"],
-                                "service_GarageDoorOpener": ["GarageDoor"],
+                                "service_GarageDoorOpener": ["GarageDoor", "Door"],
                                 "service_MotionSensor": ["MotionSensor", "ContactSensor", "OccupancySensor"],
                                 "service_Thermostat": ["Thermostat"],
                                 "service_TemperatureSensor": ["TemperatureSensor"],
@@ -729,6 +729,8 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.LightBulb(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "GarageDoor":
                         accessory = HomeKitDevices.GarageDoor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "Door":
+                        accessory = HomeKitDevices.DoorDoor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "HueLightBulb":
                         accessory = HomeKitDevices.HueLightBulb(driver, self, item["deviceid"], item['devicename'], aid=int(deviceAID))
                     elif item['subtype'] == "MotionSensor":
@@ -1790,7 +1792,7 @@ class Plugin(indigo.PluginBase):
                                 accessory.char_target_state.set_value(targetDoorState)
 
                                 # ObstructionDetected must be 0 -> False or 1 -> True
-                                obstructionDetected = (None, 0, None, 0, 1, 1)[newstate]
+                                obstructionDetected = (None, 0, None, None, 1, 1)[newstate]
                                 if obstructionDetected is not None:
                                     accessory.char_obstruction_detected.set_value(obstructionDetected)
 
