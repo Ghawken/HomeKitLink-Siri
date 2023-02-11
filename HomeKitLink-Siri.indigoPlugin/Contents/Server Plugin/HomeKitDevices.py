@@ -879,6 +879,61 @@ class LightBulb(HomeAccessory):
             self.plugin.Plugin_setter_callback(self, "Hue", char_values)
 
 
+class Vacuum(HomeAccessory):
+    ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
+
+    category = CATEGORY_OTHER
+
+    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
+        super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        self.activate_only = self.is_activate(indigodeviceid)
+        serv_switch = self.add_preload_service('Switch')
+        self.char_on = serv_switch.configure_char( 'On', value=False, getter_callback=self.get_switch)#, setter_callback=self.set_switch ) #setter_callback=self.set_bulb,
+        serv_switch.setter_callback = self.set_switch ## Setter for everything
+
+    ## The below runs once on creation of bridge/accessory to return the hook back to this accessory object
+    ##
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def is_activate(self, deviceid):
+        """Check if entity is activate only."""
+        return self.plugin.check_activateOnly(deviceid)
+        # check for absence of onOffState or whether active group - probably reverse logic
+
+    def set_switch(self, char_values):
+        if self.plugin.debug6:
+            logger.debug(f"Set Switch Values:{char_values}")
+       # logger.debug("Switch value: %s", value)
+        if self.activate_only and char_values["On"]==0:
+            if self.plugin.debug6:
+                logger.debug("DeviceId: {}: Ignoring turn_off call as activate_only".format(self.indigodeviceid))
+            return
+        #value is Ture False here not a list
+        self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
+        ## then set switch to False if activate only
+        if self.activate_only: ## Doesn't matter On or OFF is activate only, acbove has been run and then seto off immediatelly./ and char_values["On"]==0:
+            self.char_on.set_value(False)
+
+    def get_switch(self):
+        # logger.debug("Bulb value: %s", value)
+        if self.activate_only:
+            #logger.debug("Active Only switch setting to False")
+            return False
+        value = self.plugin.Plugin_getter_callback(self, "onOffState")
+        return value
+
+
+    def _set_chars(self, char_values):
+        """This will be called every time the value of one of the
+        characteristics on the service changes.
+        """
+        if self.plugin.debug6:
+            logger.debug(f"{char_values}")
 
 
 class SwitchSimple(HomeAccessory):
