@@ -175,6 +175,8 @@ class TemperatureSensor(HomeAccessory):
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 
     def _temperature_to_homekit(self, temp):
+        if temp == None:
+            temp = 0
         return HKutils.temperature_to_homekit(temp, self._unit)
 
     def set_temperature(self, temperature):

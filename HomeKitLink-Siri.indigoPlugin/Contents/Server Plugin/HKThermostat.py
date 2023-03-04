@@ -575,7 +575,7 @@ class ThermostatZone(HomeAccessory):
             if self.plugin.debug6:
                 logger.debug("Current Temp State:{}".format(value))
             if value == None:
-                value =0
+                value = 0
             return self._temperature_to_homekit(value)
            # return value
         except:
