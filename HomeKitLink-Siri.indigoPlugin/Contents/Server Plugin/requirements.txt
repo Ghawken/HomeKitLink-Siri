@@ -1,2 +1,2 @@
 cryptography>=36.0.2
-orjson>=3.7.8
+ujson

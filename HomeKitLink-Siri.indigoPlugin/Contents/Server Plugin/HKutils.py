@@ -2,6 +2,7 @@ from typing import Any
 import math
 import colorsys
 import socket
+import ujson
 
 # Temperature units
 TEMP_CELSIUS = "°C"
