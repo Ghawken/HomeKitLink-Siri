@@ -30,13 +30,8 @@ from ._services import ServiceListener
 from ._services.browser import _ServiceBrowserBase
 from ._services.info import ServiceInfo
 from ._services.types import ZeroconfServiceTypes
-from ._utils.net import IPVersion, InterfaceChoice, InterfacesType
-from .const import (
-    _BROWSER_TIME,
-    _MDNS_PORT,
-    _SERVICE_TYPE_ENUMERATION_NAME,
-)
-
+from ._utils.net import InterfaceChoice, InterfacesType, IPVersion
+from .const import _BROWSER_TIME, _MDNS_PORT, _SERVICE_TYPE_ENUMERATION_NAME
 
 __all__ = [
     "AsyncZeroconf",
@@ -87,6 +82,17 @@ class AsyncServiceBrowser(_ServiceBrowserBase):
         """Cancel the browser."""
         self._async_cancel()
 
+    def async_update_records_complete(self) -> None:
+        """Called when a record update has completed for all handlers.
+
+        At this point the cache will have the new records.
+
+        This method will be run in the event loop.
+        """
+        for pending in self._pending_handlers.items():
+            self._fire_service_state_changed_event(pending)
+        self._pending_handlers.clear()
+
 
 class AsyncZeroconfServiceTypes(ZeroconfServiceTypes):
     """An async version of ZeroconfServiceTypes."""
@@ -132,8 +138,9 @@ class AsyncZeroconf:
 
     Supports registration, unregistration, queries and browsing.
 
-    The async version is currently a wrapper around the sync version
-    with I/O being done in the executor for backwards compatibility.
+    The async version is currently a wrapper around Zeroconf which
+    is now also async. It is expected that an asyncio event loop
+    is already running before creating the AsyncZeroconf object.
     """
 
     def __init__(
@@ -145,7 +152,7 @@ class AsyncZeroconf:
         zc: Optional[Zeroconf] = None,
     ) -> None:
         """Creates an instance of the Zeroconf class, establishing
-        multicast communications, listening and reaping threads.
+        multicast communications, and listening.
 
         :param interfaces: :class:`InterfaceChoice` or a list of IP addresses
             (IPv4 and IPv6) and interface indexes (IPv6 only).

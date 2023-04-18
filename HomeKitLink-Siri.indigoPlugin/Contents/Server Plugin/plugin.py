@@ -42,6 +42,7 @@ from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
 
+#from zeroconf.asyncio import AsyncZeroconf, IPVersion
 
 from packaging import version
 
@@ -200,6 +201,8 @@ class Plugin(indigo.PluginBase):
         ## Saved to device pluginProps
         ## If device deleted -- capture this with deviceupdate and delete all accessory info for this bridge/stop bridge number..
         ## If new device - increment number as long as unique.  Do so in DeviceStart
+
+        #self.async_zeroconf_instance = AsyncZeroconf(ip_version=IPVersion.All, apple_p2p=True)
 
         self.subTypesSupported = ["HueLightBulb", "Lock", "LightBulb", "MotionSensor", "GarageDoor", "Fan", "TemperatureSensor", "Switch", "Outlet", "OccupancySensor", "ContactSensor", "CarbonDioxideSensor", "BlueIrisCamera"]
 
@@ -1040,7 +1043,12 @@ class Plugin(indigo.PluginBase):
             # currentPortNumber - has now become starting portNumber - shoudl
             nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
             self.logger.debug("Next Port available:{}".format(nextport))
-            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
+
+
+            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))# zeroconf_server=f"HomeBridge-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance))
+
+           # self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
+
             self.portsinUse.add(nextport)
             self.logger.debug("Sets of Ports Currently in Use: {}".format(self.portsinUse))
             self.bridge_multiple.append(HomeBridge(driver=self.driver_multiple[-1], plugin=self, indigodeviceid=uniqueID, display_name='HomeKitLink Bridge ' + str(uniqueID), iid_manager=HomeIIDManager(self.plugin_iidstorage, self.debug9)))
@@ -1803,10 +1811,12 @@ class Plugin(indigo.PluginBase):
                     # if type(original_device) == indigo.RelayDevice:
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
+                        currentstate = 1 if newstate == True else 0
                         if self.debug2:
-                            self.logger.debug("Valve Subtype NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(newstate)
-                        self.device_list_internal[checkindex]["accessory"].char_in_use.set_value(newstate)
+                            self.logger.debug("Valve Subtype NewState of Device:{} & State: {} & new State {}".format(updated_device.name, newstate, currentstate))
+
+                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(currentstate)
+                        self.device_list_internal[checkindex]["accessory"].set_valve_state(currentstate)
                         return
                 # Check Doorbell prior to Camera..
                 elif str(updateddevice_subtype) == "Linked-DoorBell":
@@ -1944,7 +1954,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("Plugin Setter Callback Called")
                 self.logger.debug("Indigo DeviceID {}".format(accessoryself.indigodeviceid))
                 self.logger.debug("State Wished:" + str(statetoReturn))
-                self.logger.debug("Char_Values [List] to Set: {}".format(valuetoSet))
+                self.logger.debug(f"Char_Values {type(valuetoSet)} to Set: {valuetoSet}")
             stateList = []
             #   dev.updateStatesOnServer(stateList)
             indigodevice = self.return_deviceorAG(accessoryself.indigodeviceid)  # .devices[accessoryself.indigodeviceid]
@@ -2117,6 +2127,42 @@ class Plugin(indigo.PluginBase):
                 else:
                     if self.debug5:
                         self.logger.debug("No onOffState within Lock.. Not sure what to set.  Ending.")
+
+            elif statetoReturn == 'valveState':
+                if "onOffState" in indigodevice.states:
+                    if self.debug5:
+                        self.logger.debug("Found onOffState using that..")
+                    if indigodevice.onState:  # device already On
+                        if "Active" in valuetoSet:
+                            if valuetoSet["Active"] == 1:
+                                if self.debug5:
+                                    self.logger.debug("Device already On.  Turning On regardless.")
+                                indigo.device.turnOn(accessoryself.indigodeviceid)
+
+                            elif valuetoSet["Active"] == 0:
+                                if self.debug5:
+                                    self.logger.debug("Device On and wishes to be Off turning Off.")
+                                indigo.device.turnOff(accessoryself.indigodeviceid)
+
+                        else:
+                            if self.debug5:
+                                self.logger.debug("No On or Active found in valuetoSet.. ending here.")
+                    else:  ## device off
+                        if "Active" in valuetoSet:
+                            if valuetoSet["Active"] == 1:
+                                if self.debug5:
+                                    self.logger.debug("Device Off.  Wishing to be On.  Turning On regardless.")
+                                indigo.device.turnOn(accessoryself.indigodeviceid)
+
+                            elif valuetoSet["Active"] == 0:
+                                if self.debug5:
+                                    self.logger.debug("Device Off and wishes to be On turning On.")
+                                indigo.device.turnOff(accessoryself.indigodeviceid)
+
+                        else:
+                            if self.debug5:
+                                self.logger.debug("No On or Active found in valuetoSet.. ending here.")
+                return
 
             if statetoReturn == "onOffState":
                 # variable to share across HK devices - justturnedon
@@ -3362,6 +3408,36 @@ class Plugin(indigo.PluginBase):
        # myArray = [("option1", "First Option"), ("option2", "Second Option")]
         return myArray
     ########################################
+    def menu_actionResetAccessories(self, valuesDict, typeId):
+        self.logger.debug("Reset Bridge Accessories called.  valueDict {}".format(valuesDict))
+        try:
+            Bridgedevice = int(valuesDict["Bridge"])  ## deviceID not BridgeUniqueI
+            Bridge = indigo.devices[Bridgedevice].pluginProps.get("bridgeUniqueID", 99)
+            self.logger.debug("Using Path:{}".format(self.pluginprefDirectory))
+            self.logger.info(f"Checking for busy_state file with UniqueID of {Bridge}")
+
+            onlyfiles = [f for f in listdir(self.pluginprefDirectory) if isfile(join(self.pluginprefDirectory, f))]
+            self.logger.debug("Found Files:{}".format(onlyfiles))
+
+            for file in onlyfiles:
+                if "busy_home" in file:
+                    ## we have a suitable file
+                    ## remove state
+                    checknumber = file[10:]  ## remove .state
+                    checknumber2 = checknumber[:-6]  ## get numbers go backwards to avoid error with smaller digits.  Also now 6 digits, so remove front and back
+                    self.logger.debug("Should leave number only regardless of length of Unique ID {}".format(checknumber2))
+                    if str(checknumber2) == str(Bridge):
+                        ## make sure can manage old 4 digits to 9 digit numbers even thought it is only affecting me!
+                        self.logger.warning(f"Found Bridge Security File {file} linked to Bridge ID {Bridge}  Deleting this file.".format(checknumber2))
+                        if os.path.isfile(os.path.join(self.pluginprefDirectory, file)):
+                            os.remove(os.path.join(self.pluginprefDirectory, file))
+                            self.logger.warning("Deleted file {}".format(file))
+
+            self.restartBridge()
+
+        except:
+            self.logger.exception("Caught Exception with this action")
+
     def menu_actionMoveAccessories(self, valuesDict, typeId):
         self.logger.info("Move Bridge Accessories called.  valueDict {}".format(valuesDict))
         try:
@@ -3616,7 +3692,7 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("HomeKitLink-Siri Bridge with unique ID {} exists.  Moving On.".format(checknumber2))
 
     def restartBridge(self, *args, **kwargs):
-        self.logger.info("Restart all Bridges Called")
+        self.logger.info("Restart all Bridges.")
         for device in indigo.devices.iter("self"):
             ## only turn on, turn off if device already on.
             if device.enabled:

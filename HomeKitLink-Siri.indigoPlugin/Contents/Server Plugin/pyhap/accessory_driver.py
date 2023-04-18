@@ -305,6 +305,7 @@ class AccessoryDriver:
         self.http_server = HAPServer(network_tuple, self)
         self.prepared_writes = {}
 
+
     def start(self):
         """Start the event loop and call `start_service`.
 

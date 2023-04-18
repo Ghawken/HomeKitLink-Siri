@@ -27,6 +27,8 @@ from pyhap.const import (
 
 from pyhap.iid_manager import AccessoryIIDStorage, HomeIIDManager
 
+import time
+
 logger = logging.getLogger("Plugin.HomeKit_Devices")
 
 from HKConstants import *
@@ -1004,13 +1006,21 @@ class Valve(HomeAccessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
-        self.activate_only = self.is_activate(indigodeviceid)
 
+        self.activate_only = self.is_activate(indigodeviceid)
+        self.device_state = self.get_valve()
+        self.wished_state = self.device_state ## at startup set to current device state.  Below should set this.
         serv_valve = self.add_preload_service('Valve')
-        self.char_on = serv_valve.configure_char( 'Active', value=False, getter_callback=self.get_valve)
+        self.char_on = serv_valve.configure_char( 'Active', value=False, setter_callback=self.set_valve) #, getter_callback=self.get_valve)
         self.char_in_use = serv_valve.configure_char('InUse', value=False )
         self.char_valve_type = serv_valve.configure_char( "ValveType", value=0)
-        serv_valve.setter_callback = self.set_valve ## Setter for everything
+       #self.char_in_use.set_value(self.device_state)
+       # serv_valve.setter_callback = self.set_valve ## Setter for everything
+
+        logger.debug(f"Startup: Setting Active State to {self.device_state}")
+        self.char_on.set_value(self.device_state)
+        logger.debug(f"Startup:  Setting In Use State to {self.device_state}")
+        self.char_in_use.set_value(self.device_state)
 
     async def run(self):
         if self.plugin.debug6:
@@ -1022,29 +1032,61 @@ class Valve(HomeAccessory):
         return self.plugin.check_activateOnly(deviceid)
         # check for absence of onOffState or whether active group - probably reverse logic
 
-    def set_valve(self, char_values):
-        if self.plugin.debug6:
-            logger.debug(f"Set Outlet Values:{char_values}")
-       # logger.debug("Switch value: %s", value)
-        if self.activate_only and char_values["Active"]==0:
-            if self.plugin.debug6:
-                logger.debug("DeviceId: {}: Ignoring turn_off call as activate_only".format(self.indigodeviceid))
+    def set_valve_state(self, current_state):
+        try:
+            logger.error(f"\nRequest to set valve states: \ncurrentState {current_state}\ncurrent Active {self.char_on.get_value()} \ncurrent Inuse {self.char_in_use.get_value()}\nOld wished state {self.wished_state}")
+            self.wished_state = int(current_state)
+            num = 0
+            logger.error(f"Stopping here to see if still works with homekit alone")
+
+            #self.char_on.set_value(state_use)
+            self.char_in_use.set_value(current_state)
+
             return
-        #value is Ture False here not a list
-        self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
-        ## then set switch to False if activate only
-        if self.activate_only: ## Doesn't matter On or OFF is activate only, acbove has been run and then seto off immediatelly./ and char_values["On"]==0:
-            self.char_on.set_value(0)
-            self.char_in_use.set_value(0)
-        else:
-            self.char_in_use.set_value(char_values["Active"])
+
+            while not num > 20:
+                num = num + 1
+                if self.char_on.get_value() == self.wished_state:
+                    if self.char_in_use.get_value() != self.wished_state:
+                        logger.debug(f"Attempting to set in use state to current state")
+                        self.char_in_use.set_value(current_state, should_notify=True)
+                        self.char_in_use.notify()
+                        break
+                    else:
+                        break
+                else:
+                    self.char_on.set_value(current_state)
+                    self.char_on.notify()
+                time.sleep(1)
+                logger.debug(f"Counting loop {num}")
+
+        except:
+            self.logger.exception("set_valve_state")
+
+    def set_valve(self, char_values):
+        try:
+            ## Call that has come from HomeKit, which will manage the In Use
+            if self.plugin.debug6:
+                logger.error(f"Set Valve Values:{char_values}, and Active already changed by homekit controller, Active state is currently :{self.char_on.get_value()}")
+            ## convert to including Active - as removed wider setter callback which removes the dict structure
+            ## Keep compatible with rest of backend code
+
+            char_values = {"Active": char_values}
+            if self.plugin.debug6:
+                logger.debug(f"New Set Valve Values:{char_values}")
+
+            self.plugin.Plugin_setter_callback(self, "valveState", char_values)
+
+        except:
+            logger.exception(f"Exception in Set Valve")
 
     def get_valve(self):
-        # logger.debug("Bulb value: %s", value)
         if self.activate_only:
-            return 0
+            return False
         value = self.plugin.Plugin_getter_callback(self, "onOffState")
        # logger.debug("get_valve value:{}".format(value))
+        return value
+
         if value:
             return 1
         elif value==False:
@@ -1068,7 +1110,7 @@ class Irrigation(HomeAccessory):
 
         serv_valve = self.add_preload_service('Valve')
         self.char_on = serv_valve.configure_char('Active', value=False, getter_callback=self.get_valve)
-        self.char_in_use = serv_valve.configure_char('InUse', value=False)
+        self.char_in_use = serv_valve.configure_char('InUse', value=False, getter_callback=self.get_valve)
         self.char_valve_type = serv_valve.configure_char("ValveType", value=1)
         serv_valve.setter_callback = self.set_valve  ## Setter for everything
 
@@ -1083,21 +1125,24 @@ class Irrigation(HomeAccessory):
         # check for absence of onOffState or whether active group - probably reverse logic
 
     def set_valve(self, char_values):
-        if self.plugin.debug6:
-            logger.debug(f"Set Outlet Values:{char_values}")
-        # logger.debug("Switch value: %s", value)
-        if self.activate_only and char_values["Active"] == 0:
+        try:
             if self.plugin.debug6:
-                logger.debug("DeviceId: {}: Ignoring turn_off call as activate_only".format(self.indigodeviceid))
-            return
-        # value is Ture False here not a list
-        self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
-        ## then set switch to False if activate only
-        if self.activate_only:  ## Doesn't matter On or OFF is activate only, acbove has been run and then seto off immediatelly./ and char_values["On"]==0:
-            self.char_on.set_value(0)
-            self.char_in_use.set_value(0)
-        else:
-            self.char_in_use.set_value(char_values["Active"])
+                logger.debug(f"Set Outlet Values:{char_values}")
+            # logger.debug("Switch value: %s", value)
+            if self.activate_only and char_values["Active"] == 0:
+                if self.plugin.debug6:
+                    logger.debug("DeviceId: {}: Ignoring turn_off call as activate_only".format(self.indigodeviceid))
+                return
+            # value is Ture False here not a list
+            self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
+            ## then set switch to False if activate only
+            if self.activate_only:  ## Doesn't matter On or OFF is activate only, acbove has been run and then seto off immediatelly./ and char_values["On"]==0:
+                self.char_on.set_value(0)
+                self.char_in_use.set_value(0)
+            else:
+                self.char_in_use.set_value(char_values["Active"])
+        except:
+            logger.exception("set_valve exception")
 
     def get_valve(self):
         # logger.debug("Bulb value: %s", value)

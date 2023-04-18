@@ -21,8 +21,7 @@
 """
 
 import enum
-from typing import Any, Callable, List, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, Any, Callable, List
 
 if TYPE_CHECKING:
     from .._core import Zeroconf
@@ -51,7 +50,7 @@ class Signal:
         self._handlers: List[Callable[..., None]] = []
 
     def fire(self, **kwargs: Any) -> None:
-        for h in list(self._handlers):
+        for h in self._handlers[:]:
             h(**kwargs)
 
     @property

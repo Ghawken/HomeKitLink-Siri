@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>PluginVersion</key>
-	<string>0.5.16</string>
+	<string>0.5.17</string>
 	<key>ServerApiVersion</key>
 	<string>3.2</string>
 	<key>IwsApiVersion</key>

@@ -351,3 +351,9 @@ Attempt to add the homebridge platforms/accessories as you normally would.
 
 See here for further troubleshooting
 https://github.com/Ghawken/HomeKitLink-Siri/issues
+
+## Other troubleshooting
+
+https://support.lifx.com/en_us/free-network-improvement-tool-routethis-ByvgG_iIu
+https://apps.apple.com/us/app/discovery-dns-sd-browser/id1381004916?mt=12
+
