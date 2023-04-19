@@ -61,6 +61,10 @@
         <Label/>
         <Description>9. Debug IID Manager IID Allocation</Description>
     </Field>
+        <Field id="debug10" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>10. Debug mDNS (Verbose!) File Only.</Description>
+    </Field>
     <Field id="debugDeviceid" type="menu" defaultValue="-3" fontColor="orange">
         <Label>Debug Device:</Label>
         <List class="self" method="debug_device_generator" dynamicReload="true"/>
@@ -105,6 +109,41 @@
            type="textfield"
            tooltip="Enter Port to start" defaultValue="51826" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>Enter Driver Start Port Number:</Label>
+    </Field>
+        <Field id="separateraas24" type="separator"/>
+        <Field id="mDNSipversion"
+           type="menu"
+           tooltip="Enter IP Version to use" defaultValue="ALL" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>mDNS Options: IP Version</Label>
+            <List>
+            <Option value="ALL">IPVersion.All</Option>
+            <Option value="V6Only">IPVersion.V6Only</Option>
+            <Option value="V4Only">IPVersion.V4Only</Option>
+        </List>
+    </Field>
+    <Field id="mDNSinterfaces"
+           type="textfield"
+           tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>mDNS Options: Interfaces:</Label>
+    </Field>
+        <Field id="spacede11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>eg. 192.168.1.9, 192.168.1.32</Label>
+            Comma Seperated IP address permitted, or single IP address (which should be main OSX interface)
+    </Field>
+        <Field id="mDNSapple_p2p"
+           type="checkbox"
+           tooltip="Use apple_p2p" defaultValue="False" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>mDNS Options: use Apple AWDL interface :</Label>
+    </Field>
+        <Field id="separaterz3224" type="separator"/>
+     <Field id="HAPipaddress"
+           type="textfield"
+           tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Homekit Server Options: Interface:</Label>
+    </Field>
+        <Field id="spaceddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>eg. 192.168.1.9</Label>
+            Single IP address to be used as Homekit Server.
     </Field>
     <Field id="sepaer4another" type="separator"/>
     <Field id="password"

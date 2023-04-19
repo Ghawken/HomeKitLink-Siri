@@ -30,6 +30,7 @@ import threading
 
 from zeroconf import ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
+from zeroconf import InterfaceChoice, IPVersion, ServiceStateChange
 
 from pyhap import util
 from pyhap.accessory import get_topic
@@ -280,7 +281,6 @@ class AccessoryDriver:
         self.accessory = None
         self.advertiser = async_zeroconf_instance
         self.zeroconf_server = zeroconf_server
-        self.interface_choice = interface_choice
 
         self.persist_file = os.path.expanduser(persist_file)
         self.encoder = encoder or AccessoryEncoder()
@@ -293,8 +293,15 @@ class AccessoryDriver:
 
         self.mdns_service_info = None
         self.srp_verifier = None
-
+        logger.debug(f"Found address for Zeroconf of {address}.  Likely None as not passed.")
         address = address or util.get_local_address()
+
+        self.interface_choice = interface_choice
+        logger.debug(f"Using address for Zeroconf of {address}")
+        logger.debug(f"Using interface_choice of {self.interface_choice}")
+        logger.debug(f"Using AsyncZeroConf {self.advertiser}")
+        logger.debug(f"Using ZeroConf {self.zeroconf_server}")
+
         advertised_address = advertised_address or address
         self.state = State(
             address=advertised_address, mac=mac, pincode=pincode, port=port
@@ -334,10 +341,6 @@ class AccessoryDriver:
 
         except self.plugin.StopThread:
             logger.info("Got a End Indigo Thread Alert, stopping driver")
-            self.loop.call_soon_threadsafe(self.loop.create_task, self.async_stop())
-            self.loop.run_forever()
-        except KeyboardInterrupt:
-            logger.info("Got a KeyboardInterrupt, stopping driver")
             self.loop.call_soon_threadsafe(self.loop.create_task, self.async_stop())
             self.loop.run_forever()
         except:
@@ -395,7 +398,7 @@ class AccessoryDriver:
             self.async_persist()
 
         # Advertise the accessory as a mDNS service.
-        logger.debug("Starting mDNS.")
+        logger.debug(f"Starting mDNS.{self.accessory}  {self.state}  {self.zeroconf_server}")
         self.mdns_service_info = AccessoryMDNSServiceInfo(
             self.accessory, self.state, self.zeroconf_server
         )
@@ -404,7 +407,11 @@ class AccessoryDriver:
             zc_args = {}
             if self.interface_choice is not None:
                 zc_args["interfaces"] = self.interface_choice
-            self.advertiser = AsyncZeroconf(**zc_args)
+            self.advertiser = AsyncZeroconf(**zc_args)  ## create new zeroconf async - with arguments.
+            logger.debug(f"mDNS Creating own instance of AsyncZeroconf with standard arguments.")
+        else:
+            logger.debug(f"mDNS using joint async ZeroConf Server as passed. {self.advertiser}")
+
         await self.advertiser.async_register_service(
             self.mdns_service_info, cooperating_responders=True
         )

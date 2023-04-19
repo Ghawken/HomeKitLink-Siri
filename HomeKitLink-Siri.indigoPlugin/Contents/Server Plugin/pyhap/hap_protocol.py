@@ -200,6 +200,7 @@ class HAPServerProtocol(asyncio.Protocol):
                     self.finish_and_close()
                     return
         except h11.ProtocolError as protocol_ex:
+            logger.error(f"h11.Protocol error {protocol_ex}")
             self._handle_invalid_conn_state(protocol_ex)
 
     def _send_events(self):
@@ -230,7 +231,12 @@ class HAPServerProtocol(asyncio.Protocol):
         logger.debug(
             "%s (%s): h11 Event: %s", self.peername, self.handler.client_uuid, event
         )
-        if event in (h11.NEED_DATA, h11.ConnectionClosed):
+        if event is h11.NEED_DATA:
+            logger.debug("_process_one_event returning False as H11 Need_data")
+            return False
+
+        if event is h11.ConnectionClosed:
+            logger.debug("_process_one_event returning False as H11 Connection Closed")
             return False
 
         if event is h11.PAUSED:

@@ -5,7 +5,7 @@
 Author: GlennNZ
 
 """
-
+import asyncio
 import threading
 import subprocess
 import traceback
@@ -42,7 +42,7 @@ from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
 
-#from zeroconf.asyncio import AsyncZeroconf, IPVersion
+from zeroconf.asyncio import AsyncZeroconf, IPVersion, Zeroconf, InterfaceChoice
 
 from packaging import version
 
@@ -66,6 +66,12 @@ import HKDevicesCamera
 import HKDevicesCameraSecuritySpy
 import HKThermostat
 import HKutils
+
+MAX_NAME_LENGTH = 64
+MAX_SERIAL_LENGTH = 64
+MAX_MODEL_LENGTH = 64
+MAX_VERSION_LENGTH = 64
+MAX_MANUFACTURER_LENGTH = 64
 
 ################################################################################
 # New Indigo Log Handler - display more useful info when debug logging
@@ -125,6 +131,17 @@ class UniqueQueue(Queue):
     def _get(self):
         return self.queue.pop()
 ################################################################################
+class IndigoZeroconf(Zeroconf):
+    """Zeroconf that cannot be closed."""
+    def close(self) -> None:
+        """Fake method to avoid integrations closing it."""
+    indigo_close = Zeroconf.close
+
+class IndigoAsyncZeroconf(AsyncZeroconf):
+    """Indigo version of AsyncZeroconf."""
+    async def async_close(self) -> None:
+        """Fake method to avoid bridges closing it."""
+    indigo_async_close = AsyncZeroconf.async_close
 
 ################################################################################
 class Plugin(indigo.PluginBase):
@@ -153,6 +170,9 @@ class Plugin(indigo.PluginBase):
         pfmt = logging.Formatter('%(asctime)s.%(msecs)03d\t%(levelname)s\t%(name)s.%(funcName)s:\t%(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         self.plugin_file_handler.setFormatter(pfmt)
         self.plugin_file_handler.setLevel(self.fileloglevel)
+
+        logging.getLogger("zeroconf").addHandler(self.plugin_file_handler)
+
         ################################################################################
         # Finish Logging changes
         ################################################################################
@@ -201,8 +221,6 @@ class Plugin(indigo.PluginBase):
         ## Saved to device pluginProps
         ## If device deleted -- capture this with deviceupdate and delete all accessory info for this bridge/stop bridge number..
         ## If new device - increment number as long as unique.  Do so in DeviceStart
-
-        #self.async_zeroconf_instance = AsyncZeroconf(ip_version=IPVersion.All, apple_p2p=True)
 
         self.subTypesSupported = ["HueLightBulb", "Lock", "LightBulb", "MotionSensor", "GarageDoor", "Fan", "TemperatureSensor", "Switch", "Outlet", "OccupancySensor", "ContactSensor", "CarbonDioxideSensor", "BlueIrisCamera"]
 
@@ -257,9 +275,11 @@ class Plugin(indigo.PluginBase):
         self.debug7 = self.pluginPrefs.get('debug7', False)
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
+        self.debug10 = self.pluginPrefs.get('debug10', False)
+
+        logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
         self.previousVersion = self.pluginPrefs.get("previousVersion","0.0.1")
-
         self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20))
 
         self.debugDeviceid = -3  ## always set this to not on after restart.
@@ -269,10 +289,60 @@ class Plugin(indigo.PluginBase):
         else:
             logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.INFO)
 
+        if self.debug10:
+            logging.getLogger("zeroconf").setLevel(logging.DEBUG)
+        else:
+            logging.getLogger("zeroconf").setLevel(logging.ERROR)
+
         self.ffmpeg_lastCommand = []
 
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
+
+        ip_version = self.pluginPrefs.get('mDNSipversion', "ALL")
+        if ip_version == "ALL":
+            self.select_ip_version = IPVersion.All
+        elif ip_version == "V4Only":
+            self.select_ip_version = IPVersion.V4Only
+        elif ip_version == "V6Only":
+            self.select_ip_version = IPVersion.V6Only
+        else:
+            self.select_ip_version = IPVersion.All
+            self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
+
+        interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
+        if interfaces == "":
+            self.select_interfaces = InterfaceChoice.All
+        elif "," in interfaces:
+            self.select_interfaces = interfaces.split(",")
+            self.logger.debug(f"mDNS Interface List to use: {self.select_interfaces}")
+        elif "." in interfaces:
+            self.select_interfaces = [interfaces]
+        else:
+            self.select_interfaces = InterfaceChoice.All
+            self.logger.warning("Select_Interface: Advanced plugin Properties in error, using default, please check plugin Config")
+
+        self.apple_2p2 = self.pluginPrefs.get('mDNSapple_p2p', False)
+        if self.apple_2p2:
+            self.logger.info("You have selected the use of Apple Peer to Peer network")
+            self.logger.info("This uses apples Apple Wireless Direct Link for communication between this mac and Home Devices ")
+            self.logger.info("This is untested and largely included for full support.")
+            self.logger.info("I would not recommend it's usage except in very specific circumstances...")
+
+        self.HAPipaddress = self.pluginPrefs.get('HAPipaddress', "")
+        if self.HAPipaddress == "":
+            self.HAPipaddress = None
+
+        self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces,  apple_p2p=self.apple_2p2)
+
+        self.logger.debug(f"\nmDNS Setup: {self.select_interfaces}\n{self.select_ip_version}\n{self.apple_2p2}")
+
+        self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
@@ -306,6 +376,7 @@ class Plugin(indigo.PluginBase):
             self.debug7 = valuesDict.get('debug7', False)
             self.debug8 = valuesDict.get('debug8', False)
             self.debug9 = valuesDict.get('debug9', False)
+            self.debug10 = valuesDict.get('debug10', False)
             self.logClientConnected = valuesDict.get("logClientConnected", True)
             try:
                 self.low_battery_threshold = int (valuesDict.get("batterylow",20))
@@ -320,6 +391,11 @@ class Plugin(indigo.PluginBase):
 
             self.indigo_log_handler.setLevel(self.logLevel)
             self.plugin_file_handler.setLevel(self.fileloglevel)
+
+            if self.debug10:
+                logging.getLogger("zeroconf").setLevel(logging.DEBUG)
+            else:
+                logging.getLogger("zeroconf").setLevel(logging.ERROR)
 
             if self.debug3:
                 logging.getLogger("Plugin.HomeKit_pyHap").setLevel(logging.DEBUG)
@@ -846,7 +922,11 @@ class Plugin(indigo.PluginBase):
                         self.logger.info("Skipping No Subtype this: ID {}  Name {}  DeviceAID {}".format(item["deviceid"], item['devicename'], deviceAID))
                         continue
 
-                    accessory.set_info_service(manufacturer=item['manufacturername'], model=item['devicemodel'], serial_number=str(deviceAID))
+                    manufacturer = item['manufacturername']
+                    model = item['devicemodel']
+                    serial_number = str(deviceAID)
+                    firmware_version = str(self.pluginVersion)
+                    accessory.set_info_service(manufacturer=manufacturer[:MAX_MANUFACTURER_LENGTH], model=model[:MAX_MODEL_LENGTH], serial_number=serial_number[:MAX_SERIAL_LENGTH], firmware_revision=firmware_version[:MAX_VERSION_LENGTH])
                     self.logger.debug("Adding Accessory:{}".format(accessory))
                     bridge.add_accessory(accessory)
 
@@ -1044,8 +1124,7 @@ class Plugin(indigo.PluginBase):
             nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
             self.logger.debug("Next Port available:{}".format(nextport))
 
-
-            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))# zeroconf_server=f"HomeBridge-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance))
+            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPipaddress))
 
            # self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
 
@@ -1807,15 +1886,13 @@ class Plugin(indigo.PluginBase):
                             break
                     return
 
-                elif str(updateddevice_subtype) == "Valve":  ## example of one way sesnor
+                elif str(updateddevice_subtype) in ("Valve","Irrigation","Showerhead","Faucet"):
                     # if type(original_device) == indigo.RelayDevice:
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
                         currentstate = 1 if newstate == True else 0
                         if self.debug2:
-                            self.logger.debug("Valve Subtype NewState of Device:{} & State: {} & new State {}".format(updated_device.name, newstate, currentstate))
-
-                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(currentstate)
+                            self.logger.debug(f"{updateddevice_subtype} Subtype NewState of Device:{updated_device.name} & State: {newstate} & new State {currentstate}")
                         self.device_list_internal[checkindex]["accessory"].set_valve_state(currentstate)
                         return
                 # Check Doorbell prior to Camera..
@@ -3027,7 +3104,7 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == "com.pennypacker.indigoplugin.senseme":
                 return "service_Fanv2"
 
-            if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm"):
+            if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm","com.berkinet.ad2usb"):
                 return "service_Security"
 
 

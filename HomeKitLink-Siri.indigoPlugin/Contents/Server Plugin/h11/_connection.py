@@ -35,7 +35,8 @@ from ._writers import WRITERS, WritersType
 
 # Everything in __all__ gets re-exported as part of the h11 public API.
 __all__ = ["Connection", "NEED_DATA", "PAUSED"]
-
+import logging
+logger = logging.getLogger("Plugin.HomeKit_pyHap")
 
 class NEED_DATA(Sentinel, metaclass=Sentinel):
     pass
@@ -323,7 +324,7 @@ class Connection:
         else:
             # General case: the io_dict just has the appropriate reader/writer
             # for this state
-            return io_dict.get((role, state))  # type: ignore
+            return io_dict.get((role, state))  # type: ignore[return-value]
 
     # This must be called after any action that might have caused
     # self._cstate.states to change.
@@ -395,7 +396,9 @@ class Connection:
         else:
             self._receive_buffer_closed = True
 
-    def _extract_next_receive_event(self) -> Union[Event, Type[Sentinel]]:
+    def _extract_next_receive_event(
+        self,
+    ) -> Union[Event, Type[NEED_DATA], Type[PAUSED]]:
         state = self.their_state
         # We don't pause immediately when they enter DONE, because even in
         # DONE state we can still process a ConnectionClosed() event. But
@@ -421,7 +424,7 @@ class Connection:
             event = NEED_DATA
         return event  # type: ignore[no-any-return]
 
-    def next_event(self) -> Union[Event, Type[Sentinel]]:
+    def next_event(self) -> Union[Event, Type[NEED_DATA], Type[PAUSED]]:
         """Parse the next event out of our receive buffer, update our internal
         state, and return it.
 
@@ -620,8 +623,9 @@ class Connection:
             # Make sure Connection: close is set
             connection = set(get_comma_header(headers, b"connection"))
             connection.discard(b"keep-alive")
-            connection.add(b"close")
-            headers = set_comma_header(headers, b"connection", sorted(connection))
+            if b"close" not in connection:
+                connection.add(b"close")
+                headers = set_comma_header(headers, b"connection", sorted(connection))
 
         return Response(
             headers=headers,

@@ -80,7 +80,19 @@ VSS_TO_HOMEKIT_TARGET = {
     "night": HK_ALARM_NIGHT_ARMED,
     "disarm": HK_ALARM_DISARMED
 }
-
+AD2USB_TO_HOMEKIT_CURRENT = {
+    "armedStay":HK_ALARM_STAY_ARMED,
+    "armedAway": HK_ALARM_AWAY_ARMED,
+    "armedNightStay": HK_ALARM_NIGHT_ARMED,
+    "disarmed": HK_ALARM_DISARMED,
+    "alarmOccurred": HK_ALARM_TRIGGERED
+}
+AD2USB_TO_HOMEKIT_TARGET = {
+    "armedStay":HK_ALARM_STAY_ARMED,
+    "armedAway": HK_ALARM_AWAY_ARMED,
+    "armedNightStay": HK_ALARM_NIGHT_ARMED,
+    "disarmed": HK_ALARM_DISARMED
+}
 class SecuritySystem(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
     category = CATEGORY_ALARM_SYSTEM
@@ -103,16 +115,19 @@ class SecuritySystem(HomeAccessory):
             self.SET_TO_USE_CURRENT = VSS_TO_HOMEKIT_CURRENT
             self.SET_TO_USE_TARGET = VSS_TO_HOMEKIT_TARGET
             self.device_current_state = "securitySystemState"
-
         elif self.plugin_inuse == "com.GlennNZ.indigoplugin.ParadoxAlarm":
             self.SET_TO_USE_CURRENT = PARADOX_TO_HOMEKIT_CURRENT
             self.SET_TO_USE_TARGET = PARADOX_TO_HOMEKIT_TARGET
             self.device_current_state = "Current_State"
-
         elif self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
             self.SET_TO_USE_CURRENT = DSC_TO_HOMEKIT_CURRENT
             self.SET_TO_USE_TARGET = DSC_TO_HOMEKIT_TARGET
             self.device_current_state = "state"  # can be disarmed, armedAway, armedStay, entryDelay, exitDelay, tripped
+        elif self.plugin_inuse == "com.berkinet.ad2usb":
+            self.SET_TO_USE_CURRENT = AD2USB_TO_HOMEKIT_CURRENT
+            self.SET_TO_USE_TARGET = AD2USB_TO_HOMEKIT_TARGET
+            self.device_current_state = "homeKitState"  # can be armedStay, armedAway, armedNightStay, disarmed, alarmOccurred
+
         else:
             ## set a default in case of user selection error
             self.SET_TO_USE_CURRENT = PARADOX_TO_HOMEKIT_CURRENT
@@ -163,6 +178,17 @@ class SecuritySystem(HomeAccessory):
                         # basePlugin.executeAction("actionArmStayForce", deviceId=self.indigodeviceid) # all open zones are bypassed
                     elif int(char_values) == HK_ALARM_AWAY_ARMED:
                         basePlugin.executeAction("actionArmAway", deviceId=self.indigodeviceid)
+                ## A2USB
+                elif self.plugin_inuse == "com.berkinet.ad2usb":
+                    if int(char_values) == HK_ALARM_DISARMED:
+                        basePlugin.executeAction("homeKitDisarm", deviceId=self.indigodeviceid)
+                    elif int(char_values) == HK_ALARM_STAY_ARMED:
+                        basePlugin.executeAction("homeKitArmStay", deviceId=self.indigodeviceid)
+                    elif int(char_values) == HK_ALARM_NIGHT_ARMED:
+                        basePlugin.executeAction("homeKitArmNightStay", deviceId=self.indigodeviceid)
+                    elif int(char_values) == HK_ALARM_AWAY_ARMED:
+                        basePlugin.executeAction("homeKitArmAway", deviceId=self.indigodeviceid)
+                ## End a2usb
                 else:
                     logger.info("Unsupported Security System Plugin.  Sorry.  Maybe on a TODO list somewhere..")
             else:

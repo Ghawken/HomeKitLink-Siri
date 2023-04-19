@@ -37,10 +37,7 @@ from ._util import LocalProtocolError, RemoteProtocolError, Sentinel, validate
 __all__ = ["READERS"]
 
 header_field_re = re.compile(header_field.encode("ascii"))
-
-# Remember that this has to run in O(n) time -- so e.g. the bytearray cast is
-# critical.
-obs_fold_re = re.compile(br"[ \t]+")
+obs_fold_re = re.compile(rb"[ \t]+")
 
 
 def _obsolete_line_fold(lines: Iterable[bytes]) -> Iterable[bytes]:
@@ -52,6 +49,7 @@ def _obsolete_line_fold(lines: Iterable[bytes]) -> Iterable[bytes]:
             if last is None:
                 raise LocalProtocolError("continuation line at start of headers")
             if not isinstance(last, bytearray):
+                # Cast to a mutable type, avoiding copy on append to ensure O(n) time
                 last = bytearray(last)
             last += b" "
             last += line[match.end() :]
@@ -227,7 +225,7 @@ def expect_nothing(buf: ReceiveBuffer) -> None:
 
 
 ReadersType = Dict[
-    Union[Sentinel, Tuple[Sentinel, Sentinel]],
+    Union[Type[Sentinel], Tuple[Type[Sentinel], Type[Sentinel]]],
     Union[Callable[..., Any], Dict[str, Callable[..., Any]]],
 ]
 

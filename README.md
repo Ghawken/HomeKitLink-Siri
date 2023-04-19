@@ -354,6 +354,65 @@ https://github.com/Ghawken/HomeKitLink-Siri/issues
 
 ## Other troubleshooting
 
+Can Try mDNS options below:
+
 https://support.lifx.com/en_us/free-network-improvement-tool-routethis-ByvgG_iIu
 https://apps.apple.com/us/app/discovery-dns-sd-browser/id1381004916?mt=12
+
+
+
+## Changelog
+
+## Version 0.6.0
+
+### New 16.4 HomeKit Architecture
+
+After some hours of troubleshooting mDNS connections it seems with new 16.4 architecture without a Home Hub (AppleTV or HomePod)
+The various homekit apps (Home app) close connections with this plugin, everything still works it would seem, but adds a slight delay
+With a HomeHub added - no such behaviour.  Nothing to do with mDNS/Bonjour afterall!
+
+##Changes
+Spins up HLKS own Zeroconf Async server for use by all Bridges to help minimise overhead.
+Adds Advanced mDNS Options
+Adds Reset Accessory option
+Bump python-zeroconf to version 0.56
+Bump h11 to latest dev version
+Adds debug10 logging of very verbose mDNS settings (this goes to file ONLY)
+Attempt to fix Valve device (slowed down by above), Valve/Irrigation/Showerhead devices appear to have been fixed.
+(Interestingly there is some HomeKit app issue - as when appears to have not updated which happends infrequently, if open the device - will refresh and show correct state)
+Add HKLS support for new Beta version of plugin for AD2USB security systems - (Thanks ab39870)
+
+(as you can guess given above, and potentially for issues, some testing is needed...)
+
+### Advanced Bonjour/mDNS options
+
+Adds Advanced Bonjour/mDNS options for troubleshooting, including Debug10 - a very verbose file only mDNS/Bonjour logging option.
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/AdvancedOptions.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/AdvancedOptions.png?raw=true)
+
+**USE THESE WITH CAUTION**
+
+mDNS Options: IP Version.  Ideally should be IPversion.All or IPVersion.V4Only.
+mDNS Options Interfaces, a comma seperated list, or single IP address that HKLS should listen on.
+(NB it seems if IPVersion.All is selected and V4 IP address given - a list will fail as Bonjour tries V6)
+(So if giving a List of IP addresses, select IPVersion.V4Only)
+
+mDNS use Apple AWDL:  Strangely still seems to work with this enabled.  Default is disabled.
+
+Homekit Server Options Interface:
+Single IP address which is what will be forced used for HKLS.  This differs from mDNS as above.
+It must be the device you are running the plugin on.
+
+### Reset Accessory
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/ResetAccessory.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/ResetAccessory.png?raw=true)
+
+This allows a bridge to be selected that will have all its security and connection to HomeKit deleted.  Gone.
+Ideally this should be used if you added bridge to homekit and then deleted it, or tried to add and failed/cancelled.
+
+Before use delete bridge from Home App.  Select bridge and run.  For good measure restart plugin.  And then re-add accessory, hopefully
+removing the message that this accessory needs to be reset.
+
+
+
 
