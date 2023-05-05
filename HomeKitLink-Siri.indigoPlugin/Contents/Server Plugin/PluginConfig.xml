@@ -63,7 +63,7 @@
     </Field>
         <Field id="debug10" type="checkbox" tooltip="Enabling will .">
         <Label/>
-        <Description>10. Debug mDNS (Verbose!) File Only.</Description>
+        <Description>10. Debug mDNS (Verbose!) File Only.   </Description>
     </Field>
     <Field id="debugDeviceid" type="menu" defaultValue="-3" fontColor="orange">
         <Label>Debug Device:</Label>

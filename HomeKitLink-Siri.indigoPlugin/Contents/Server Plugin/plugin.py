@@ -2078,20 +2078,21 @@ class Plugin(indigo.PluginBase):
                         if self.debug5:
                             self.logger.debug("CurrentMode: {}, and wised Mode:{} and indigo Mode: {} ".format(currentMode, modewished, indigomodewished))
                         modechange = False
+                        newMode = currentMode
                         if currentMode == indigo.kHvacMode.Off and modewished in (1, 2, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
-                            modechange = True
+                            newMode = indigomodewished
                         elif currentMode == indigo.kHvacMode.Cool and modewished in (0, 1, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
-                            modechange = True
+                            newMode = indigomodewished
                         elif currentMode == indigo.kHvacMode.Heat and modewished in (0, 2, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
-                            modechange = True
+                            newMode = indigomodewished
                         elif currentMode == indigo.kHvacMode.HeatCool and modewished in (0, 1, 2):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
-                            modechange = True
+                            newMode=indigomodewished
                         ## call Thermostat device to update target and values
-                        if modechange:
+                        if currentMode != newMode:
                             if self.debug5:
                                 self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
                             if 'setpointCool' in indigodevice.states:
@@ -2111,6 +2112,7 @@ class Plugin(indigo.PluginBase):
                                     accessoryself.set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
 
                     if "TargetTemperature" in valuetoSet:
+                        currentMode = newMode
                         target_temp = valuetoSet['TargetTemperature']
                         if unit:  ## if F select will need to convert
                             target_temp = HKutils.celsius_to_fahrenheit(target_temp)  ## Homekit always in Celsius so if using F convert back. for Indigo.
