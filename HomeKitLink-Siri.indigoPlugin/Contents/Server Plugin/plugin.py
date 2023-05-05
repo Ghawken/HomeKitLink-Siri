@@ -2070,6 +2070,7 @@ class Plugin(indigo.PluginBase):
 
                 if hasattr(indigodevice, "hvacMode"):
                     currentMode = indigodevice.hvacMode
+                    newMode = currentMode
                     if "TargetHeatingCoolingState" in valuetoSet:
                         ## Wants to change state of thermostat - do that first and then
                         modewished = valuetoSet["TargetHeatingCoolingState"]
@@ -2077,8 +2078,6 @@ class Plugin(indigo.PluginBase):
                         # 0 = off, 1- heat, 2 cool, 3 auto
                         if self.debug5:
                             self.logger.debug("CurrentMode: {}, and wised Mode:{} and indigo Mode: {} ".format(currentMode, modewished, indigomodewished))
-                        modechange = False
-                        newMode = currentMode
                         if currentMode == indigo.kHvacMode.Off and modewished in (1, 2, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
                             newMode = indigomodewished
