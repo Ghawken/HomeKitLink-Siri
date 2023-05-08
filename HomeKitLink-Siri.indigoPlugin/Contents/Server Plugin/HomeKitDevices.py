@@ -715,12 +715,12 @@ class Fanv2(HomeAccessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
         # Add the fan service. Also add optional characteristics to it.
-        serv_fan = self.add_preload_service('Fanv2', chars=['RotationSpeed', 'RotationDirection', "SwingMode"])
+        serv_fan = self.add_preload_service('Fanv2', chars=['RotationSpeed'])#, 'RotationDirection', "SwingMode"])
 
         self.char_on = serv_fan.configure_char('Active', getter_callback=self.on_getter)
         self.char_rotation_speed = serv_fan.configure_char( 'RotationSpeed')
-        self.char_rotation_direction = serv_fan.configure_char( 'RotationDirection')
-        self.char_swing_mode = serv_fan.configure_char("SwingMode")
+        #self.char_rotation_direction = serv_fan.configure_char( 'RotationDirection')
+        #self.char_swing_mode = serv_fan.configure_char("SwingMode")
         serv_fan.setter_callback = self._set_chars
 
     async def run(self):
