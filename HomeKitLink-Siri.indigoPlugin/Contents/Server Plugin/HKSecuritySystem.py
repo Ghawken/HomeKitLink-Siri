@@ -93,6 +93,20 @@ AD2USB_TO_HOMEKIT_TARGET = {
     "armedNightStay": HK_ALARM_NIGHT_ARMED,
     "disarmed": HK_ALARM_DISARMED
 }
+ADB_TO_HOMEKIT_CURRENT = {
+    "stay": HK_ALARM_STAY_ARMED,
+    "away": HK_ALARM_AWAY_ARMED,
+    "night": HK_ALARM_NIGHT_ARMED,
+    "disarm": HK_ALARM_DISARMED,
+    "triggered": HK_ALARM_TRIGGERED
+}
+ADB_TO_HOMEKIT_TARGET = {
+    "stay": HK_ALARM_STAY_ARMED,
+    "away": HK_ALARM_AWAY_ARMED,
+    "night": HK_ALARM_NIGHT_ARMED,
+    "disarm": HK_ALARM_DISARMED
+}
+
 class SecuritySystem(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
     category = CATEGORY_ALARM_SYSTEM
@@ -127,7 +141,10 @@ class SecuritySystem(HomeAccessory):
             self.SET_TO_USE_CURRENT = AD2USB_TO_HOMEKIT_CURRENT
             self.SET_TO_USE_TARGET = AD2USB_TO_HOMEKIT_TARGET
             self.device_current_state = "homeKitState"  # can be armedStay, armedAway, armedNightStay, disarmed, alarmOccurred
-
+        elif self.plugin_inuse == "net.papamac.indigoplugin.alarmdecoder-bridge":
+            self.SET_TO_USE_CURRENT = ADB_TO_HOMEKIT_CURRENT
+            self.SET_TO_USE_TARGET = ADB_TO_HOMEKIT_TARGET
+            self.device_current_state = "securitySystemState"
         else:
             ## set a default in case of user selection error
             self.SET_TO_USE_CURRENT = PARADOX_TO_HOMEKIT_CURRENT
@@ -238,9 +255,9 @@ class SecuritySystem(HomeAccessory):
             indigodevice = indigo.devices[self.indigodeviceid]
             state = ""
 
-            if self.plugin_inuse in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm"):
+            if self.plugin_inuse in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm", "net.papamac.indigoplugin.alarmdecoder-bridge","com.berkinet.ad2usb"):
                 if str(self.device_current_state) in indigodevice.states:
-                    logger.debug(f"Using VSS and ParadoxAlarm, and device_current_state == {self.device_current_state}")
+                    logger.debug(f"Using : {self.plugin_inuse} and device_current_state == {self.device_current_state}")
                     #logger.debug(f"IndigoDevice\n {indigodevice.states}")
                     state = indigodevice.states[str(self.device_current_state)]
                     value = self.SET_TO_USE_CURRENT.get(state)

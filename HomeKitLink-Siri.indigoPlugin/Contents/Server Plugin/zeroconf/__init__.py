@@ -82,12 +82,9 @@ from ._utils.time import (  # noqa # import needed for backwards compat
     millis_to_seconds,
 )
 
-import logging
-logger = logging.getLogger("Plugin.HomeKit_pyHap")
-
 __author__ = 'Paul Scott-Murphy, William McBrine'
 __maintainer__ = 'Jakub Stasiak <jakub@stasiak.at>'
-__version__ = '0.56.0'
+__version__ = '0.62.0'
 __license__ = 'LGPL'
 
 

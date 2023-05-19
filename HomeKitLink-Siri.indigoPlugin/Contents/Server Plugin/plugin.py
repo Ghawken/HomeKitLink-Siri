@@ -3105,10 +3105,8 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == "com.pennypacker.indigoplugin.senseme":
                 return "service_Fanv2"
 
-            if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm","com.berkinet.ad2usb"):
+            if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm","com.berkinet.ad2usb", "net.papamac.indigoplugin.alarmdecoder-bridge"):
                 return "service_Security"
-
-
 
             if dev.model == "BlindsT1234":
                 return "service_WindowCovering"
