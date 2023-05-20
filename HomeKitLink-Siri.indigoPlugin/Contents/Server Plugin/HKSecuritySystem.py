@@ -180,7 +180,7 @@ class SecuritySystem(HomeAccessory):
             basePlugin = indigo.server.getPlugin(self.plugin_inuse)
             logger.debug(f"Plugin in Use: {self.plugin_inuse}")
             if basePlugin.isEnabled():
-                if self.plugin_inuse == "com.boisypitre.vss":
+                if self.plugin_inuse in ( "com.boisypitre.vss",  "net.papamac.indigoplugin.alarmdecoder-bridge"):
                     basePlugin.executeAction("setSecuritySystemState", deviceId=self.indigodeviceid, props={"securitySystemState": str(char_values)} )
                 elif self.plugin_inuse == "com.GlennNZ.indigoplugin.ParadoxAlarm":
                     partition= indigodevice.globalProps["com.GlennNZ.indigoplugin.ParadoxAlarm"]["zonePartition"]
