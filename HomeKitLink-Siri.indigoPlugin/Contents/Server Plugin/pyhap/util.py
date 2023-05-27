@@ -8,6 +8,9 @@ from uuid import UUID
 
 from .const import BASE_UUID
 
+import logging
+logger = logging.getLogger("Plugin.HomeKit_pyHap")
+
 ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 HEX_DIGITS = "0123456789ABCDEF"
 
@@ -44,8 +47,16 @@ def get_local_address():
     # TODO: try not to talk 8888 for this
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        s.connect(("8.8.8.8", 80))
+        #s.connect(("8.8.8.8", 80))
+        #addr = s.getsockname()[0]
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.connect(('10.255.255.255', 80))
         addr = s.getsockname()[0]
+        logger.debug(f"Using IP Address for Homekit Server : {addr}.  To manually change see advanced options in Plugin config")
+    except:
+        logger.info(f"Error Getting local address, can't connect to 8.8.8.8")
+        logger.debug(f"Exception trying to get local IP address", exc_info=True)
+        logger.info(f"Try setting Interface for HAP in advanced options, Home Server Options:Interface setting")
     finally:
         s.close()
     return addr

@@ -288,19 +288,20 @@ class AccessoryDriver:
         self.loader = loader or Loader()
         self.aio_stop_event = None
         self.stop_event = threading.Event()
+        self.interface_choice = interface_choice
 
         self.safe_mode = False
 
         self.mdns_service_info = None
         self.srp_verifier = None
-        logger.debug(f"Found address for Zeroconf of {address}.  Likely None as not passed.")
+        logger.debug(f"Found address for Zeroconf of {self.interface_choice=}.  Likely not relevant as using Combined Async Zeroconf.")
         address = address or util.get_local_address()
 
         self.interface_choice = interface_choice
-        logger.debug(f"Using address for Zeroconf of {address}")
-        logger.debug(f"Using interface_choice of {self.interface_choice}")
-        logger.debug(f"Using AsyncZeroConf {self.advertiser}")
-        logger.debug(f"Using ZeroConf {self.zeroconf_server}")
+        logger.debug(f"mDNS: Using address for Zeroconf of {self.interface_choice=}")
+        logger.debug(f"mDNS: Using HAP address of {address=}")
+        logger.debug(f"mDNS: Using AsyncZeroConf {self.advertiser=}")
+        logger.debug(f"mDNS: Using ZeroConf {self.zeroconf_server=}")
 
         advertised_address = advertised_address or address
         self.state = State(
@@ -408,9 +409,9 @@ class AccessoryDriver:
             if self.interface_choice is not None:
                 zc_args["interfaces"] = self.interface_choice
             self.advertiser = AsyncZeroconf(**zc_args)  ## create new zeroconf async - with arguments.
-            logger.debug(f"mDNS Creating own instance of AsyncZeroconf with standard arguments.")
+            logger.debug(f"mDNS Creating own instance of AsyncZeroconf with standard arguments.  {zc_args=}")
         else:
-            logger.debug(f"mDNS using joint async ZeroConf Server as passed. {self.advertiser}")
+            logger.debug(f"mDNS using joint async ZeroConf Server {self.advertiser=}")
 
         await self.advertiser.async_register_service(
             self.mdns_service_info, cooperating_responders=True

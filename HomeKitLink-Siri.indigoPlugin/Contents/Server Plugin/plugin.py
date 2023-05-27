@@ -299,7 +299,7 @@ class Plugin(indigo.PluginBase):
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
-        ip_version = self.pluginPrefs.get('mDNSipversion', "ALL")
+        ip_version = self.pluginPrefs.get('mDNSipversion', "V4Only")
         if ip_version == "ALL":
             self.select_ip_version = IPVersion.All
         elif ip_version == "V4Only":
@@ -307,7 +307,7 @@ class Plugin(indigo.PluginBase):
         elif ip_version == "V6Only":
             self.select_ip_version = IPVersion.V6Only
         else:
-            self.select_ip_version = IPVersion.All
+            self.select_ip_version = IPVersion.V4Only
             self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
 
         interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
@@ -340,7 +340,7 @@ class Plugin(indigo.PluginBase):
 
         self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces,  apple_p2p=self.apple_2p2)
 
-        self.logger.debug(f"\nmDNS Setup: {self.select_interfaces}\n{self.select_ip_version}\n{self.apple_2p2}")
+        self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
 
         self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
 
