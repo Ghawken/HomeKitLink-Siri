@@ -1,4 +1,7 @@
 """Module for `State` class."""
+from typing import Dict
+from uuid import UUID
+
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from pyhap import util
@@ -8,8 +11,7 @@ from pyhap.const import (
     DEFAULT_PORT,
     MAX_CONFIG_VERSION,
 )
-from typing import Dict
-from uuid import UUID
+
 ADMIN_BIT = 0x01
 
 
@@ -36,6 +38,7 @@ class State:
 
         self.private_key = ed25519.Ed25519PrivateKey.generate()
         self.public_key = self.private_key.public_key()
+        self.uuid_to_bytes: Dict[UUID, bytes] = {}
         self.accessories_hash = None
 
     # ### Pairing ###
