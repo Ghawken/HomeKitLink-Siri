@@ -8,6 +8,7 @@ from http import HTTPStatus
 import logging
 from urllib.parse import parse_qs, urlparse
 import uuid
+from typing import TYPE_CHECKING
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives import serialization
@@ -27,6 +28,9 @@ from pyhap.util import long_to_bytes
 
 from .hap_crypto import hap_hkdf, pad_tls_nonce
 from .util import to_hap_json, from_hap_json
+from .state import State
+if TYPE_CHECKING:
+    from .accessory_driver import AccessoryDriver
 
 # iOS will terminate the connection if it does not respond within
 # 10 seconds, so we only allow 9 seconds to avoid this.
@@ -135,8 +139,8 @@ class HAPServerHandler:
         @param accessory_handler: An object that controls an accessory's state.
         @type accessory_handler: AccessoryDriver
         """
-        self.accessory_handler = accessory_handler
-        self.state = self.accessory_handler.state
+        self.accessory_handler: AccessoryDriver = accessory_handler
+        self.state: State = self.accessory_handler.state
         self.enc_context = None
         self.client_address = client_address
         self.is_encrypted = False
@@ -343,13 +347,21 @@ class HAPServerHandler:
             return
 
         dec_tlv_objects = tlv.decode(bytes(decrypted_data))
-        client_username = dec_tlv_objects[HAP_TLV_TAGS.USERNAME]
+        client_username_bytes = dec_tlv_objects[HAP_TLV_TAGS.USERNAME]
         client_ltpk = dec_tlv_objects[HAP_TLV_TAGS.PUBLIC_KEY]
         client_proof = dec_tlv_objects[HAP_TLV_TAGS.PROOF]
 
-        self._pairing_four(client_username, client_ltpk, client_proof, hkdf_enc_key)
+        self._pairing_four(
+            client_username_bytes, client_ltpk, client_proof, hkdf_enc_key
+        )
 
-    def _pairing_four(self, client_username, client_ltpk, client_proof, encryption_key):
+    def _pairing_four(
+        self,
+        client_username_bytes: bytes,
+        client_ltpk: bytes,
+        client_proof: bytes,
+        encryption_key: bytes,
+    ):
         """Expand the SRP session key to obtain a new key.
             Use it to verify that the client's proof of the private key. Continue to
             step five.
@@ -372,7 +384,7 @@ class HAPServerHandler:
             long_to_bytes(session_key), self.PAIRING_4_SALT, self.PAIRING_4_INFO
         )
 
-        data = output_key + client_username + client_ltpk
+        data = output_key + client_username_bytes + client_ltpk
         verifying_key = ed25519.Ed25519PublicKey.from_public_bytes(client_ltpk)
 
         try:
@@ -381,9 +393,11 @@ class HAPServerHandler:
             logger.error("Bad signature, abort.")
             raise
 
-        self._pairing_five(client_username, client_ltpk, encryption_key)
+        self._pairing_five(client_username_bytes, client_ltpk, encryption_key)
 
-    def _pairing_five(self, client_username, client_ltpk, encryption_key):
+    def _pairing_five(
+            self, client_username_bytes: bytes, client_ltpk: bytes, encryption_key: bytes
+    ):
         """At that point we know the client has the accessory password and has a valid key
         pair. Add it as a pair and send a sever proof.
 
@@ -417,7 +431,7 @@ class HAPServerHandler:
         cipher = ChaCha20Poly1305(encryption_key)
         aead_message = bytes(cipher.encrypt(self.PAIRING_5_NONCE, bytes(message), b""))
 
-        client_username_str = str(client_username, "utf-8")
+        client_username_str = client_username_bytes.decode("utf-8")
         client_uuid = uuid.UUID(client_username_str)
         logger.debug(
             "Finishing pairing with admin %s uuid=%s", client_username_str, client_uuid
@@ -676,22 +690,17 @@ class HAPServerHandler:
 
     def _handle_add_pairing(self, tlv_objects):
         """Update client information."""
-        logger.debug("%s: Adding client pairing.", self.client_address)
-        client_username = tlv_objects[HAP_TLV_TAGS.USERNAME]
-        client_username_str = str(client_username, "utf-8")
+        client_username_bytes = tlv_objects[HAP_TLV_TAGS.USERNAME]
         client_public = tlv_objects[HAP_TLV_TAGS.PUBLIC_KEY]
         permissions = tlv_objects[HAP_TLV_TAGS.PERMISSIONS]
-        client_uuid = uuid.UUID(client_username_str)
         logger.debug(
-            "%s: Adding client pairing for %s uuid=%s with permissions %s.",
+            "%s: Adding client pairing for %s with permissions %s.",
             self.client_address,
-            client_username_str,
-            client_uuid,
+            client_username_bytes,
             permissions,
         )
-
         should_confirm = self.accessory_handler.pair(
-            client_uuid, client_public, permissions
+            client_username_bytes, client_public, permissions
         )
         if not should_confirm:
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M2)
@@ -702,8 +711,8 @@ class HAPServerHandler:
 
     def _handle_remove_pairing(self, tlv_objects):
         """Remove pairing with the client."""
-        client_username = tlv_objects[HAP_TLV_TAGS.USERNAME]
-        client_username_str = str(client_username, "utf-8")
+        client_username_bytes: bytes = tlv_objects[HAP_TLV_TAGS.USERNAME]
+        client_username_str = client_username_bytes.decode("utf-8")
         client_uuid = uuid.UUID(client_username_str)
         was_paired = self.state.paired
         logger.debug(
