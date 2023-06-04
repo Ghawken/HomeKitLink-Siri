@@ -353,6 +353,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
                 self.logger.info(u"{0:=^130}".format(" End of Setup "))
                 self.pluginPrefs['previousVersion']= pluginVersion
+                self.pluginPrefs['mDNSipversion'] = "V4Only"
+                self.logger.info(f"For this update setting mDNS IP Version to V4Only (strongly recommended)")
+                self.select_ip_version = IPVersion.V4Only
         except:
             pass
 

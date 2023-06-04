@@ -54,9 +54,10 @@ def get_local_address():
         addr = s.getsockname()[0]
         logger.debug(f"Using IP Address for Homekit Server : {addr}.  To manually change see advanced options in Plugin config")
     except:
-        logger.info(f"Error Getting local address, can't connect to 8.8.8.8")
+        logger.error(f"Error Getting local address IP address.  See debug log for more details.")
+        logger.error(f"This is a breaking issue which until fixed will cause no connection to be possible.")
         logger.debug(f"Exception trying to get local IP address", exc_info=True)
-        logger.info(f"Try setting Interface for HAP in advanced options, Home Server Options:Interface setting")
+        logger.error(f"Try setting Interface for HAP in advanced options, Home Server Options:Interface setting")
     finally:
         s.close()
     return addr

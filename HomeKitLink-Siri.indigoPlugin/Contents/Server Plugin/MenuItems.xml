@@ -109,12 +109,18 @@ It would be important to unpair the old bridge in homekit app.
                 <CallbackMethod>menu_actionResetAccessories</CallbackMethod>
             </Field>
 			<Field id="moveLabel2" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
-				<Label>This will, all going well, will reset the Bridge.  Use this when delete bridge from HomeKit App and then wish to re-add.
+				<Label>
+                    This will, all going well, will reset the Bridge.  Use this when delete bridge from HomeKit App and then wish to re-add.
+
                     It will reset the security keys of the bridge.  If not deleted from homeKit app first will cause ... issues ....
 				</Label>
 			</Field>
             <Field id="moveWarningLabel2" type="label" fontColor="orange" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
-				<Label>NB: This is not without some risk bridge.  Use with caution.</Label>
+				<Label>
+                    ** You should have deleted this bridge from Home app first, or it was never successfully added **.
+                    This deletes all security information for this bridge, without repairing (with QR code) nothing will function.
+                    NB: This is not without some risk bridge.  Use with caution.</Label>
+
 			</Field>
 
         </ConfigUI>

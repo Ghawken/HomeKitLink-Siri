@@ -544,12 +544,14 @@ class HAPServerHandler:
         client_uuid = uuid.UUID(str(client_username, "utf-8"))
         perm_client_public = self.state.paired_clients.get(client_uuid)
         if perm_client_public is None:
-            logger.error(
+            logger.debug(
                 "%s: Client %s attempted pair verify without being paired to %s first.",
                 self.client_address,
                 client_uuid,
                 self.accessory_handler.accessory.display_name,
             )
+            logger.info(f"Home app Client with IP address {self.client_address} appears incompatible with this version of homekit.   It attempted to connect to Bridge {self.accessory_handler.accessory.display_name} and this connection failed to verify. ")
+            logger.info(f"Typically this means this client hasn't been updated to latest OS version, or is incompatible with it.  This needs to be addressed with the Client Home App.  See forum for more details as needed.")
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M4)
             return
 
