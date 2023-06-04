@@ -4,17 +4,15 @@ The HAPServerHandler manages the state of the connection and handles incoming re
 """
 import asyncio
 from http import HTTPStatus
-#import json
 import logging
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 import uuid
-from typing import TYPE_CHECKING
 
+from chacha20poly1305_reuseable import ChaCha20Poly1305Reusable as ChaCha20Poly1305
 from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, x25519
-#from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-from chacha20poly1305_reuseable import ChaCha20Poly1305Reusable as ChaCha20Poly1305
 
 from pyhap import tlv
 from pyhap.const import (
@@ -27,8 +25,9 @@ from pyhap.const import (
 from pyhap.util import long_to_bytes
 
 from .hap_crypto import hap_hkdf, pad_tls_nonce
-from .util import to_hap_json, from_hap_json
 from .state import State
+from .util import from_hap_json, to_hap_json
+
 if TYPE_CHECKING:
     from .accessory_driver import AccessoryDriver
 
@@ -151,6 +150,7 @@ class HAPServerHandler:
         self.headers = None
         self.request_body = None
         self.parsed_url = None
+
         self.response = None
 
     def _set_encryption_ctx(
@@ -215,8 +215,8 @@ class HAPServerHandler:
             self.path,
             self.headers,
         )
+
         path = self.parsed_url.path
-        #path = urlparse(self.path).path
         try:
             getattr(self, self.HANDLERS[self.command][path])()
         except UnprivilegedRequestException:
@@ -396,7 +396,7 @@ class HAPServerHandler:
         self._pairing_five(client_username_bytes, client_ltpk, encryption_key)
 
     def _pairing_five(
-            self, client_username_bytes: bytes, client_ltpk: bytes, encryption_key: bytes
+        self, client_username_bytes: bytes, client_ltpk: bytes, encryption_key: bytes
     ):
         """At that point we know the client has the accessory password and has a valid key
         pair. Add it as a pair and send a sever proof.
@@ -436,8 +436,9 @@ class HAPServerHandler:
         logger.debug(
             "Finishing pairing with admin %s uuid=%s", client_username_str, client_uuid
         )
+
         should_confirm = self.accessory_handler.pair(
-            client_uuid, client_ltpk, HAP_PERMISSIONS.ADMIN
+            client_username_bytes, client_ltpk, HAP_PERMISSIONS.ADMIN
         )
 
         if not should_confirm:
@@ -559,9 +560,10 @@ class HAPServerHandler:
         perm_client_public = self.state.paired_clients.get(client_uuid)
         if perm_client_public is None:
             logger.debug(
-                "%s: Client %s attempted pair verify without being paired to %s first.",
+                "%s: Client %s with uuid %s attempted pair verify without being paired first (paired clients=%s).",
                 self.client_address,
                 client_uuid,
+                self.state.paired_clients,
                 self.accessory_handler.accessory.display_name,
             )
             logger.info(f"Home app Client with IP address {self.client_address} appears incompatible with this version of homekit.   It attempted to connect to Bridge {self.accessory_handler.accessory.display_name} and this connection failed to verify. ")
@@ -606,7 +608,6 @@ class HAPServerHandler:
             raise UnprivilegedRequestException
 
         # Check that char exists and ...
-        #params = parse_qs(urlparse(self.path).query)
         params = parse_qs(self.parsed_url.query)
         response = self.accessory_handler.get_characteristics(
             params["id"][0].split(",")
@@ -741,12 +742,18 @@ class HAPServerHandler:
         """List current pairings."""
         logger.debug("%s: list pairings", self.client_address)
         response = [HAP_TLV_TAGS.SEQUENCE_NUM, HAP_TLV_STATES.M2]
-        for client_uuid, client_public in self.state.paired_clients.items():
+        state = self.state
+        for client_uuid, client_public in state.paired_clients.items():
             admin = self.state.is_admin(client_uuid)
             response.extend(
                 [
                     HAP_TLV_TAGS.USERNAME,
-                    str(client_uuid).encode("utf-8").upper(),
+                    # iOS 16+ requires the username to be uppercase
+                    # or it will unpair the accessory because it thinks
+                    # the username is invalid. We try to send back the
+                    # exact bytes that was used to pair if we have it
+                    state.uuid_to_bytes.get(client_uuid)
+                    or str(client_uuid).encode("utf-8").upper(),
                     HAP_TLV_TAGS.PUBLIC_KEY,
                     client_public,
                     HAP_TLV_TAGS.PERMISSIONS,
