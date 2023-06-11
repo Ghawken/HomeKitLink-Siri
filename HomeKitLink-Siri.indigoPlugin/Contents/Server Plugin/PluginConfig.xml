@@ -139,11 +139,11 @@
      <Field id="HAPipaddress"
            type="textfield"
            tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>Homekit Server Options: Interface:</Label>
+        <Label>Homekit Server Options: Interfaces:</Label>
     </Field>
         <Field id="spaceddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>eg. 192.168.1.9</Label>
-            Single IP address to be used as Homekit Server.
+        <Label>eg. 192.168.1.9,::1</Label>
+            IP addresses to be used as Homekit Server (HAP server).
     </Field>
     <Field id="sepaer4another" type="separator"/>
     <Field id="password"

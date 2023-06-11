@@ -10,7 +10,8 @@ import threading
 import subprocess
 import traceback
 import webbrowser
-
+import ifaddr
+from ipaddress import IPv4Address, IPv6Address, ip_address
 
 from queue import Queue
 
@@ -329,9 +330,20 @@ class Plugin(indigo.PluginBase):
             self.logger.info("This is untested and largely included for full support.")
             self.logger.info("I would not recommend it's usage except in very specific circumstances...")
 
-        self.HAPipaddress = self.pluginPrefs.get('HAPipaddress', "")
-        if self.HAPipaddress == "":
+        self.HAPipaddress = None
+        HAPipaddress = self.pluginPrefs.get('HAPipaddress', "")
+        if HAPipaddress == "":
             self.HAPipaddress = None
+        elif "," in HAPipaddress:
+            self.HAPipaddress = HAPipaddress.split(",")
+            self.logger.debug(f"HAP interfaces List to use: {self.select_interfaces}")
+        elif "." in HAPipaddress:
+            self.HAPipaddress = [HAPipaddress]
+        else:
+            self.logger.warning(f"HAP Interface to use in error state, using default.  Check Plugin Config advanced settings")
+            self.HAPipaddress = None
+
+        self.logger.debug(f"Using Hap interfaces {self.HAPipaddress}")
 
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
@@ -353,9 +365,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
                 self.logger.info(u"{0:=^130}".format(" End of Setup "))
                 self.pluginPrefs['previousVersion']= pluginVersion
-                self.pluginPrefs['mDNSipversion'] = "V4Only"
-                self.logger.info(f"For this update setting mDNS IP Version to V4Only (strongly recommended)")
-                self.select_ip_version = IPVersion.V4Only
+                #self.pluginPrefs['mDNSipversion'] = "V4Only"
+                #self.logger.info(f"For this update setting mDNS IP Version to V4Only (strongly recommended)")
+                #self.select_ip_version = IPVersion.V4Only
         except:
             pass
 
@@ -1400,7 +1412,23 @@ class Plugin(indigo.PluginBase):
         camerapath = os.path.join(self.pluginprefDirectory, "cameras")
         if not os.path.exists(camerapath):
             os.makedirs(camerapath)
+####
+    # Code Block to automate mutliple adapter selections
+    #
+    def _ip_address_is_external(self, ip_addr: IPv4Address | IPv6Address) -> bool:
+        return (
+                not ip_addr.is_multicast
+                and not ip_addr.is_loopback
+                and not ip_addr.is_link_local
+        )
 
+    def _get_adapters(self):
+        self.logger.debug(f"_get_adapters to generate IP address")
+        list_adapters = []
+        for adapter in ifaddr.get_adapters():
+            if self._ip_address_is_external(adapter):
+                list_adapters.append(adapter)
+###
 
     def startup(self):
         self.debugLog(u"Starting Plugin. startup() method called.")
@@ -1512,6 +1540,7 @@ class Plugin(indigo.PluginBase):
                     this_is_debug_device = True
 
                 updateddevice_subtype = self.device_list_internal[checkindex]["subtype"]
+
 
                 if str(updateddevice_subtype) == "Thermostat":
                     if self.debug2:

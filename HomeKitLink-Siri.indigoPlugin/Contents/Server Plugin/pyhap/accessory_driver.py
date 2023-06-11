@@ -125,7 +125,6 @@ class AccessoryMDNSServiceInfo(ServiceInfo):
     def __init__(self, accessory, state, zeroconf_server=None):
         self.accessory = accessory
         self.state = state
-
         adv_data = self._get_advert_data()
         valid_name = self._valid_name()
         short_mac = self.state.mac[-8:].replace(":", "")
@@ -141,7 +140,7 @@ class AccessoryMDNSServiceInfo(ServiceInfo):
             weight=0,
             priority=0,
             properties=adv_data,
-            addresses=[socket.inet_aton(self.state.address)],
+            parsed_addresses=self.state.addresses,
         )
 
     def _valid_name(self):
@@ -246,10 +245,10 @@ class AccessoryDriver:
             If not given, the value of the address parameter will be used.
         :type listen_address: str
 
-        :param advertised_address: The address of the HAPServer announced via mDNS.
+        :param advertised_address: The addresses of the HAPServer announced via mDNS.
             This can be used to announce an external address from behind a NAT.
             If not given, the value of the address parameter will be used.
-        :type advertised_address: str
+        :type advertised_address: str | list[str]
 
         :param interface_choice: The zeroconf interfaces to listen on.
         :type InterfacesType: [InterfaceChoice.Default, InterfaceChoice.All]
@@ -299,7 +298,7 @@ class AccessoryDriver:
 
         self.interface_choice = interface_choice
         logger.debug(f"mDNS: Using address for Zeroconf of {self.interface_choice=}")
-        logger.debug(f"mDNS: Using HAP address of {address=}")
+        logger.debug(f"mDNS: Using HAP addresses of {address=}")
         logger.debug(f"mDNS: Using AsyncZeroConf {self.advertiser=}")
         logger.debug(f"mDNS: Using ZeroConf {self.zeroconf_server=}")
 
@@ -381,9 +380,9 @@ class AccessoryDriver:
         self.aio_stop_event = asyncio.Event()
 
         logger.info(
-            "Starting accessory %s on address %s, port %s.",
+            "Starting accessory %s on addresses %s with port %s.",
             self.accessory.display_name,
-            self.state.address,
+            self.state.addresses,
             self.state.port,
         )
 

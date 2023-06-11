@@ -60,7 +60,7 @@ def get_local_address():
         logger.error(f"Try setting Interface for HAP in advanced options, Home Server Options:Interface setting")
     finally:
         s.close()
-    return addr
+    return str(addr)
 
 
 def long_to_bytes(n):

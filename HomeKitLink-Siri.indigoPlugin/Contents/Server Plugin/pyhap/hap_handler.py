@@ -5,8 +5,8 @@ The HAPServerHandler manages the state of the connection and handles incoming re
 import asyncio
 from http import HTTPStatus
 import logging
-from typing import TYPE_CHECKING
-from urllib.parse import parse_qs, urlparse
+from typing import TYPE_CHECKING, Dict, Optional
+from urllib.parse import ParseResult, parse_qs, urlparse
 import uuid
 
 from chacha20poly1305_reuseable import ChaCha20Poly1305Reusable as ChaCha20Poly1305
@@ -143,15 +143,16 @@ class HAPServerHandler:
         self.enc_context = None
         self.client_address = client_address
         self.is_encrypted = False
-        self.client_uuid = None
+        self.client_uuid: Optional[uuid.UUID] = None
 
-        self.path = None
-        self.command = None
-        self.headers = None
-        self.request_body = None
-        self.parsed_url = None
+        self.path: Optional[str] = None
+        self.command: Optional[str] = None
+        self.headers: Optional[Dict[str, str]] = None
+        self.request_body: Optional[bytes] = None
+        self.parsed_url: Optional[ParseResult] = None
 
-        self.response = None
+        self.response: Optional[HAPResponse] = None
+
 
     def _set_encryption_ctx(
         self, client_public, private_key, public_key, shared_key, pre_session_key
