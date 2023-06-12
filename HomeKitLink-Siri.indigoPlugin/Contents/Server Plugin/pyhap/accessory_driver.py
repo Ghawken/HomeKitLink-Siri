@@ -31,9 +31,10 @@ import threading
 from zeroconf import ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
 from zeroconf import InterfaceChoice, IPVersion, ServiceStateChange
+from typing import Optional
 
 from pyhap import util
-from pyhap.accessory import get_topic
+from pyhap.accessory import Accessory, get_topic
 from pyhap.characteristic import CharacteristicError
 from pyhap.const import (
     HAP_PERMISSION_NOTIFY,
@@ -277,7 +278,7 @@ class AccessoryDriver:
 
         self.loop = loop
        # self.indigodeviceid = indigodeviceid
-        self.accessory = None
+        self.accessory: Optional[Accessory] = None
         self.advertiser = async_zeroconf_instance
         self.zeroconf_server = zeroconf_server
 
@@ -380,7 +381,7 @@ class AccessoryDriver:
         self.aio_stop_event = asyncio.Event()
 
         logger.info(
-            "Starting accessory %s on addresses %s with port %s.",
+            "Starting accessory %s with advertised addresses %s with port %s.",
             self.accessory.display_name,
             self.state.addresses,
             self.state.port,
@@ -440,13 +441,12 @@ class AccessoryDriver:
         await self.advertiser.async_close()
 
         self.aio_stop_event.set()
-
         self.http_server.async_stop()
 
         logger.info(
-            "Stopping accessory %s on address %s, port %s.",
+            "Stopping accessory %s on addresses %s, port %s.",
             self.accessory.display_name,
-            self.state.address,
+            self.state.addresses,
             self.state.port,
         )
 

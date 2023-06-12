@@ -330,21 +330,31 @@ class Plugin(indigo.PluginBase):
             self.logger.info("This is untested and largely included for full support.")
             self.logger.info("I would not recommend it's usage except in very specific circumstances...")
 
-        self.HAPipaddress = None
+        self.HAPAdvertised_ipaddress = None
         HAPipaddress = self.pluginPrefs.get('HAPipaddress', "")
         if HAPipaddress == "":
-            self.HAPipaddress = None
+            self.HAPAdvertised_ipaddress = None
         elif "," in HAPipaddress:
-            self.HAPipaddress = HAPipaddress.split(",")
+            self.HAPAdvertised_ipaddress = HAPipaddress.split(",")
             self.logger.debug(f"HAP interfaces List to use: {self.select_interfaces}")
-        elif "." in HAPipaddress:
-            self.HAPipaddress = [HAPipaddress]
+        elif "." in HAPipaddress or ":" in HAPipaddress:
+            self.HAPAdvertised_ipaddress = [HAPipaddress]
         else:
             self.logger.warning(f"HAP Interface to use in error state, using default.  Check Plugin Config advanced settings")
-            self.HAPipaddress = None
+            self.HAPAdvertised_ipaddress = None
 
-        self.logger.debug(f"Using Hap interfaces {self.HAPipaddress}")
+        self.HAPServeripaddress = None
+        HAPServeripaddress = self.pluginPrefs.get("HAPServeripaddress","")
+        if HAPServeripaddress == "":
+            self.HAPServeripaddress = None
+        else:
+            self.HAPServeripaddress = HAPServeripaddress
 
+        if self.HAPAdvertised_ipaddress !=None or self.HAPServeripaddress !=None:
+            self.logger.info(f"Using Advanced settings: HAP Server IP {self.HAPServeripaddress} (if NONE will be calculated) with advertised interfaces of: {self.HAPAdvertised_ipaddress}")
+            if self.HAPServeripaddress !=None:
+                if self.HAPServeripaddress not in self.HAPAdvertised_ipaddress:
+                    self.logger.warning(f"It would seem that your IP address running HomeKit ({self.HAPServeripaddress}) is not in the advertised IP addresses.  This will likely cause issues, I would suggest you add {self.HAPServeripaddress} to the list of advertised interfaces in advanced config")
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
         loop = asyncio.new_event_loop()
@@ -1139,7 +1149,7 @@ class Plugin(indigo.PluginBase):
             nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
             self.logger.debug("Next Port available:{}".format(nextport))
 
-            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPipaddress))
+            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
 
            # self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
 

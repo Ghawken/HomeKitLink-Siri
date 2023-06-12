@@ -123,10 +123,10 @@
     </Field>
     <Field id="mDNSinterfaces"
            type="textfield"
-           tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+           tooltip="Enter IP address to use" defaultValue="" hidden="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>mDNS Options: Interfaces:</Label>
     </Field>
-        <Field id="spacede11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Field id="spacede11" type="label" fontSize="small" hidden="true" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>eg. 192.168.1.9, 192.168.1.32</Label>
             Comma Seperated IP address permitted, or single IP address (which should be main OSX interface)
     </Field>
@@ -139,13 +139,22 @@
      <Field id="HAPipaddress"
            type="textfield"
            tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>Homekit Server Options: Interfaces:</Label>
+        <Label>Homekit Server Options: Advertised Interfaces:</Label>
     </Field>
         <Field id="spaceddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>eg. 192.168.1.9,::1</Label>
-            IP addresses to be used as Homekit Server (HAP server).
+            IP addresses/networks for HomeKit server to be advertised via mDNS on
     </Field>
-    <Field id="sepaer4another" type="separator"/>
+         <Field id="HAPServeripaddress"
+           type="textfield"
+           tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Homekit Server : IP address</Label>
+    </Field>
+        <Field id="spacedddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label>eg. 192.168.1.6</Label>
+            IP address to be used as Homekit Server (HAP server).
+    </Field>
+    <Field id="sepaaer4another" type="separator"/>
     <Field id="password"
            type="textfield"
            tooltip="Enter system Password" defaultValue="" visibleBindingId="advanced" hidden="true" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
