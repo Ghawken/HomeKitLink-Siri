@@ -151,8 +151,16 @@
         <Label>Homekit Server : IP address</Label>
     </Field>
         <Field id="spacedddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>eg. 192.168.1.6</Label>
-            IP address to be used as Homekit Server (HAP server).
+        <Label>eg. 192.168.1.6
+IP address to be used as Homekit Server (HAP server).
+
+Delete all values from these boxes to restore system created defaults.
+        </Label>
+    </Field>
+        <Field id="reload"
+           type="label"
+           tooltip="Enter system Password" fontSize='large' alignText="right" fontColor="blue" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label> Reload Plugin from main menu if you have updated these advanced options</Label>
     </Field>
     <Field id="sepaaer4another" type="separator"/>
     <Field id="password"
