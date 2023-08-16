@@ -45,6 +45,7 @@ def get_local_address():
     :rtype: str
     """
     # TODO: try not to talk 8888 for this
+    addr = ""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         #s.connect(("8.8.8.8", 80))
