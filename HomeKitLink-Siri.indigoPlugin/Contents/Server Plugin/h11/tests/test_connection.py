@@ -7,6 +7,7 @@ from .._events import (
     ConnectionClosed,
     Data,
     EndOfMessage,
+    Event,
     InformationalResponse,
     Request,
     Response,
@@ -16,6 +17,7 @@ from .._state import (
     CLOSED,
     DONE,
     ERROR,
+    IDLE,
     MIGHT_SWITCH_PROTOCOL,
     MUST_CLOSE,
     SEND_BODY,
@@ -592,7 +594,7 @@ def test_pipelining() -> None:
 
 
 def test_protocol_switch() -> None:
-    for (req, deny, accept) in [
+    for req, deny, accept in [
         (
             Request(
                 method="CONNECT",
@@ -719,7 +721,7 @@ def test_protocol_switch() -> None:
 def test_close_simple() -> None:
     # Just immediately closing a new connection without anything having
     # happened yet.
-    for (who_shot_first, who_shot_second) in [(CLIENT, SERVER), (SERVER, CLIENT)]:
+    for who_shot_first, who_shot_second in [(CLIENT, SERVER), (SERVER, CLIENT)]:
 
         def setup() -> ConnectionPair:
             p = ConnectionPair()
@@ -1118,8 +1120,3 @@ def test_special_exceptions_for_lost_connection_in_message_body() -> None:
     with pytest.raises(RemoteProtocolError) as excinfo:
         c.next_event()
     assert "incomplete chunked read" in str(excinfo.value)
-
-def test_ensure_connection_close_remains_untouched() -> None:
-    c = Connection(SERVER)
-    data = c.send(Response(status_code=200, headers=[(b"connection", b"close")]))  # type: ignore[arg-type]
-    assert data == b"HTTP/1.1 200 \r\n" b"connection: close\r\n\r\n"

@@ -67,6 +67,7 @@ UNPACK_HHiH = struct.Struct(b'!HHiH').unpack_from
 
 _seen_logs: Dict[str, Union[int, tuple]] = {}
 _str = str
+_int = int
 
 
 class DNSIncoming:
@@ -134,6 +135,16 @@ class DNSIncoming:
     def is_response(self) -> bool:
         """Returns true if this is a response."""
         return (self.flags & _FLAGS_QR_MASK) == _FLAGS_QR_RESPONSE
+
+    def has_qu_question(self) -> bool:
+        """Returns true if any question is a QU question."""
+        if not self.num_questions:
+            return False
+        for question in self.questions:
+            # QU questions use the same bit as unique
+            if question.unique:
+                return True
+        return False
 
     @property
     def truncated(self) -> bool:
@@ -221,7 +232,7 @@ class DNSIncoming:
         self.offset += 1
         return self._read_string(length)
 
-    def _read_string(self, length: int) -> bytes:
+    def _read_string(self, length: _int) -> bytes:
         """Reads a string of a given length from the packet"""
         info = self.data[self.offset : self.offset + length]
         self.offset += length
@@ -257,7 +268,7 @@ class DNSIncoming:
                 self._answers.append(rec)
 
     def _read_record(
-        self, domain: _str, type_: int, class_: int, ttl: int, length: int
+        self, domain: _str, type_: _int, class_: _int, ttl: _int, length: _int
     ) -> Optional[DNSRecord]:
         """Read known records types and skip unknown ones."""
         if type_ == _TYPE_A:
@@ -314,7 +325,7 @@ class DNSIncoming:
         self.offset += length
         return None
 
-    def _read_bitmap(self, end: int) -> List[int]:
+    def _read_bitmap(self, end: _int) -> List[int]:
         """Reads an NSEC bitmap from the packet."""
         rdtypes = []
         while self.offset < end:
@@ -345,7 +356,7 @@ class DNSIncoming:
             )
         return name
 
-    def _decode_labels_at_offset(self, off: int, labels: List[str], seen_pointers: Set[int]) -> int:
+    def _decode_labels_at_offset(self, off: _int, labels: List[str], seen_pointers: Set[int]) -> int:
         # This is a tight loop that is called frequently, small optimizations can make a difference.
         while off < self._data_len:
             length = self.data[off]

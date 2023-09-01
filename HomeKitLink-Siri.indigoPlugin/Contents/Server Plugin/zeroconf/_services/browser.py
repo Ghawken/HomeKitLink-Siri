@@ -26,6 +26,7 @@ import random
 import threading
 import warnings
 from abc import abstractmethod
+from types import TracebackType  # noqa # used in type hints
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -35,11 +36,12 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    Type,
     Union,
     cast,
 )
 
-from .._dns import DNSPointer, DNSQuestion, DNSQuestionType, DNSRecord
+from .._dns import DNSPointer, DNSQuestion, DNSQuestionType
 from .._logger import log
 from .._protocol.outgoing import DNSOutgoing
 from .._services import (
@@ -84,6 +86,8 @@ _QuestionWithKnownAnswers = Dict[DNSQuestion, Set[DNSPointer]]
 
 class _DNSPointerOutgoingBucket:
     """A DNSOutgoing bucket."""
+
+    __slots__ = ('now', 'out', 'bytes')
 
     def __init__(self, now: float, multicast: bool) -> None:
         """Create a bucke to wrap a DNSOutgoing."""
@@ -164,7 +168,11 @@ def generate_service_query(
         if not qu_question and zc.question_history.suppresses(question, now, known_answers):
             log.debug("Asking %s was suppressed by the question history", question)
             continue
-        questions_with_known_answers[question] = cast(Set[DNSPointer], known_answers)
+        if TYPE_CHECKING:
+            pointer_known_answers = cast(Set[DNSPointer], known_answers)
+        else:
+            pointer_known_answers = known_answers
+        questions_with_known_answers[question] = pointer_known_answers
         if not qu_question:
             zc.question_history.add_question_at_time(question, now, known_answers)
 
@@ -196,12 +204,14 @@ class QueryScheduler:
 
     """
 
+    __slots__ = ('_schedule_changed_event', '_types', '_next_time', '_first_random_delay_interval', '_delay')
+
     def __init__(
         self,
         types: Set[str],
         delay: int,
         first_random_delay_interval: Tuple[int, int],
-    ):
+    ) -> None:
         self._schedule_changed_event: Optional[asyncio.Event] = None
         self._types = types
         self._next_time: Dict[str, float] = {}
@@ -260,6 +270,22 @@ class QueryScheduler:
 
 class _ServiceBrowserBase(RecordUpdateListener):
     """Base class for ServiceBrowser."""
+
+    __slots__ = (
+        'types',
+        'zc',
+        'addr',
+        'port',
+        'multicast',
+        'question_type',
+        '_pending_handlers',
+        '_service_state_changed',
+        'query_scheduler',
+        'done',
+        '_first_request',
+        '_next_send_timer',
+        '_query_sender_task',
+    )
 
     def __init__(
         self,
@@ -359,50 +385,46 @@ class _ServiceBrowserBase(RecordUpdateListener):
         ):
             self._pending_handlers[key] = state_change
 
-    def _async_process_record_update(
-        self, now: float, record: DNSRecord, old_record: Optional[DNSRecord]
-    ) -> None:
-        """Process a single record update from a batch of updates."""
-        record_type = record.type
-
-        if record_type is _TYPE_PTR:
-            if TYPE_CHECKING:
-                record = cast(DNSPointer, record)
-            for type_ in self.types.intersection(cached_possible_types(record.name)):
-                if old_record is None:
-                    self._enqueue_callback(ServiceStateChange.Added, type_, record.alias)
-                elif record.is_expired(now):
-                    self._enqueue_callback(ServiceStateChange.Removed, type_, record.alias)
-                else:
-                    self.reschedule_type(type_, now, record.get_expiration_time(_EXPIRE_REFRESH_TIME_PERCENT))
-            return
-
-        # If its expired or already exists in the cache it cannot be updated.
-        if old_record or record.is_expired(now):
-            return
-
-        if record_type in _ADDRESS_RECORD_TYPES:
-            # Iterate through the DNSCache and callback any services that use this address
-            for type_, name in self._names_matching_types(
-                {service.name for service in self.zc.cache.async_entries_with_server(record.name)}
-            ):
-                self._enqueue_callback(ServiceStateChange.Updated, type_, name)
-            return
-
-        for type_, name in self._names_matching_types((record.name,)):
-            self._enqueue_callback(ServiceStateChange.Updated, type_, name)
-
     def async_update_records(self, zc: 'Zeroconf', now: float, records: List[RecordUpdate]) -> None:
         """Callback invoked by Zeroconf when new information arrives.
 
         Updates information required by browser in the Zeroconf cache.
 
-        Ensures that there is are no unecessary duplicates in the list.
+        Ensures that there is are no unnecessary duplicates in the list.
 
         This method will be run in the event loop.
         """
-        for record in records:
-            self._async_process_record_update(now, record[0], record[1])
+        for record_update in records:
+            record, old_record = record_update
+            record_type = record.type
+
+            if record_type is _TYPE_PTR:
+                if TYPE_CHECKING:
+                    record = cast(DNSPointer, record)
+                for type_ in self.types.intersection(cached_possible_types(record.name)):
+                    if old_record is None:
+                        self._enqueue_callback(ServiceStateChange.Added, type_, record.alias)
+                    elif record.is_expired(now):
+                        self._enqueue_callback(ServiceStateChange.Removed, type_, record.alias)
+                    else:
+                        expire_time = record.get_expiration_time(_EXPIRE_REFRESH_TIME_PERCENT)
+                        self.reschedule_type(type_, now, expire_time)
+                continue
+
+            # If its expired or already exists in the cache it cannot be updated.
+            if old_record or record.is_expired(now):
+                continue
+
+            if record_type in _ADDRESS_RECORD_TYPES:
+                # Iterate through the DNSCache and callback any services that use this address
+                for type_, name in self._names_matching_types(
+                    {service.name for service in self.zc.cache.async_entries_with_server(record.name)}
+                ):
+                    self._enqueue_callback(ServiceStateChange.Updated, type_, name)
+                continue
+
+            for type_, name in self._names_matching_types((record.name,)):
+                self._enqueue_callback(ServiceStateChange.Updated, type_, name)
 
     @abstractmethod
     def async_update_records_complete(self) -> None:
@@ -556,3 +578,15 @@ class ServiceBrowser(_ServiceBrowserBase, threading.Thread):
         for pending in self._pending_handlers.items():
             self.queue.put(pending)
         self._pending_handlers.clear()
+
+    def __enter__(self) -> 'ServiceBrowser':
+        return self
+
+    def __exit__(  # pylint: disable=useless-return
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
+        self.cancel()
+        return None

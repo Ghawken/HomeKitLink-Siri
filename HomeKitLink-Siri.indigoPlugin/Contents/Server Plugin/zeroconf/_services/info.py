@@ -21,13 +21,14 @@
 """
 
 import asyncio
-import ipaddress
 import random
 from functools import lru_cache
-from typing import TYPE_CHECKING, Dict, List, Optional, Union, cast
+from ipaddress import IPv4Address, IPv6Address, _BaseAddress, ip_address
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, cast
 
 from .._dns import (
     DNSAddress,
+    DNSNsec,
     DNSPointer,
     DNSQuestionType,
     DNSRecord,
@@ -39,27 +40,33 @@ from .._logger import log
 from .._protocol.outgoing import DNSOutgoing
 from .._updates import RecordUpdate, RecordUpdateListener
 from .._utils.asyncio import (
+    _resolve_all_futures_to_none,
     get_running_loop,
     run_coro_with_timeout,
-    wait_event_or_timeout,
+    wait_for_future_set_or_timeout,
 )
 from .._utils.name import service_type_name
 from .._utils.net import IPVersion, _encode_address
-from .._utils.time import current_time_millis, millis_to_seconds
+from .._utils.time import current_time_millis
 from ..const import (
+    _ADDRESS_RECORD_TYPES,
     _CLASS_IN,
-    _CLASS_UNIQUE,
+    _CLASS_IN_UNIQUE,
     _DNS_HOST_TTL,
     _DNS_OTHER_TTL,
     _FLAGS_QR_QUERY,
     _LISTENER_TIME,
+    _MDNS_PORT,
     _TYPE_A,
     _TYPE_AAAA,
+    _TYPE_NSEC,
     _TYPE_PTR,
     _TYPE_SRV,
     _TYPE_TXT,
 )
 
+_IPVersion_All_value = IPVersion.All.value
+_IPVersion_V4Only_value = IPVersion.V4Only.value
 # https://datatracker.ietf.org/doc/html/rfc6762#section-5.2
 # The most common case for calling ServiceInfo is from a
 # ServiceBrowser. After the first request we add a few random
@@ -74,17 +81,17 @@ if TYPE_CHECKING:
     from .._core import Zeroconf
 
 
-def instance_name_from_service_info(info: "ServiceInfo") -> str:
+def instance_name_from_service_info(info: "ServiceInfo", strict: bool = True) -> str:
     """Calculate the instance name from the ServiceInfo."""
     # This is kind of funky because of the subtype based tests
     # need to make subtypes a first class citizen
-    service_name = service_type_name(info.name)
+    service_name = service_type_name(info.name, strict=strict)
     if not info.type.endswith(service_name):
         raise BadTypeInNameException
     return info.name[: -len(service_name) - 1]
 
 
-_cached_ip_addresses = lru_cache(maxsize=256)(ipaddress.ip_address)
+_cached_ip_addresses = lru_cache(maxsize=256)(ip_address)
 
 
 class ServiceInfo(RecordUpdateListener):
@@ -125,6 +132,7 @@ class ServiceInfo(RecordUpdateListener):
         "host_ttl",
         "other_ttl",
         "interface_index",
+        "_new_records_futures",
     )
 
     def __init__(
@@ -152,8 +160,8 @@ class ServiceInfo(RecordUpdateListener):
         self.type = type_
         self._name = name
         self.key = name.lower()
-        self._ipv4_addresses: List[ipaddress.IPv4Address] = []
-        self._ipv6_addresses: List[ipaddress.IPv6Address] = []
+        self._ipv4_addresses: List[IPv4Address] = []
+        self._ipv6_addresses: List[IPv6Address] = []
         if addresses is not None:
             self.addresses = addresses
         elif parsed_addresses is not None:
@@ -163,7 +171,7 @@ class ServiceInfo(RecordUpdateListener):
         self.priority = priority
         self.server = server if server else None
         self.server_key = server.lower() if server else None
-        self._properties: Dict[Union[str, bytes], Optional[Union[str, bytes]]] = {}
+        self._properties: Optional[Dict[Union[str, bytes], Optional[Union[str, bytes]]]] = None
         if isinstance(properties, bytes):
             self._set_text(properties)
         else:
@@ -171,7 +179,7 @@ class ServiceInfo(RecordUpdateListener):
         self.host_ttl = host_ttl
         self.other_ttl = other_ttl
         self.interface_index = interface_index
-        self._notify_event: Optional[asyncio.Event] = None
+        self._new_records_futures: Set[asyncio.Future] = set()
 
     @property
     def name(self) -> str:
@@ -217,7 +225,7 @@ class ServiceInfo(RecordUpdateListener):
                 self._ipv6_addresses.append(addr)
 
     @property
-    def properties(self) -> Dict:
+    def properties(self) -> Dict[Union[str, bytes], Optional[Union[str, bytes]]]:
         """If properties were set in the constructor this property returns the original dictionary
         of type `Dict[Union[bytes, str], Any]`.
 
@@ -225,13 +233,17 @@ class ServiceInfo(RecordUpdateListener):
         bytes and the values are either bytes, if there was a value, even empty, or `None`, if there
         was none. No further decoding is attempted. The type returned is `Dict[bytes, Optional[bytes]]`.
         """
+        if self._properties is None:
+            self._unpack_text_into_properties()
+        if TYPE_CHECKING:
+            assert self._properties is not None
         return self._properties
 
     async def async_wait(self, timeout: float) -> None:
         """Calling task waits for a given number of milliseconds or until notified."""
-        if self._notify_event is None:
-            self._notify_event = asyncio.Event()
-        await wait_event_or_timeout(self._notify_event, timeout=millis_to_seconds(timeout))
+        loop = get_running_loop()
+        assert loop is not None
+        await wait_for_future_set_or_timeout(loop, self._new_records_futures, timeout)
 
     def addresses_by_version(self, version: IPVersion) -> List[bytes]:
         """List addresses matching IP version.
@@ -242,18 +254,19 @@ class ServiceInfo(RecordUpdateListener):
         This means the first address will always be the most recently added
         address of the given IP version.
         """
-        if version == IPVersion.V4Only:
+        version_value = version.value
+        if version_value == _IPVersion_All_value:
+            return [
+                *(addr.packed for addr in self._ipv4_addresses),
+                *(addr.packed for addr in self._ipv6_addresses),
+            ]
+        if version_value == _IPVersion_V4Only_value:
             return [addr.packed for addr in self._ipv4_addresses]
-        if version == IPVersion.V6Only:
-            return [addr.packed for addr in self._ipv6_addresses]
-        return [
-            *(addr.packed for addr in self._ipv4_addresses),
-            *(addr.packed for addr in self._ipv6_addresses),
-        ]
+        return [addr.packed for addr in self._ipv6_addresses]
 
     def ip_addresses_by_version(
         self, version: IPVersion
-    ) -> Union[List[ipaddress.IPv4Address], List[ipaddress.IPv6Address], List[ipaddress._BaseAddress]]:
+    ) -> Union[List[IPv4Address], List[IPv6Address], List[_BaseAddress]]:
         """List ip_address objects matching IP version.
 
         Addresses are guaranteed to be returned in LIFO (last in, first out)
@@ -262,11 +275,17 @@ class ServiceInfo(RecordUpdateListener):
         This means the first address will always be the most recently added
         address of the given IP version.
         """
-        if version == IPVersion.V4Only:
+        return self._ip_addresses_by_version_value(version.value)
+
+    def _ip_addresses_by_version_value(
+        self, version_value: int
+    ) -> Union[List[IPv4Address], List[IPv6Address], List[_BaseAddress]]:
+        """Backend for addresses_by_version that uses the raw value."""
+        if version_value == _IPVersion_All_value:
+            return [*self._ipv4_addresses, *self._ipv6_addresses]
+        if version_value == _IPVersion_V4Only_value:
             return self._ipv4_addresses
-        if version == IPVersion.V6Only:
-            return self._ipv6_addresses
-        return [*self._ipv4_addresses, *self._ipv6_addresses]
+        return self._ipv6_addresses
 
     def parsed_addresses(self, version: IPVersion = IPVersion.All) -> List[str]:
         """List addresses in their parsed string form.
@@ -277,7 +296,7 @@ class ServiceInfo(RecordUpdateListener):
         This means the first address will always be the most recently added
         address of the given IP version.
         """
-        return [str(addr) for addr in self.ip_addresses_by_version(version)]
+        return [str(addr) for addr in self._ip_addresses_by_version_value(version.value)]
 
     def parsed_scoped_addresses(self, version: IPVersion = IPVersion.All) -> List[str]:
         """Equivalent to parsed_addresses, with the exception that IPv6 Link-Local
@@ -293,13 +312,13 @@ class ServiceInfo(RecordUpdateListener):
             return self.parsed_addresses(version)
         return [
             f"{addr}%{self.interface_index}" if addr.version == 6 and addr.is_link_local else str(addr)
-            for addr in self.ip_addresses_by_version(version)
+            for addr in self._ip_addresses_by_version_value(version.value)
         ]
 
-    def _set_properties(self, properties: Dict) -> None:
+    def _set_properties(self, properties: Dict[Union[str, bytes], Optional[Union[str, bytes]]]) -> None:
         """Sets properties and text of this info from a dictionary"""
         self._properties = properties
-        list_ = []
+        list_: List[bytes] = []
         result = b''
         for key, value in properties.items():
             if isinstance(key, str):
@@ -317,98 +336,87 @@ class ServiceInfo(RecordUpdateListener):
 
     def _set_text(self, text: bytes) -> None:
         """Sets properties and text given a text field"""
+        if text == self.text:
+            return
         self.text = text
-        end = len(text)
-        if end == 0:
+        # Clear the properties cache
+        self._properties = None
+
+    def _unpack_text_into_properties(self) -> None:
+        """Unpacks the text field into properties"""
+        text = self.text
+        if not text:
+            # Properties should be set atomically
+            # in case another thread is reading them
             self._properties = {}
             return
-        result: Dict[Union[str, bytes], Optional[Union[str, bytes]]] = {}
+
         index = 0
-        strs = []
+        pairs: List[bytes] = []
+        end = len(text)
         while index < end:
             length = text[index]
             index += 1
-            strs.append(text[index : index + length])
+            pairs.append(text[index : index + length])
             index += length
 
-        key: bytes
-        value: Optional[bytes]
-        for s in strs:
-            try:
-                key, value = s.split(b'=', 1)
-            except ValueError:
-                # No equals sign at all
-                key = s
-                value = None
-
-            # Only update non-existent properties
-            if key and result.get(key) is None:
-                result[key] = value
-
-        self._properties = result
+        # Reverse the list so that the first item in the list
+        # is the last item in the text field. This is important
+        # to preserve backwards compatibility where the first
+        # key always wins if the key is seen multiple times.
+        pairs.reverse()
+        self._properties = {key: value or None for key, _, value in (pair.partition(b'=') for pair in pairs)}
 
     def get_name(self) -> str:
         """Name accessor"""
-        return self.name[: len(self.name) - len(self.type) - 1]
+        return self._name[: len(self._name) - len(self.type) - 1]
 
     def _get_ip_addresses_from_cache_lifo(
         self, zc: 'Zeroconf', now: float, type: int
-    ) -> List[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]]:
+    ) -> List[Union[IPv4Address, IPv6Address]]:
         """Set IPv6 addresses from the cache."""
-        address_list: List[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]] = []
+        address_list: List[Union[IPv4Address, IPv6Address]] = []
         for record in self._get_address_records_from_cache_by_type(zc, type):
             if record.is_expired(now):
                 continue
             try:
-                ip_address = _cached_ip_addresses(record.address)
+                ip_addr = _cached_ip_addresses(record.address)
             except ValueError:
                 continue
             else:
-                address_list.append(ip_address)
+                address_list.append(ip_addr)
         address_list.reverse()  # Reverse to get LIFO order
         return address_list
 
     def _set_ipv6_addresses_from_cache(self, zc: 'Zeroconf', now: float) -> None:
         """Set IPv6 addresses from the cache."""
-        self._ipv6_addresses = cast(
-            "List[ipaddress.IPv6Address]", self._get_ip_addresses_from_cache_lifo(zc, now, _TYPE_AAAA)
-        )
+        if TYPE_CHECKING:
+            self._ipv6_addresses = cast(
+                "List[IPv6Address]", self._get_ip_addresses_from_cache_lifo(zc, now, _TYPE_AAAA)
+            )
+        else:
+            self._ipv6_addresses = self._get_ip_addresses_from_cache_lifo(zc, now, _TYPE_AAAA)
 
     def _set_ipv4_addresses_from_cache(self, zc: 'Zeroconf', now: float) -> None:
         """Set IPv4 addresses from the cache."""
-        self._ipv4_addresses = cast(
-            "List[ipaddress.IPv4Address]", self._get_ip_addresses_from_cache_lifo(zc, now, _TYPE_A)
-        )
-
-    def update_record(self, zc: 'Zeroconf', now: float, record: Optional[DNSRecord]) -> None:
-        """Updates service information from a DNS record.
-
-        This method is deprecated and will be removed in a future version.
-        update_records should be implemented instead.
-
-        This method will be run in the event loop.
-        """
-        if record is not None:
-            self._process_record_threadsafe(zc, record, now)
+        if TYPE_CHECKING:
+            self._ipv4_addresses = cast(
+                "List[IPv4Address]", self._get_ip_addresses_from_cache_lifo(zc, now, _TYPE_A)
+            )
+        else:
+            self._ipv4_addresses = self._get_ip_addresses_from_cache_lifo(zc, now, _TYPE_A)
 
     def async_update_records(self, zc: 'Zeroconf', now: float, records: List[RecordUpdate]) -> None:
         """Updates service information from a DNS record.
 
         This method will be run in the event loop.
         """
-        if self._process_records_threadsafe(zc, now, records) and self._notify_event:
-            self._notify_event.set()
-            self._notify_event.clear()
-
-    def _process_records_threadsafe(self, zc: 'Zeroconf', now: float, records: List[RecordUpdate]) -> bool:
-        """Thread safe record updating.
-
-        Returns True if new records were added.
-        """
+        new_records_futures = self._new_records_futures
         updated: bool = False
         for record_update in records:
             updated |= self._process_record_threadsafe(zc, record_update.new, now)
-        return updated
+        if updated and new_records_futures:
+            _resolve_all_futures_to_none(new_records_futures)
 
     def _process_record_threadsafe(self, zc: 'Zeroconf', record: DNSRecord, now: float) -> bool:
         """Thread safe record updating.
@@ -418,50 +426,53 @@ class ServiceInfo(RecordUpdateListener):
         if record.is_expired(now):
             return False
 
-        if record.key == self.server_key and isinstance(record, DNSAddress):
+        record_key = record.key
+        if record_key == self.server_key and type(record) is DNSAddress:
             try:
                 ip_addr = _cached_ip_addresses(record.address)
             except ValueError as ex:
                 log.warning("Encountered invalid address while processing %s: %s", record, ex)
                 return False
 
-            if ip_addr.version == 4:
-                if not self._ipv4_addresses:
+            if type(ip_addr) is IPv4Address:
+                if self._ipv4_addresses:
                     self._set_ipv4_addresses_from_cache(zc, now)
 
-                if ip_addr not in self._ipv4_addresses:
-                    self._ipv4_addresses.insert(0, ip_addr)
+                ipv4_addresses = self._ipv4_addresses
+                if ip_addr not in ipv4_addresses:
+                    ipv4_addresses.insert(0, ip_addr)
                     return True
-                elif ip_addr != self._ipv4_addresses[0]:
-                    self._ipv4_addresses.remove(ip_addr)
-                    self._ipv4_addresses.insert(0, ip_addr)
+                elif ip_addr != ipv4_addresses[0]:
+                    ipv4_addresses.remove(ip_addr)
+                    ipv4_addresses.insert(0, ip_addr)
 
                 return False
 
             if not self._ipv6_addresses:
                 self._set_ipv6_addresses_from_cache(zc, now)
 
+            ipv6_addresses = self._ipv6_addresses
             if ip_addr not in self._ipv6_addresses:
-                self._ipv6_addresses.insert(0, ip_addr)
+                ipv6_addresses.insert(0, ip_addr)
                 return True
             elif ip_addr != self._ipv6_addresses[0]:
-                self._ipv6_addresses.remove(ip_addr)
-                self._ipv6_addresses.insert(0, ip_addr)
+                ipv6_addresses.remove(ip_addr)
+                ipv6_addresses.insert(0, ip_addr)
 
             return False
 
-        if record.key != self.key:
+        if record_key != self.key:
             return False
 
-        if record.type == _TYPE_TXT and isinstance(record, DNSText):
+        if record.type == _TYPE_TXT and type(record) is DNSText:
             self._set_text(record.text)
             return True
 
-        if record.type == _TYPE_SRV and isinstance(record, DNSService):
+        if record.type == _TYPE_SRV and type(record) is DNSService:
             old_server_key = self.server_key
             self.name = record.name
             self.server = record.server
-            self.server_key = record.server.lower()
+            self.server_key = record.server_key
             self.port = record.port
             self.weight = record.weight
             self.priority = record.priority
@@ -479,19 +490,20 @@ class ServiceInfo(RecordUpdateListener):
         created: Optional[float] = None,
     ) -> List[DNSAddress]:
         """Return matching DNSAddress from ServiceInfo."""
-        name = self.server or self.name
+        name = self.server or self._name
         ttl = override_ttl if override_ttl is not None else self.host_ttl
-        class_ = _CLASS_IN | _CLASS_UNIQUE
+        class_ = _CLASS_IN_UNIQUE
+        version_value = version.value
         return [
             DNSAddress(
                 name,
-                _TYPE_AAAA if address.version == 6 else _TYPE_A,
+                _TYPE_AAAA if type(ip_addr) is IPv6Address else _TYPE_A,
                 class_,
                 ttl,
-                address.packed,
+                ip_addr.packed,
                 created=created,
             )
-            for address in self.ip_addresses_by_version(version)
+            for ip_addr in self._ip_addresses_by_version_value(version_value)
         ]
 
     def dns_pointer(self, override_ttl: Optional[int] = None, created: Optional[float] = None) -> DNSPointer:
@@ -501,34 +513,65 @@ class ServiceInfo(RecordUpdateListener):
             _TYPE_PTR,
             _CLASS_IN,
             override_ttl if override_ttl is not None else self.other_ttl,
-            self.name,
+            self._name,
             created,
         )
 
     def dns_service(self, override_ttl: Optional[int] = None, created: Optional[float] = None) -> DNSService:
         """Return DNSService from ServiceInfo."""
+        port = self.port
+        if TYPE_CHECKING:
+            assert isinstance(port, int)
         return DNSService(
-            self.name,
+            self._name,
             _TYPE_SRV,
-            _CLASS_IN | _CLASS_UNIQUE,
+            _CLASS_IN_UNIQUE,
             override_ttl if override_ttl is not None else self.host_ttl,
             self.priority,
             self.weight,
-            cast(int, self.port),
-            self.server or self.name,
+            port,
+            self.server or self._name,
             created,
         )
 
     def dns_text(self, override_ttl: Optional[int] = None, created: Optional[float] = None) -> DNSText:
         """Return DNSText from ServiceInfo."""
         return DNSText(
-            self.name,
+            self._name,
             _TYPE_TXT,
-            _CLASS_IN | _CLASS_UNIQUE,
+            _CLASS_IN_UNIQUE,
             override_ttl if override_ttl is not None else self.other_ttl,
             self.text,
             created,
         )
+
+    def dns_nsec(
+        self, missing_types: List[int], override_ttl: Optional[int] = None, created: Optional[float] = None
+    ) -> DNSNsec:
+        """Return DNSNsec from ServiceInfo."""
+        return DNSNsec(
+            self._name,
+            _TYPE_NSEC,
+            _CLASS_IN_UNIQUE,
+            override_ttl if override_ttl is not None else self.host_ttl,
+            self._name,
+            missing_types,
+            created,
+        )
+
+    def get_address_and_nsec_records(
+        self, override_ttl: Optional[int] = None, created: Optional[float] = None
+    ) -> Set[DNSRecord]:
+        """Build a set of address records and NSEC records for non-present record types."""
+        missing_types: Set[int] = _ADDRESS_RECORD_TYPES.copy()
+        records: Set[DNSRecord] = set()
+        for dns_address in self.dns_addresses(override_ttl, IPVersion.All, created):
+            missing_types.discard(dns_address.type)
+            records.add(dns_address)
+        if missing_types:
+            assert self.server is not None, "Service server must be set for NSEC record."
+            records.add(self.dns_nsec(list(missing_types), override_ttl, created))
+        return records
 
     def _get_address_records_from_cache_by_type(self, zc: 'Zeroconf', _type: int) -> List[DNSAddress]:
         """Get the addresses from the cache."""
@@ -542,20 +585,21 @@ class ServiceInfo(RecordUpdateListener):
         This function is for backwards compatibility.
         """
         if self.server is None:
-            self.server = self.name
-            self.server_key = self.server.lower()
+            self.server = self._name
+            self.server_key = self.key
 
-    def load_from_cache(self, zc: 'Zeroconf') -> bool:
+    def load_from_cache(self, zc: 'Zeroconf', now: Optional[float] = None) -> bool:
         """Populate the service info from the cache.
 
         This method is designed to be threadsafe.
         """
-        now = current_time_millis()
+        if not now:
+            now = current_time_millis()
         original_server_key = self.server_key
-        cached_srv_record = zc.cache.get_by_details(self.name, _TYPE_SRV, _CLASS_IN)
+        cached_srv_record = zc.cache.get_by_details(self._name, _TYPE_SRV, _CLASS_IN)
         if cached_srv_record:
             self._process_record_threadsafe(zc, cached_srv_record, now)
-        cached_txt_record = zc.cache.get_by_details(self.name, _TYPE_TXT, _CLASS_IN)
+        cached_txt_record = zc.cache.get_by_details(self._name, _TYPE_TXT, _CLASS_IN)
         if cached_txt_record:
             self._process_record_threadsafe(zc, cached_txt_record, now)
         if original_server_key == self.server_key:
@@ -575,7 +619,12 @@ class ServiceInfo(RecordUpdateListener):
         return bool(self.text is not None and (self._ipv4_addresses or self._ipv6_addresses))
 
     def request(
-        self, zc: 'Zeroconf', timeout: float, question_type: Optional[DNSQuestionType] = None
+        self,
+        zc: 'Zeroconf',
+        timeout: float,
+        question_type: Optional[DNSQuestionType] = None,
+        addr: Optional[str] = None,
+        port: int = _MDNS_PORT,
     ) -> bool:
         """Returns true if the service could be discovered on the
         network, and updates this object with details discovered.
@@ -587,21 +636,39 @@ class ServiceInfo(RecordUpdateListener):
         assert zc.loop is not None and zc.loop.is_running()
         if zc.loop == get_running_loop():
             raise RuntimeError("Use AsyncServiceInfo.async_request from the event loop")
-        return bool(run_coro_with_timeout(self.async_request(zc, timeout, question_type), zc.loop, timeout))
+        return bool(
+            run_coro_with_timeout(
+                self.async_request(zc, timeout, question_type, addr, port), zc.loop, timeout
+            )
+        )
 
     async def async_request(
-        self, zc: 'Zeroconf', timeout: float, question_type: Optional[DNSQuestionType] = None
+        self,
+        zc: 'Zeroconf',
+        timeout: float,
+        question_type: Optional[DNSQuestionType] = None,
+        addr: Optional[str] = None,
+        port: int = _MDNS_PORT,
     ) -> bool:
         """Returns true if the service could be discovered on the
         network, and updates this object with details discovered.
+
+        This method will be run in the event loop.
+
+        Passing addr and port is optional, and will default to the
+        mDNS multicast address and port. This is useful for directing
+        requests to a specific host that may be able to respond across
+        subnets.
         """
         if not zc.started:
             await zc.async_wait_for_start()
-        if self.load_from_cache(zc):
+
+        now = current_time_millis()
+
+        if self.load_from_cache(zc, now):
             return True
 
         first_request = True
-        now = current_time_millis()
         delay = _LISTENER_TIME
         next_ = now
         last = now + timeout
@@ -616,8 +683,8 @@ class ServiceInfo(RecordUpdateListener):
                     )
                     first_request = False
                     if not out.questions:
-                        return self.load_from_cache(zc)
-                    zc.async_send(out)
+                        return self.load_from_cache(zc, now)
+                    zc.async_send(out, addr, port)
                     next_ = now + delay
                     delay *= 2
                     next_ += random.randint(*_AVOID_SYNC_DELAY_RANDOM_INTERVAL)
@@ -634,10 +701,13 @@ class ServiceInfo(RecordUpdateListener):
     ) -> DNSOutgoing:
         """Generate the request query."""
         out = DNSOutgoing(_FLAGS_QR_QUERY)
-        out.add_question_or_one_cache(zc.cache, now, self.name, _TYPE_SRV, _CLASS_IN)
-        out.add_question_or_one_cache(zc.cache, now, self.name, _TYPE_TXT, _CLASS_IN)
-        out.add_question_or_all_cache(zc.cache, now, self.server or self.name, _TYPE_A, _CLASS_IN)
-        out.add_question_or_all_cache(zc.cache, now, self.server or self.name, _TYPE_AAAA, _CLASS_IN)
+        name = self._name
+        server_or_name = self.server or name
+        cache = zc.cache
+        out.add_question_or_one_cache(cache, now, name, _TYPE_SRV, _CLASS_IN)
+        out.add_question_or_one_cache(cache, now, name, _TYPE_TXT, _CLASS_IN)
+        out.add_question_or_all_cache(cache, now, server_or_name, _TYPE_A, _CLASS_IN)
+        out.add_question_or_all_cache(cache, now, server_or_name, _TYPE_AAAA, _CLASS_IN)
         if question_type == DNSQuestionType.QU:
             for question in out.questions:
                 question.unicast = True
@@ -645,7 +715,7 @@ class ServiceInfo(RecordUpdateListener):
 
     def __eq__(self, other: object) -> bool:
         """Tests equality of service name"""
-        return isinstance(other, ServiceInfo) and other.name == self.name
+        return isinstance(other, ServiceInfo) and other._name == self._name
 
     def __repr__(self) -> str:
         """String representation"""

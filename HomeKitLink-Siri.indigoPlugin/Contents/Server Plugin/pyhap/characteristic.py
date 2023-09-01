@@ -336,7 +336,7 @@ class Characteristic:
         .. seealso:: accessory.publish
         .. seealso:: accessory_driver.publish
         """
-        immediate = True # TODO self.type_id in IMMEDIATE_NOTIFY
+        immediate = self.type_id in IMMEDIATE_NOTIFY
         self.broker.publish(self.value, self, sender_client_addr, immediate)
 
     # pylint: disable=invalid-name

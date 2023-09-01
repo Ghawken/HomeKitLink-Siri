@@ -1,6 +1,17 @@
 # This contains the main Connection class. Everything in h11 revolves around
 # this.
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Dict,
+    List,
+    Optional,
+    overload,
+    Tuple,
+    Type,
+    Union,
+)
 
 from ._events import (
     ConnectionClosed,
@@ -35,8 +46,7 @@ from ._writers import WRITERS, WritersType
 
 # Everything in __all__ gets re-exported as part of the h11 public API.
 __all__ = ["Connection", "NEED_DATA", "PAUSED"]
-import logging
-logger = logging.getLogger("Plugin.HomeKit_pyHap")
+
 
 class NEED_DATA(Sentinel, metaclass=Sentinel):
     pass
@@ -57,6 +67,7 @@ class PAUSED(Sentinel, metaclass=Sentinel):
 # - IIS: 16 * 1024
 # - Apache: <8 KiB per line>
 DEFAULT_MAX_INCOMPLETE_EVENT_SIZE = 16 * 1024
+
 
 # RFC 7230's rules for connection lifecycles:
 # - If either side says they want to close the connection, then the connection
@@ -489,6 +500,14 @@ class Connection:
             else:
                 raise
 
+    @overload
+    def send(self, event: ConnectionClosed) -> None:
+        ...
+
+    @overload
+    def send(self, event: Event) -> bytes:
+        ...
+
     def send(self, event: Event) -> Optional[bytes]:
         """Convert a high-level event into bytes that can be sent to the peer,
         while updating our internal state machine.
@@ -623,9 +642,8 @@ class Connection:
             # Make sure Connection: close is set
             connection = set(get_comma_header(headers, b"connection"))
             connection.discard(b"keep-alive")
-            if b"close" not in connection:
-                connection.add(b"close")
-                headers = set_comma_header(headers, b"connection", sorted(connection))
+            connection.add(b"close")
+            headers = set_comma_header(headers, b"connection", sorted(connection))
 
         return Response(
             headers=headers,

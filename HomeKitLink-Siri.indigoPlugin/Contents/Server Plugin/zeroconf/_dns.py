@@ -22,11 +22,11 @@
 
 import enum
 import socket
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from ._exceptions import AbstractMethodException
 from ._utils.net import _is_v6_address
-from ._utils.time import current_time_millis, millis_to_seconds
+from ._utils.time import current_time_millis
 from .const import _CLASS_MASK, _CLASS_UNIQUE, _CLASSES, _TYPE_ANY, _TYPES
 
 _LEN_BYTE = 1
@@ -40,6 +40,8 @@ _EXPIRE_FULL_TIME_MS = 1000
 _EXPIRE_STALE_TIME_MS = 500
 _RECENT_TIME_MS = 250
 
+_float = float
+_int = int
 
 if TYPE_CHECKING:
     from ._protocol.incoming import DNSIncoming
@@ -172,41 +174,46 @@ class DNSRecord(DNSEntry):
     def suppressed_by(self, msg: 'DNSIncoming') -> bool:
         """Returns true if any answer in a message can suffice for the
         information held in this record."""
-        return any(self._suppressed_by_answer(record) for record in msg.answers)
+        answers = msg.answers
+        for record in answers:
+            if self._suppressed_by_answer(record):
+                return True
+        return False
 
     def _suppressed_by_answer(self, other) -> bool:  # type: ignore[no-untyped-def]
         """Returns true if another record has same name, type and class,
         and if its TTL is at least half of this record's."""
         return self == other and other.ttl > (self.ttl / 2)
 
-    def get_expiration_time(self, percent: int) -> float:
+    def get_expiration_time(self, percent: _int) -> float:
         """Returns the time at which this record will have expired
         by a certain percentage."""
         return self.created + (percent * self.ttl * 10)
 
     # TODO: Switch to just int here
-    def get_remaining_ttl(self, now: float) -> Union[int, float]:
+    def get_remaining_ttl(self, now: _float) -> Union[int, float]:
         """Returns the remaining TTL in seconds."""
-        return max(0, millis_to_seconds((self.created + (_EXPIRE_FULL_TIME_MS * self.ttl)) - now))
+        remain = (self.created + (_EXPIRE_FULL_TIME_MS * self.ttl) - now) / 1000.0
+        return 0 if remain < 0 else remain
 
-    def is_expired(self, now: float) -> bool:
+    def is_expired(self, now: _float) -> bool:
         """Returns true if this record has expired."""
         return self.created + (_EXPIRE_FULL_TIME_MS * self.ttl) <= now
 
-    def is_stale(self, now: float) -> bool:
+    def is_stale(self, now: _float) -> bool:
         """Returns true if this record is at least half way expired."""
         return self.created + (_EXPIRE_STALE_TIME_MS * self.ttl) <= now
 
-    def is_recent(self, now: float) -> bool:
+    def is_recent(self, now: _float) -> bool:
         """Returns true if the record more than one quarter of its TTL remaining."""
         return self.created + (_RECENT_TIME_MS * self.ttl) > now
 
-    def reset_ttl(self, other: 'DNSRecord') -> None:
+    def reset_ttl(self, other) -> None:  # type: ignore[no-untyped-def]
         """Sets this record's TTL and created time to that of
         another record."""
         self.set_created_ttl(other.created, other.ttl)
 
-    def set_created_ttl(self, created: float, ttl: Union[float, int]) -> None:
+    def set_created_ttl(self, created: _float, ttl: Union[float, int]) -> None:
         """Set the created and ttl of a record."""
         self.created = created
         self.ttl = ttl
@@ -516,7 +523,7 @@ class DNSRRSet:
 
     __slots__ = ('_record_sets', '_lookup')
 
-    def __init__(self, record_sets: Iterable[List[DNSRecord]]) -> None:
+    def __init__(self, record_sets: List[List[DNSRecord]]) -> None:
         """Create an RRset from records sets."""
         self._record_sets = record_sets
         self._lookup: Optional[Dict[DNSRecord, float]] = None
@@ -530,7 +537,10 @@ class DNSRRSet:
         """Return the lookup table, building it if needed."""
         if self._lookup is None:
             # Build the hash table so we can lookup the record ttl
-            self._lookup = {record: record.ttl for record_sets in self._record_sets for record in record_sets}
+            self._lookup = {}
+            for record_sets in self._record_sets:
+                for record in record_sets:
+                    self._lookup[record] = record.ttl
         return self._lookup
 
     def suppresses(self, record: _DNSRecord) -> bool:
