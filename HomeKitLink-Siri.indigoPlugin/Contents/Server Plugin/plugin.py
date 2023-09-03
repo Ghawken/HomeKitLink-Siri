@@ -323,7 +323,8 @@ class Plugin(indigo.PluginBase):
             self.select_interfaces = InterfaceChoice.All
             self.logger.warning("Select_Interface: Advanced plugin Properties in error, using default, please check plugin Config")
 
-        self.apple_2p2 = self.pluginPrefs.get('mDNSapple_p2p', False)
+        #self.apple_2p2 = self.pluginPrefs.get('mDNSapple_p2p', False)
+        self.apple_2p2 = False
         if self.apple_2p2:
             self.logger.info("You have selected the use of Apple Peer to Peer network")
             self.logger.info("This uses apples Apple Wireless Direct Link for communication between this mac and Home Devices ")
@@ -352,7 +353,7 @@ class Plugin(indigo.PluginBase):
 
         if self.HAPAdvertised_ipaddress !=None or self.HAPServeripaddress !=None:
             self.logger.info(f"Using Advanced settings: HAP Server IP {self.HAPServeripaddress} (if NONE will be calculated) with advertised interfaces of: {self.HAPAdvertised_ipaddress}")
-            if self.HAPServeripaddress !=None:
+            if self.HAPServeripaddress !=None and self.HAPAdvertised_ipaddress!=None:
                 if self.HAPServeripaddress not in self.HAPAdvertised_ipaddress:
                     self.logger.warning(f"It would seem that your IP address running HomeKit ({self.HAPServeripaddress}) is not in the advertised IP addresses.  This will likely cause issues, I would suggest you add {self.HAPServeripaddress} to the list of advertised interfaces in advanced config")
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
@@ -360,11 +361,9 @@ class Plugin(indigo.PluginBase):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces,  apple_p2p=self.apple_2p2)
-
-        self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
-
-        self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
+    #    self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces,  apple_p2p=self.apple_2p2)
+     #   self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
+    #    self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
@@ -950,13 +949,13 @@ class Plugin(indigo.PluginBase):
                     manufacturer = item['manufacturername']
                     model = item['devicemodel']
                     serial_number = str(deviceAID)
-                    firmware_version = str(self.pluginVersion)
+                    firmware_version = str(self.pluginVersion).replace(".","")
                     accessory.set_info_service(manufacturer=manufacturer[:MAX_MANUFACTURER_LENGTH], model=model[:MAX_MODEL_LENGTH], serial_number=serial_number[:MAX_SERIAL_LENGTH], firmware_revision=firmware_version[:MAX_VERSION_LENGTH])
                     self.logger.debug("Adding Accessory:{}".format(accessory))
                     bridge.add_accessory(accessory)
 
                     # self.runningAccessoryCount = self.runningAccessoryCount +1
-                    bridge.set_info_service(firmware_revision=self.pluginVersion, manufacturer="Indigo " + self.pluginIndigoVersion, model="HomeKitLink Bridge " + str(bridgenumber), serial_number=str(bridgenumber) + "1244")
+                    bridge.set_info_service(firmware_revision=firmware_version, manufacturer="Indigo " + self.pluginIndigoVersion, model="HomeKitLink Bridge " + str(bridgenumber), serial_number=str(bridgenumber) + "1244")
             self.device_list_internal = self.device_list_internal + extend_device_list
 
             # self.logger.debug("Self.Device_list_internal:\n\n{}\n".format(self.device_list_internal))
@@ -1148,10 +1147,14 @@ class Plugin(indigo.PluginBase):
             # currentPortNumber - has now become starting portNumber - shoudl
             nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
             self.logger.debug("Next Port available:{}".format(nextport))
+           # self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces, apple_p2p=self.apple_2p2)
+           # self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
+           # self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
+            self.logger.debug(f"\nmDNS: Starting Driver listen_address={self.HAPServeripaddress=} && advertised_address={self.HAPAdvertised_ipaddress=}")  ## 2nd []
+            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local" , interface_choice=self.select_ip_version,  address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
 
-            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
-
-           # self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
+            #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
+           #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
 
             self.portsinUse.add(nextport)
             self.logger.debug("Sets of Ports Currently in Use: {}".format(self.portsinUse))

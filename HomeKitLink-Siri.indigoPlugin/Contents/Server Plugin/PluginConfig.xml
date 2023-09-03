@@ -132,7 +132,7 @@
     </Field>
         <Field id="mDNSapple_p2p"
            type="checkbox"
-           tooltip="Use apple_p2p" defaultValue="False" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+           tooltip="Use apple_p2p" defaultValue="False" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true" hidden="true">
         <Label>mDNS Options: use Apple AWDL interface :</Label>
     </Field>
         <Field id="separaterz3224" type="separator"/>

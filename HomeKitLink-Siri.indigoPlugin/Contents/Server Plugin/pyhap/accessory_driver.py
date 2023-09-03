@@ -30,7 +30,7 @@ import threading
 
 from zeroconf import ServiceInfo
 from zeroconf.asyncio import AsyncZeroconf
-from zeroconf import InterfaceChoice, IPVersion, ServiceStateChange
+#from zeroconf import InterfaceChoice, IPVersion, ServiceStateChange
 from typing import Optional
 
 from pyhap import util
@@ -276,39 +276,45 @@ class AccessoryDriver:
             self.tid = threading.main_thread()
             self.executor = None
 
+        logger.debug(f"\n\nInit mDNS: Using interface choices for Zeroconf of {interface_choice=}\n" +
+        f"Init mDNS: Using HAP addresses of {address=}\n" +
+        f"Init mDNS: Using Listen addresses of {listen_address=}\n" +
+        f"Init mDNS: Using Advertised addresses of {advertised_address=}\n" +
+        f"Init mDNS: Using AsyncZeroConf {async_zeroconf_instance}\n" +
+        f"Init mDNS: Using ZeroConf {zeroconf_server=}\n")
         self.loop = loop
        # self.indigodeviceid = indigodeviceid
         self.accessory: Optional[Accessory] = None
         self.advertiser = async_zeroconf_instance
         self.zeroconf_server = zeroconf_server
-
+        self.interface_choice = interface_choice
+        self.advertised_address = advertised_address
         self.persist_file = os.path.expanduser(persist_file)
         self.encoder = encoder or AccessoryEncoder()
         self.topics = {}  # topic: set of (address, port) of subscribed clients
         self.loader = loader or Loader()
         self.aio_stop_event = None
         self.stop_event = threading.Event()
-        self.interface_choice = interface_choice
 
         self.safe_mode = False
 
         self.mdns_service_info = None
         self.srp_verifier = None
-        logger.debug(f"Found address for Zeroconf of {self.interface_choice=}.  Likely not relevant as using Combined Async Zeroconf.")
+
         address = address or util.get_local_address()
-
-        self.interface_choice = interface_choice
-        logger.debug(f"mDNS: Using address for Zeroconf of {self.interface_choice=}")
-        logger.debug(f"mDNS: Using HAP addresses of {address=}")
-        logger.debug(f"mDNS: Using AsyncZeroConf {self.advertiser=}")
-        logger.debug(f"mDNS: Using ZeroConf {self.zeroconf_server=}")
-
         advertised_address = advertised_address or address
         self.state = State(
             address=advertised_address, mac=mac, pincode=pincode, port=port
         )
 
         listen_address = listen_address or address
+        logger.debug(f"\nmDNS: Using interface choices for Zeroconf of {self.interface_choice=}\n" +
+        f"mDNS: Using HAP addresses of {address=}\n" +
+        f"mDNS: Using Listen addresses of {listen_address=}\n" +
+        f"mDNS: Using Advertised addresses of {advertised_address=}\n" +
+        f"mDNS: Using AsyncZeroConf {self.advertiser=}\n" +
+        f"mDNS: Using ZeroConf {self.zeroconf_server=}\n")
+
         network_tuple = (listen_address, self.state.port)
         self.http_server = HAPServer(network_tuple, self)
         self.prepared_writes = {}
@@ -381,7 +387,7 @@ class AccessoryDriver:
         self.aio_stop_event = asyncio.Event()
 
         logger.info(
-            "Starting accessory %s with advertised addresses %s with port %s.",
+            "mDNS: Starting accessory %s with advertised addresses %s with port %s.",
             self.accessory.display_name,
             self.state.addresses,
             self.state.port,
@@ -399,7 +405,7 @@ class AccessoryDriver:
             self.async_persist()
 
         # Advertise the accessory as a mDNS service.
-        logger.debug(f"Starting mDNS.{self.accessory}  {self.state}  {self.zeroconf_server}")
+        logger.debug(f"Starting mDNS. {self.accessory=}  {self.state=}  {self.zeroconf_server=}")
         self.mdns_service_info = AccessoryMDNSServiceInfo(
             self.accessory, self.state, self.zeroconf_server
         )
@@ -407,7 +413,12 @@ class AccessoryDriver:
         if not self.advertiser:
             zc_args = {}
             if self.interface_choice is not None:
-                zc_args["interfaces"] = self.interface_choice
+                zc_args["ip_version"] = self.interface_choice
+            if self.advertised_address is not None:
+                if isinstance(self.advertised_address, str):
+                    zc_args["interfaces"] = self.advertised_address
+                else:
+                    zc_args["interfaces"] = [self.advertised_address]
             self.advertiser = AsyncZeroconf(**zc_args)  ## create new zeroconf async - with arguments.
             logger.debug(f"mDNS Creating own instance of AsyncZeroconf with standard arguments.  {zc_args=}")
         else:
