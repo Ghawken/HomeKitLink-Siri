@@ -387,7 +387,7 @@ class AccessoryDriver:
         self.aio_stop_event = asyncio.Event()
 
         logger.info(
-            "mDNS: Starting accessory %s with advertised addresses %s with port %s.",
+            "Starting accessory %s with advertised addresses %s with port %s.",
             self.accessory.display_name,
             self.state.addresses,
             self.state.port,
