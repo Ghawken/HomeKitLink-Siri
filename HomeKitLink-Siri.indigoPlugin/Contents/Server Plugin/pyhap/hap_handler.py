@@ -5,7 +5,7 @@ The HAPServerHandler manages the state of the connection and handles incoming re
 import asyncio
 from http import HTTPStatus
 import logging
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Any
 from urllib.parse import ParseResult, parse_qs, urlparse
 import uuid
 import async_timeout
@@ -88,7 +88,7 @@ class HAP_TLV_TAGS:
     ERROR_CODE = b"\x07"
     PROOF = b"\x0A"
     PERMISSIONS = b"\x0B"
-
+    SEPARATOR = b"\xFF"
 
 class UnprivilegedRequestException(Exception):
     pass
@@ -148,7 +148,7 @@ class HAPServerHandler:
         """
         self.accessory_handler: AccessoryDriver = accessory_handler
         self.state: State = self.accessory_handler.state
-        self.enc_context = None
+        self.enc_context: Optional[Dict[str, Any]] = None
         self.client_address = client_address
         self.is_encrypted = False
         self.client_uuid: Optional[uuid.UUID] = None
@@ -568,24 +568,24 @@ class HAPServerHandler:
 
         dec_tlv_objects = tlv.decode(bytes(decrypted_data))
         client_username = dec_tlv_objects[HAP_TLV_TAGS.USERNAME]
-        material = (
-            self.enc_context["client_public"]
-            + client_username
-            + self.enc_context["public_key"].public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw,
-            )
+        public_key: x25519.X25519PublicKey = self.enc_context["public_key"]
+        raw_public_key = public_key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
         )
+        material = self.enc_context["client_public"] + client_username + raw_public_key
 
         client_uuid = uuid.UUID(str(client_username, "utf-8"))
         perm_client_public = self.state.paired_clients.get(client_uuid)
         if perm_client_public is None:
             logger.debug(
-                "%s: Client %s with uuid %s attempted pair verify without being paired first (paired clients=%s).",
+                "%s: Client %s with uuid %s attempted pair verify "
+                "without being paired first (public_key=%s, paired clients=%s).",
+                self.accessory_handler.accessory.display_name,
                 self.client_address,
                 client_uuid,
-                self.state.paired_clients,
-                self.accessory_handler.accessory.display_name,
+                raw_public_key.hex(),
+                {uuid: key.hex() for uuid, key in self.state.paired_clients.items()},
             )
             logger.info(f"Home app Client with IP address {self.client_address} appears incompatible with this version of homekit.   It attempted to connect to Bridge {self.accessory_handler.accessory.display_name} and this connection failed to verify. ")
             logger.info(f"Typically this means this client hasn't been updated to latest OS version, or is incompatible with it.  This needs to be addressed with the Client Home App.  See forum for more details as needed.")
@@ -779,8 +779,14 @@ class HAPServerHandler:
                     client_public,
                     HAP_TLV_TAGS.PERMISSIONS,
                     HAP_PERMISSIONS.ADMIN if admin else HAP_PERMISSIONS.USER,
+                    HAP_TLV_TAGS.SEPARATOR,
+                    b"",
                 ]
             )
+        if response[-2] == HAP_TLV_TAGS.SEPARATOR:
+            # The last pairing should not have a separator
+            response.pop()
+            response.pop()
 
         data = tlv.encode(*response)
         self._send_tlv_pairing_response(data)
