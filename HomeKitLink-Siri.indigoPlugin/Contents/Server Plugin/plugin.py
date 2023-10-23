@@ -2494,6 +2494,8 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug("Plugin getter Called: Indigo DeviceID {} State {} ".format(accessoryself.indigodeviceid, statetoGet))
                     return
                 ## First check if sensor device and then easy - use sensorValue
+                if self.debug4:
+                    self.logger.debug(f"Checking: Type:IndigoDevice {type(indigodevice)} {statetoGet=} and {sensortouse=}")
                 if type(indigodevice) == indigo.SensorDevice:
                     ## should default to selected state
                     if sensortouse not in ("sensorValue", "onOffState"):
@@ -2512,12 +2514,27 @@ class Plugin(indigo.PluginBase):
                             return indigodevice.states["onOffState"]
                     if "sensorValue" in indigodevice.states:
                         if self.debug4:
-                            self.logger.debug("Found a Sensor value, using that")
-                        sensorvalue = indigodevice.states["sensorValue"]
-                        if type(sensorvalue) in (float, int):
-                            if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
-                                sensorvalue = 100000  ## true / false results thought... should never be greater but will be less than... should be okay
-                        return sensorvalue
+                            self.logger.debug(f"SensorValue:  {indigodevice.states['sensorValue']}")
+                        if indigodevice.states["sensorValue"] != None:
+                            sensorvalue = indigodevice.states["sensorValue"]
+                            if self.debug4:
+                                self.logger.debug(f"Found a Sensor value {sensorvalue}, using that")
+                            if type(sensorvalue) in (float, int):
+                                if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
+                                    sensorvalue = 100000  ## true / false results thought... should never be greater but will be less than... should be okay
+                            return sensorvalue
+                        else:
+                            ##  sensortouse likely blank, and sensorValue None
+                            if "onOffState" in indigodevice.states:
+                                if self.debug4:
+                                    self.logger.debug("Found onOffState using that..")
+                                return indigodevice.states["onOffState"]
+                    else:
+                     ##  sensortouse likely blank, and sensorValue None
+                        if "onOffState" in indigodevice.states:
+                            if self.debug4:
+                                self.logger.debug("Found onOffState using that..")
+                            return indigodevice.states["onOffState"]
                 ## else check internal list for sensor State that we wish to return back
                 else:  ## if another device use the selectred state
                     if sensortouse != "":
@@ -2529,6 +2546,11 @@ class Plugin(indigo.PluginBase):
                             if self.debug4:
                                 self.logger.debug("Device {} + SensorValue:{} + type(sensorValue) {}".format(indigodevice.name, sensorvalue, type(sensorvalue)))
                             return sensorvalue  # indigodevice.states[sensortouse]
+                    else:
+                        if "onOffState" in indigodevice.states:
+                            if self.debug4:
+                                self.logger.debug("SensortoUse Empty and found onOffState using that..")
+                            return indigodevice.states["onOffState"]
 
             if statetoGet == "onOffState":
                 # attempt to get onOffState
