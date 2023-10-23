@@ -26,6 +26,8 @@ from pyhap.const import (
 )
 
 from pyhap.iid_manager import AccessoryIIDStorage, HomeIIDManager
+from pyhap.service import Service
+from pyhap.characteristic import Characteristic
 
 import time
 
@@ -1665,6 +1667,91 @@ class Lock(HomeAccessory):
         value = self.plugin.Plugin_getter_callback(self, "lockState")
         return value
 
+class LockNew(HomeAccessory):
+    ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
+    category = CATEGORY_DOOR_LOCK
+
+    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
+        super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        serv_lock = self.add_preload_service("LockMechanism")
+        self.char_current_state = serv_lock.configure_char( 'LockCurrentState', value=3 , getter_callback=self.get_lock)  ## 3 == unknown at startup
+        self.char_target_state = serv_lock.configure_char("LockTargetState", setter_callback=self.set_lock, getter_callback=self.get_lock)
+
+        self.service_lock_management: Service = self.add_preload_service("LockManagement")
+        self.lock_control_point: Characteristic = self.service_lock_management.configure_char(
+            "LockControlPoint",
+            setter_callback=self.set_lock_control_point,
+        )
+        self.lock_control_point: Characteristic = self.service_lock_management.configure_char(
+            "Version",
+            getter_callback=self.get_lock_version,
+        )
+        self.service_nfc_access: Service = self.add_preload_service("NFCAccess")
+        self.char_configuration_state: Characteristic = self.service_nfc_access.configure_char(
+            "ConfigurationState",
+            getter_callback=self.get_configuration_state
+        )
+        self.char_nfc_access_supported_configuration: Characteristic = self.service_nfc_access.configure_char(
+            "NFCAccessSupportedConfiguration",
+            getter_callback=self.get_nfc_access_supported_configuration
+        )
+        self.char_nfc_access_control_point: Characteristic = self.service_nfc_access.configure_char(
+            "NFCAccessControlPoint",
+            getter_callback=self.get_nfc_access_control_point,
+            setter_callback=self.set_nfc_access_control_point,
+        )
+    ## The below runs once on creation of bridge/accessory to return the hook back to this accessory object
+    ##
+    # def add_info_service(self):
+    #     serv_info: Service = self.driver.loader.get_service("AccessoryInformation")
+    #     serv_info.configure_char("Name", value=self.display_name)
+    #     serv_info.configure_char("SerialNumber", value="default")
+    #     serv_info.add_characteristic(self.driver.loader.get_char("HardwareFinish"))
+    #     serv_info.configure_char("HardwareFinish", value="AQTj4+MA") # Silver color
+
+
+    def get_configuration_state(self):
+        logger.error(f"get_configuration_state")
+        return 0
+
+    def get_nfc_access_supported_configuration(self):
+       logger.error(f"get_nfc_access_supported_configuration")
+       return "AQEQAgEQ"
+
+    def get_nfc_access_control_point(self):
+        logger.error(f"get_nfc_access_control_point")
+        return ""
+
+    def set_nfc_access_control_point(self,value):
+        logger.error(f"set_nfc_access_control_point {value}")
+        return ""
+
+    def set_lock_control_point(self,value):
+        logger.error(f"set_lock_control_point: {value}")
+
+    def get_lock_version(self):
+        logger.error(f"get_lock_version")
+        return ""
+
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def set_lock(self, char_values):
+        if self.plugin.debug6:
+            logger.debug(f"Set Lock Values:{char_values}")
+        self.plugin.Plugin_setter_callback(self, "lockState", char_values)
+        ## correct onOffState to get, not for set
+        ##
+
+    def get_lock(self):
+        value = self.plugin.Plugin_getter_callback(self, "lockState")
+        return value
+
 class DoorDoor(HomeAccessory):
 
     category = CATEGORY_DOOR
@@ -2203,13 +2290,20 @@ class MotionSensor(HomeAccessory):
             self._char_low_battery = serv_battery.configure_char(
                 "StatusLowBattery", value=0            )
 
-        self.char_on = serv_temp.configure_char( 'MotionDetected', value=False) # set to false at startupgetter_callback=self.get_bulb)
+        self.char_on = serv_temp.configure_char( 'MotionDetected', getter_callback=self.get_motion) # set to false at startupgetter_callback=self.get_bulb)
         serv_temp.setter_callback = self._set_chars
 
     async def run(self):
         if self.plugin.debug6:
             logger.debug("Run called once, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def get_motion(self):
+        value = self.plugin.Plugin_getter_callback(self, "motionSensor")
+        if not isinstance(value, bool):
+            logger.error(f"MotionSensor: Indigo DeviceID {self.indigodeviceid}.  Error: Value returned is not True/False.")
+            return False
+        return value
 
     # def set_bulb(self, value):
     #     if self.plugin.debug6:
@@ -2228,7 +2322,8 @@ class MotionSensor(HomeAccessory):
         """
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
-
+## The below shouldn't be used for true/false sensor or custom device being published as a Motion Sensor
+## However leaving it in as there are fringe cases of lights as motion sensor where may be used.
         if "On" in char_values:
             if self.plugin.debug6:
                 logger.debug('On changed to: {}, sending to Indigo'.format( char_values["On"]))
