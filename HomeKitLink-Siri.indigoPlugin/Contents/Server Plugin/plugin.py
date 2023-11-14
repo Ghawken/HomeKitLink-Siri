@@ -260,6 +260,14 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Plugin ID:", pluginId))
         self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version) )
         self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
+        self.ffmpeg_command_line = "-x86"  ## default to x86
+        if platform.machine() == "x86_64":
+            self.ffmpeg_command_line = "-x86"
+            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Intel Silicon using x86"))
+        else:
+            self.ffmpeg_command_line = "-arm"
+            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Apple Silicon using Arm"))
+
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
         self.logger.info("")
