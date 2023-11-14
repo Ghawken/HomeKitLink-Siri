@@ -260,6 +260,7 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Plugin ID:", pluginId))
         self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version) )
         self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
+
         self.ffmpeg_command_line = "-x86"  ## default to x86
         if platform.machine() == "x86_64":
             self.ffmpeg_command_line = "-x86"
@@ -305,13 +306,6 @@ class Plugin(indigo.PluginBase):
             logging.getLogger("zeroconf").setLevel(logging.ERROR)
 
         self.ffmpeg_lastCommand = []
-        self.ffmpeg_command_line = "-x86"  ## default to x86
-        if platform.machine() == "x86_64":
-            self.ffmpeg_command_line = "-x86"
-            self.logger.info("Detected Intel silicon, setting ffmpeg to use version x86")
-        else:
-            self.ffmpeg_command_line = "-arm"
-            self.logger.info("Detected Apple Silicon, setting ffmpeg to use version ARM")
 
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
