@@ -367,7 +367,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             if extra_cmd !=None:
                 cmd = extra_cmd + cmd
 
-            cmd.insert(0,"./ffmpeg/ffmpeg")
+            cmd.insert(0,"./ffmpeg/ffmpeg"+str(self.plugin.ffmpeg_command_line) )
             # if self.plugin.debug7:
             #     cmd.insert(len(cmd),"-loglevel")
             #     cmd.insert(len(cmd),"48")
