@@ -1997,9 +1997,9 @@ class Plugin(indigo.PluginBase):
                                 self.logger.debug("OnOffState Changed...and New State {}".format(newstate))
                             if self.debug2:
                                 self.logger.debug("OnOffState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            if newstate:  ##
-                                self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
-                                self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
+                            ## Trigger doorbell if state change, rather than just On.if newstate:  ##
+                            self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
+                            self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
                     # if Doorbell nothing further to do... return regardless
                     return
 
@@ -2035,7 +2035,7 @@ class Plugin(indigo.PluginBase):
                             if isinstance(speedLevel, int):
                                 self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(speedLevel)
 
-                elif str(updateddevice_subtype) in ("Blind", "Window"):
+                elif str(updateddevice_subtype) in ("Blind", "Window", "Door"):
                     if "brightnessLevel" in updated_device.states:
                         if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
                             brightness = updated_device.states["brightnessLevel"]
@@ -2105,7 +2105,7 @@ class Plugin(indigo.PluginBase):
                                         self.device_list_internal[checkindex]["accessory"].Saturation.notify()
                                         self.device_list_internal[checkindex]["accessory"].char_color_temp.notify()
 
-                if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window"):   ## work around to remnove this TODO
+                if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window","Door"):   ## work around to remnove this TODO
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
                         if self.debug2:
