@@ -240,42 +240,26 @@ class Accessory:
         Installation through `pip install HAP-python[QRCode]`
         """
         pincode = self.driver.state.pincode.decode()
-       # logger.info('Enter this code in your HomeKit app on your iOS device: {}'
-     #   .format(pincode))
-
-        SUPPORT_QR_CODE = True
-
         if SUPPORT_QR_CODE:
             xhm_uri = self.xhm_uri()
-
-           # logger.info(f"Setup payload: {xhm_uri}")
-            logger.info(
-                "Scan the QR code with your HomeKit app on your iOS device:"           )
-            logger.info("Select Device QR button to Display QR Code, or use pincode.")
-      #      logger.info(QRCode(xhm_uri).terminal(quiet_zone=2))
-          #  textcode = QRCode(xhm_uri).text(quiet_zone=8)
-            image_as_str = QRCode(xhm_uri).png_as_base64_str(scale=5)
-            html_img = '''<div><h1>HomeKitLink Siri</h1>
-  <p>  Indigo Plugin: Scan this QR Code to add HomeKitLink Siri Bridge to HomeKit</p>
-  <img src="data:image/png;base64,{}" width="600" height="600">'''.format(image_as_str)
-            html_img = html_img + "</div>"
-            #builtins.QRCodeurl = html_img
-        #    logger.info(html_img)
-          #  webbrowser.get().open_new(html_img)
-         #   logger.info("\n\n"+textcode+"\n\n")
-
-            logger.debug(
-                f"Or enter this code in your HomeKit app on your iOS device: {pincode}"          )
-            return (html_img, pincode)
-
+            print(f"Setup payload: {xhm_uri}", flush=True)
+            print(
+                "Scan this code with your HomeKit app on your iOS device:", flush=True
+            )
+            print(QRCode(xhm_uri).terminal(quiet_zone=2), flush=True)
+            print(
+                f"Or enter this code in your HomeKit app on your iOS device: {pincode}",
+                flush=True,
+            )
         else:
-
-
-            logger.info(
-                "To use the QR Code feature, use 'pip install " "HAP-python[QRCode]'")
-            logger.info(
-                f"Enter this code in your HomeKit app on your iOS device: {pincode}"            )
-            return (None,pincode)
+            print(
+                "To use the QR Code feature, use 'pip install HAP-python[QRCode]'",
+                flush=True,
+            )
+            print(
+                f"Enter this code in your HomeKit app on your iOS device: {pincode}",
+                flush=True,
+            )
 
     @staticmethod
     def run_at_interval(seconds):
