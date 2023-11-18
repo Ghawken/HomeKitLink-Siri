@@ -65,6 +65,7 @@ DOORBELL_SINGLE_PRESS = 0
 DOORBELL_DOUBLE_PRESS = 1
 DOORBELL_LONG_PRESS = 2
 
+
 VIDEO_OUTPUT = (
     "-map {v_map} "#-an "
     "-c:v {v_codec} "
