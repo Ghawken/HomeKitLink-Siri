@@ -281,7 +281,8 @@ class Camera(HomeAccessory,  PyhapCamera):
                             valid_values={"SinglePress": 0},
                         )
                     )
-
+                    serv_speaker = self.add_preload_service("Speaker")
+                    serv_speaker.configure_char("Mute", value=0)
 
     async def run(self):
         #if self.plugin.debug6:

@@ -928,7 +928,7 @@ class Plugin(indigo.PluginBase):
                         if "BI_imageURL" in cameraoptions:
                             self.listofenabledcameras.append(cameraoptions)
                         device_add_id = indigodevice.pluginProps.get("HomeKit_doorbellId", "")
-                        DoorBelldeviceAID = int(str(bridgenumber) + str(device_add_id))
+                        #DoorBelldeviceAID = int(str(bridgenumber) + str(device_add_id))
                         if device_add_id != "":  ## Doorbell ID exists  ## internal list = deviceid = okay to use for accessory but not here..
                             # self.runningAccessoryCount = self.runningAccessoryCount +1
                             extend_device_list.append({"deviceid": int(device_add_id),
