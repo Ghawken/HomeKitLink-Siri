@@ -6,6 +6,10 @@
         <Name>Show Device Publications</Name>
         <CallbackMethod>show_device_publications</CallbackMethod>
     </MenuItem>
+    <MenuItem id="showmissingids-show">
+        <Name>Identify Devices Running /  Not Running</Name>
+        <CallbackMethod>Menu_show_runningids</CallbackMethod>
+    </MenuItem>
     <MenuItem id="sepa1"/>
     <MenuItem id="toggleDebug">
         <Name>Toggle Debugging</Name>

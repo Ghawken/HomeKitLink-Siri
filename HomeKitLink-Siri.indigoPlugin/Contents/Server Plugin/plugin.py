@@ -306,6 +306,7 @@ class Plugin(indigo.PluginBase):
             logging.getLogger("zeroconf").setLevel(logging.ERROR)
 
         self.ffmpeg_lastCommand = []
+        self.running_deviceids = []   ## list of running device ids to get list of non running ids
 
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
@@ -597,6 +598,9 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug("Removed Thread object {}".format(threadtobedeleted))
 
                 self.logger.info("{} has completed full Bridge, Driver and Bridge Thread Shutdown.".format(device.name))
+
+                ##########################################################################
+
                 self.logger.debug(f"Now updating internal lists of active devices, for BridgeID {checkid}")
                 for item in self.device_list:
                     try:
@@ -624,6 +628,8 @@ class Plugin(indigo.PluginBase):
                                     # it should be in this below list as should match above only containing IDs
                                     if device.id in self.device_list_internal_idonly:
                                         self.device_list_internal_idonly.remove(device.id)
+                                    if device.id in self.running_deviceids:
+                                        self.running_deviceids.remove(device.id)
                     except:
                             self.logger.exception("Issue updating internal lists...")
 
@@ -696,7 +702,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info("{} Home Kit Accessories are now Started.".format(self.runningAccessoryCount))
 
             if int(self.count) > int(self.runningAccessoryCount):
-                self.logger.info('Given this difference, please review devices by Select Menu Item, Show Device Publications for more information.')
+                self.logger.info('Given this difference, please review devices by Menu Item, Show Device Publications & Identity Devices Running for more information.')
 
 
             self.sleep(10)
@@ -2805,6 +2811,7 @@ class Plugin(indigo.PluginBase):
                 self.device_list_internal[check]["accessory"] = accessoryself
                 # below doesn't catch those without callback == temp sensors - but they still need callback...
                 self.runningAccessoryCount = self.runningAccessoryCount + 1
+                self.running_deviceids.append(accessoryself.indigodeviceid)
                 ## if checking and camera, add callback if DoorBell Accessory exists to same accessory as Camera...
                 self.logger.debug("{}".format(accessoryself.services))
                 check_doorbell = None
@@ -2820,8 +2827,9 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Found DoorBell ID in Accessory. = {} \nSearching self.device_list_internal for it..".format(accessoryself.doorbellID))
                         doorbell_ID_Found = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == int(accessoryself.doorbellID)), None)
                         if doorbell_ID_Found != None:
-                            self.logger.debug("Check DoorBell Found: {}".format(doorbell_ID_Found))
+                            self.logger.debug(f"Check DoorBell Found: id: {accessoryself.doorbellID}")
                             self.device_list_internal[doorbell_ID_Found]["accessory"] = accessoryself
+                            self.running_deviceids.append(accessoryself.doorbellID)
 
                 if self.debug4:
                     self.logger.debug("{}".format(accessoryself))
@@ -3942,6 +3950,42 @@ class Plugin(indigo.PluginBase):
     def Menu_reset_pairing(self, *args, **kwargs):
         self.logger.debug("reset Paired Clients called...")
         self.logger.info("{}".format())
+
+    def Menu_show_runningids(self, *args, **kwargs):
+        self.logger.debug("Show Running Ids called...")
+        self.logger.info(u"{0:=^190}".format(""))
+        self.logger.info(u"{0:=^190}".format(" Device Bridges enabled and up and Running "))
+        self.logger.info(u"{0:=^190}".format(""))
+        for num in range(0,len(self.running_deviceids)):
+            device = self.return_deviceorAG(self.running_deviceids[num])
+            device_props = dict(device.pluginProps)
+            devicename = device_props.get("homekit-name", "")
+            deviceType = device_props.get("HomeKit_deviceSubtype", "")
+            devicesensor = device_props.get("HomeKit_deviceSensor", "")
+            try:
+                deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+            except ValueError:
+                deviceBridgeID = 99
+            self.logger.info("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
+
+        missing_id = list(set(self.device_list_internal_idonly).difference(self.running_deviceids))
+        self.logger.info(u"{0:=^190}".format(""))
+        self.logger.info(u"{0:=^190}".format(" Enabled Bridge, yet not Running Devices "))
+        self.logger.info(u"{0:=^190}".format(""))
+        for num in range(0, len(missing_id) ):
+            device = self.return_deviceorAG(missing_id[num])
+            device_props = dict(device.pluginProps)
+            devicename = device_props.get("homekit-name", "")
+            deviceType = device_props.get("HomeKit_deviceSubtype", "")
+            devicesensor = device_props.get("HomeKit_deviceSensor", "")
+            try:
+                deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+            except ValueError:
+                deviceBridgeID = 99
+            self.logger.warning("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
+        self.logger.info(u"{0:=^190}".format(""))
+
+        #self.logger.info(f"{missing_id}")
 
     def Menu_Crash(self, *args, **kwargs):
         self.logger.debug("Crash Homekit Called... ..")
