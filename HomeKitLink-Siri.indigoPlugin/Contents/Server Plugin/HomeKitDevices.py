@@ -133,7 +133,6 @@ class TemperatureSensor(HomeAccessory):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
-
         ## Add below for all Sensor Device Types
         self._char_battery = None
         self._char_charging = None
@@ -151,12 +150,10 @@ class TemperatureSensor(HomeAccessory):
             self._unit = TEMP_CELSIUS
 
         # add battery service to each Sensor - prelim below
-        indigodevice = indigo.devices[indigodeviceid]
         batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
         if batterySupported:
             if "batteryLevel" in indigodevice.states:
                 batteryLevel = HKutils.convert_to_float(indigodevice.states["batteryLevel"])
-
         serv_temp = self.add_preload_service('TemperatureSensor')
 
         if batteryLevel:
@@ -180,8 +177,12 @@ class TemperatureSensor(HomeAccessory):
 
     def set_temperature(self, temperature):
         if self.plugin.debug6:
-            logger.debug(f"Updating Temp: {temperature} and setting Converted value {self._temperature_to_homekit(temperature)}")
-        self.char_temp.set_value(self._temperature_to_homekit(temperature))
+            logger.debug(f"Updating Temp: {temperature} and setting Converted value {HKutils.temperature_to_homekit((HKutils.convert_to_float(temperature)), self._unit)}")
+        if (temperature := HKutils.convert_to_float(temperature)) is not None:
+            temperature = HKutils.temperature_to_homekit(temperature, self._unit)
+            self.char_temp.set_value(temperature)
+            #return temperature
+       # self.char_temp.set_value(self._temperature_to_homekit(temperature))
 
     async def run(self):
         if self.plugin.debug6:
@@ -190,7 +191,10 @@ class TemperatureSensor(HomeAccessory):
 
     def get_temp(self):
         value = self.plugin.Plugin_getter_callback(self, "temperature")
-        return self._temperature_to_homekit(HKutils.convert_to_float(value))
+        if (temperature := HKutils.convert_to_float(value)) is not None:
+            temperature = HKutils.temperature_to_homekit(temperature, self._unit)
+            return temperature
+        #return self._temperature_to_homekit(HKutils.convert_to_float(value))
 
     def _set_chars(self, char_values):
         """This will be called every time the value of one of the
@@ -286,8 +290,6 @@ class CarbonDioxideSensor(HomeAccessory):
             is_low_battery = 1 if batteryLevel < self.plugin.low_battery_threshold else 0
             self._char_low_battery = serv_battery.configure_char(
                 "StatusLowBattery", value=is_low_battery   )
-
-
         self.char_on = serv_temp.configure_char('CarbonDioxideDetected',  getter_callback=self.get_temp)
         serv_temp.setter_callback = self._set_chars  ## Setter for everything
 

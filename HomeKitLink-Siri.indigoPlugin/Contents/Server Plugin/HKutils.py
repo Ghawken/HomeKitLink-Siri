@@ -59,7 +59,6 @@ def coerce_int(state: str) -> int:
 
 def temperature_to_homekit(temperature: float | int, unit: str) -> float:
     """Convert temperature to Celsius for HomeKit."""
-
     return round(convert(temperature, unit, TEMP_CELSIUS), 1)
 
 def fahrenheit_to_celsius(fahrenheit: float, interval: bool = False) -> float:

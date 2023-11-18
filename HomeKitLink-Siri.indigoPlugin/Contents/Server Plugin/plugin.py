@@ -597,6 +597,35 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug("Removed Thread object {}".format(threadtobedeleted))
 
                 self.logger.info("{} has completed full Bridge, Driver and Bridge Thread Shutdown.".format(device.name))
+                self.logger.debug(f"Now updating internal lists of active devices, for BridgeID {checkid}")
+                for item in self.device_list:
+                    try:
+                        ## just a list of item numbers all goodies stored in deviceProps
+                        device = self.return_deviceorAG(item)  # indigo.devices[item]
+                        if device == None:
+                            self.logger.debug("Error with this device ID {}.  Skipping.".format(item))
+                            continue
+                        device_props = dict(device.pluginProps)
+                      #  devicename = device_props.get("homekit-name", "")
+                      #  deviceType = device_props.get("HomeKit_deviceSubtype", "")
+                      #  deviceSensor = device_props.get("HomeKit_deviceSensor", "")
+                ## update internal list now a bridge is stopped.
+                        try:
+                            bridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+                        except ValueError:
+                            bridgeID = 99
+                        if bridgeID == checkid:  ## Current shutting down Bridge ID number
+                            if device.id in self.device_list_internal_idonly:
+                                # It's one we care about
+                                checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
+                                if checkindex != None:
+                                    self.logger.debug("Removing item:{}".format(self.device_list_internal[checkindex]))
+                                    del self.device_list_internal[checkindex]
+                                    # it should be in this below list as should match above only containing IDs
+                                    if device.id in self.device_list_internal_idonly:
+                                        self.device_list_internal_idonly.remove(device.id)
+                    except:
+                            self.logger.exception("Issue updating internal lists...")
 
         except:
             self.logger.debug("Exception in DeviceStopCom \n", exc_info=True)
@@ -718,7 +747,9 @@ class Plugin(indigo.PluginBase):
 
     def create_deviceList_internal(self):
         self.logger.debug("create Device List Internal called")
+        #  ? Can't delete list as everydevice startup
         # self.device_list_internal = []
+        # self.device_list_internal_idonly = []
 
         for item in self.device_list:
             try:
@@ -731,7 +762,7 @@ class Plugin(indigo.PluginBase):
                 device_props = dict(device.pluginProps)
                 devicename = device_props.get("homekit-name", "")
                 deviceType = device_props.get("HomeKit_deviceSubtype", "")
-
+                deviceSensor = device_props.get("HomeKit_deviceSensor","")
                 # Move to subtype reflecting plugins belief as to type of Accessory
                 # Currently Lightbulb can reflect Lightbulb_switch, HueLightBulb and now ColorTempLightBulb
                 # May be others eg. Fan -- I should look at.  Again this subtype reflects the HK Accessory plugin creates
@@ -2077,6 +2108,9 @@ class Plugin(indigo.PluginBase):
                             self.logger.warning("onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                         self.device_list_internal[checkindex]["accessory"].char_on.set_value(newstate)
 
+        except (AttributeError):
+            self.logger.info(f"HomekitLink Published Device: {original_device.name} caused a Nonetype error, this usually means device, or entire bridge has not correctly started.")
+            self.logger.debug("Caught exception in Device Update", exc_info=True)
         except:
             self.logger.debug("Caught exception in Device Update", exc_info=True)
         ## Motion Detected
