@@ -2,10 +2,10 @@
 import asyncio
 from datetime import timedelta
 import logging
-
+from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 import aiofiles
-
-import os
+from typing import Any
+from HKutils import pid_is_alive
 import time as t
 
 
@@ -115,6 +115,11 @@ AUDIO_OUTPUT2 = (
     "localrtcpport={a_port}&pkt_size=188"#{a_pkt_size}"
 )
 
+FFMPEG_WATCH_INTERVAL = timedelta(seconds=5)
+FFMPEG_LOGGER = "ffmpeg_logger"
+FFMPEG_WATCHER = "ffmpeg_watcher"
+FFMPEG_PID = "ffmpeg_pid"
+SESSION_ID = "session_id"
 
 AUDIO_OUTPUT = (
     "-map {a_map} -vn "
@@ -233,6 +238,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             "srtp": True,
             "stream_count": config[CONF_STREAM_COUNT],
         }
+        self.base_config = config
 
     #   super().__init__(driver, plugin, indigodeviceid, display_name, aid)  # *args, **kwargs)
     #   def __init__(self, driver, plugin, indigodeviceid, display_name, aid):  # self, *args, **kwargs):
@@ -295,17 +301,16 @@ class Camera(HomeAccessory,  PyhapCamera):
         """Start a new stream with the given configuration."""
         try:
             _LOGGER.debug(
-                "[%s] Starting stream -I'm Here2- with the following parameters: %s",
+                "[%s] Starting stream -I'm Here 2- with the following parameters: %s",
                 session_info["id"],
                 stream_config
             )
+            self.base_config = stream_config
 
             input_source = self.config.get(CONF_STREAM_SOURCE)
-            extra_commands = self.config.get("start_commands_extra", None)
+            extra_commands = self.config.get("start_commands_extra", "")
 
             _LOGGER.debug("Input Source\n{}".format(input_source))
-
-
 
             video_profile = ""
             if self.config[CONF_VIDEO_CODEC] != "copy":
@@ -327,7 +332,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                 {
                     "v_profile": video_profile,
                 #    "v_max_bitrate" : stream_config["v_max_bitrate"] *4,
-                    "v_bufsize": stream_config["v_max_bitrate"] * 8,
+                    "v_bufsize": stream_config["v_max_bitrate"] * 4,
                     "v_map": self.config[CONF_VIDEO_MAP],
                     "fps": self.config[CONF_MAX_FPS],
                     "v_pkt_size": self.config[CONF_VIDEO_PACKET_SIZE],
@@ -341,11 +346,10 @@ class Camera(HomeAccessory,  PyhapCamera):
             )
             output = VIDEO_OUTPUT.format(**output_vars)
 
-
-
             if self.config[CONF_SUPPORT_AUDIO]:
                 output = output + " " + AUDIO_OUTPUT.format(**output_vars)
 
+            _LOGGER.debug(f"FFmpeg output_vars {output_vars}")
             _LOGGER.debug("FFmpeg output settings: %s", output)
 
             _LOGGER.debug(
@@ -355,53 +359,242 @@ class Camera(HomeAccessory,  PyhapCamera):
             )
 
             ## if Blueiris modify.  No checks for that as yet.
-            input_source = input_source + "&kbps="+str(output_vars["v_max_bitrate"]) #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
-            ## dont need below at all...
-            #cmd = self.start_stream_cmd.format(**stream_config).split()
-            cmd = output.split()
-            if len(extra_commands)>0:
-                extra_cmd = extra_commands.split()
-            ## insert input source into 2nd cmd after ffmp command
-            cmd.insert(0, input_source)
-            cmd.insert(0, "-i")
-            cmd.insert(0,"-re")
-            if extra_cmd !=None:
-                cmd = extra_cmd + cmd
+            input_source =  input_source + "&kbps="+str(output_vars["v_max_bitrate"]) #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
 
-            cmd.insert(0,"./ffmpeg/ffmpeg"+str(self.plugin.ffmpeg_command_line) )
-            # if self.plugin.debug7:
-            #     cmd.insert(len(cmd),"-loglevel")
-            #     cmd.insert(len(cmd),"48")
-            _LOGGER.debug("\nExecuting start stream command: \n{}\n".format(cmd) )
-            try:
-                process = await asyncio.create_subprocess_exec(*cmd,
-                        stdout=asyncio.subprocess.DEVNULL,
-                        stderr=asyncio.subprocess.PIPE,
-                        limit=1024)
-            except Exception as e:  # pylint: disable=broad-except
-                _LOGGER.error('Failed to start streaming process because of error: %s', e)
+            input_source = "-rtsp_transport tcp -i " + input_source
+
+            stream = IndigoFFmpeg("./ffmpeg/ffmpeg"+str(self.plugin.ffmpeg_command_line))
+            opened = await stream.open(
+                cmd=[],
+                input_source=input_source,
+                output=output,
+                extra_cmd="-hide_banner -nostats "+str(extra_commands),
+                stderr_pipe=True,
+                stdout_pipe=False,
+            )
+            if not opened:
+                _LOGGER.error("Failed to open ffmpeg stream")
                 return False
 
-            session_info['process'] = process
-            if self.plugin.debug7:
-                _LOGGER.debug("Command:\n\n{}\n\n".format(cmd))
-
-            self.plugin.ffmpeg_lastCommand = cmd
-
             _LOGGER.info(
-                '[%s] Started stream process - PID %d',
-                session_info['id'],
-                process.pid
+                "[%s] Started video stream process - PID %d",
+                session_info["id"],
+                stream.process.pid,
             )
 
-            return True
+            session_info["stream"] = stream
+            session_info[FFMPEG_PID] = stream.process.pid
+
+            stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
+
+            async def watch_session(_: Any) -> None:
+                await self._async_ffmpeg_watch(session_info["id"])
+
+            session_info[FFMPEG_LOGGER] = asyncio.create_task(
+                self._async_log_stderr_stream(stderr_reader)
+            )
+
+            return await self._async_ffmpeg_watch(session_info["id"])
+
+
         except:
             _LOGGER.exception("Start Stream Exception")
+
+    async def _async_log_stderr_stream(
+            self, stderr_reader: asyncio.StreamReader
+    ) -> None:
+        """Log output from ffmpeg."""
+        _LOGGER.debug("%s: ffmpeg: started", self.display_name)
+        while True:
+            line = await stderr_reader.readline()
+            if line == b"":
+                return
+            _LOGGER.debug("%s: ffmpeg: %s", self.display_name, line.rstrip())
+
+    async def _async_ffmpeg_watch(self, session_id: str) -> bool:
+        """Check to make sure ffmpeg is still running and cleanup if not."""
+        ffmpeg_pid = self.sessions[session_id][FFMPEG_PID]
+        if pid_is_alive(ffmpeg_pid):
+            return True
+
+        _LOGGER.warning("Streaming process ended unexpectedly - PID %d", ffmpeg_pid)
+        self._async_stop_ffmpeg_watch(session_id)
+        self.set_streaming_available(self.sessions[session_id]["stream_idx"])
+        return False
+
+    def _async_stop_ffmpeg_watch(self, session_id: str) -> None:
+        """Cleanup a streaming session after stopping."""
+        if FFMPEG_WATCHER not in self.sessions[session_id]:
+            return
+        self.sessions[session_id].pop(FFMPEG_WATCHER)()
+        self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
         _LOGGER.debug('RECONFIG STREAM CALLED: Interesting may be options for managing later\nSession Info {}\n\nStream Config\n{}\n'.format(session_info,stream_config))
+      #  _LOGGER.debug("Attempting to stop current stream and reconfigure as requested....")
+        # ## Stop stream in this async call
+        session_id = session_info["id"]
         return True
+
+        ## Below was an attempt to reconfigure streams when requested.  First copies all stream info as reconfigure doesn't include most info
+        ## Only seems to include what had changed eg. video bit-rate
+        ## Below sucessfully stops ffmpeg instance, and creates a new one using the updated video info.  Unfortunately the client never receives the message and video freezes on client
+        ## Maybe a missing call to client to force update...
+        ## On reviewing - it seems no one implements reconfigure
+
+        # if not (stream := session_info.get("stream")):
+        #     _LOGGER.debug("No stream for session ID %s", session_id)
+        #
+        # self._async_stop_ffmpeg_watch(session_id)
+        #
+        # if not pid_is_alive(stream.process.pid):
+        #     _LOGGER.info("[%s] Stream already stopped", session_id)
+        #
+        # for shutdown_method in ("close", "kill"):
+        #     _LOGGER.info("[%s] %s video stream", session_id, shutdown_method)
+        #     try:
+        #         await getattr(stream, shutdown_method)()
+        #     except Exception:  # pylint: disable=broad-except
+        #         _LOGGER.debug(
+        #             "[%s] Failed to %s stream", session_id, shutdown_method
+        #         )
+        #
+        # _LOGGER.info(f"Reconfiguring Stream as requested, Stopping & Quickly restarting...")
+        #
+        # try:
+        #     _LOGGER.debug(
+        #         "[%s] Starting stream - In reconfigure - with the following parameters: %s",
+        #         session_info["id"],
+        #         stream_config
+        #     )
+        #
+        #     for config_key, conf in self.base_config.items():
+        #         if config_key not in stream_config:
+        #             stream_config[config_key] = conf
+        #
+        #
+        #     input_source = self.config.get(CONF_STREAM_SOURCE)
+        #     extra_commands = self.config.get("start_commands_extra", None)
+        #
+        #     _LOGGER.debug("Input Source\n{}".format(input_source))
+        #
+        #     video_profile = ""
+        #     if self.config[CONF_VIDEO_CODEC] != "copy":
+        #         video_profile = (
+        #                 "-profile:v "
+        #                 + VIDEO_PROFILE_NAMES[
+        #                     int.from_bytes(stream_config["v_profile_id"], byteorder="big")
+        #                 ]
+        #                 + " "
+        #         )
+        #
+        #     audio_application = ""
+        #     if self.config[CONF_AUDIO_CODEC] == "libopus":
+        #         audio_application = "-application lowdelay "
+        #
+        #     output_vars = stream_config.copy()
+        #     output_vars.update(
+        #         {
+        #             "v_profile": video_profile,
+        #             "v_bufsize": stream_config["v_max_bitrate"] * 4,
+        #             "v_map": self.config[CONF_VIDEO_MAP],
+        #             "fps": self.config[CONF_MAX_FPS],
+        #             "v_pkt_size": self.config[CONF_VIDEO_PACKET_SIZE],
+        #             "v_codec": self.config[CONF_VIDEO_CODEC],
+        #             "a_bufsize": stream_config["a_max_bitrate"] * 4,
+        #             "a_map": self.config[CONF_AUDIO_MAP],
+        #             "a_pkt_size": self.config[CONF_AUDIO_PACKET_SIZE],
+        #             "a_encoder": self.config[CONF_AUDIO_CODEC],
+        #             "a_application": audio_application,
+        #         }
+        #     )
+        #     output = VIDEO_OUTPUT.format(**output_vars)
+        #
+        #     if self.config[CONF_SUPPORT_AUDIO]:
+        #         output = output + " " + AUDIO_OUTPUT.format(**output_vars)
+        #     _LOGGER.debug(f"FFmpeg output_vars {output_vars}")
+        #     _LOGGER.debug("FFmpeg output settings: %s", output)
+        #
+        #     _LOGGER.debug(
+        #         '[%s] Starting stream with the following parameters: %s',
+        #         session_info['id'],
+        #         stream_config
+        #     )
+        #
+        #     input_source =  input_source + "&kbps="+str(output_vars["v_max_bitrate"]) #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
+        #
+        #     input_source = "-rtsp_transport tcp -i " + input_source
+        #
+        #     stream = IndigoFFmpeg("./ffmpeg/ffmpeg" + str(self.plugin.ffmpeg_command_line))
+        #     opened = await stream.open(
+        #         cmd=[],
+        #         input_source=input_source,
+        #         output=output,
+        #         extra_cmd="-hide_banner -nostats",
+        #         stderr_pipe=True,
+        #         stdout_pipe=False,
+        #     )
+        #     if not opened:
+        #         _LOGGER.error("Failed to open ffmpeg stream")
+        #         return False
+        #
+        #     _LOGGER.info(
+        #         "[%s] Started video stream process - PID %d",
+        #         session_info["id"],
+        #         stream.process.pid,
+        #     )
+        #
+        #     session_info["stream"] = stream
+        #     session_info[FFMPEG_PID] = stream.process.pid
+        #
+        #     stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
+        #
+        #     async def watch_session(_: Any) -> None:
+        #         await self._async_ffmpeg_watch(session_info["id"])
+        #
+        #     session_info[FFMPEG_LOGGER] = asyncio.create_task(
+        #         self._async_log_stderr_stream(stderr_reader)
+        #     )
+        #
+        #     return await self._async_ffmpeg_watch(session_info["id"])
+
+
+     ##   except:
+      #      _LOGGER.exception("Start Stream Exception")
+
+       # return True
+
+    def async_stop(self) -> None:
+        """Stop any streams when the accessory is stopped."""
+        for session_info in self.sessions.values():
+            self.hass.async_create_background_task(
+                self.stop_stream(session_info), "homekit.camera-stop-stream"
+            )
+        super().async_stop()
+
+    async def stop_stream(self, session_info: dict[str, Any]) -> None:
+        """Stop the stream for the given ``session_id``."""
+        session_id = session_info["id"]
+        if not (stream := session_info.get("stream")):
+            _LOGGER.debug("No stream for session ID %s", session_id)
+            return
+
+        self._async_stop_ffmpeg_watch(session_id)
+
+        if not pid_is_alive(stream.process.pid):
+            _LOGGER.info("[%s] Stream already stopped", session_id)
+            return
+
+        for shutdown_method in ("close", "kill"):
+            _LOGGER.info("[%s] %s video stream", session_id, shutdown_method)
+            try:
+                await getattr(stream, shutdown_method)()
+                return
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.debug(
+                    "[%s] Failed to %s stream", session_id, shutdown_method
+                )
 
     async def stop(self):
         """Stop any streams when the accessory is stopped."""

@@ -3,6 +3,7 @@ import math
 import colorsys
 import socket
 import ujson
+import os
 
 # Temperature units
 TEMP_CELSIUS = "°C"
@@ -116,6 +117,15 @@ def color_temperature_mired_to_kelvin(mired_temperature: float) -> int:
 def color_temperature_kelvin_to_mired(kelvin_temperature: float) -> int:
     """Convert absolute mired shift to degrees kelvin."""
     return math.floor(1000000 /  kelvin_temperature)
+
+def pid_is_alive(pid: int) -> bool:
+    """Check to see if a process is alive."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        pass
+    return False
 
 def density_to_air_quality(density: float) -> int:
     """Map PM2.5 density to HomeKit AirQuality level."""

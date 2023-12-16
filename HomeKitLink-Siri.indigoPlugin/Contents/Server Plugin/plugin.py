@@ -1327,9 +1327,7 @@ class Plugin(indigo.PluginBase):
                 config["BI_imageURL"] = "{}/image/{}".format(biURLhttp, biName)
 
                 config["useMotionSensor"] = True
-                config["start_commands_extra"] = ("-rtsp_transport tcp "
-                                                  "-probesize 32 "
-                                                  "-analyzeduration 0 ")
+                config["start_commands_extra"] = ("-probesize 32 -analyzeduration 0 ")
                 config[HKDevicesCamera.CONF_STREAM_SOURCE] = '{}/{}&stream=2&fps=15'.format(biURLrtsp, biName)
 
             elif indigo.devices[indigodeviceid].pluginId == "org.cynic.indigo.securityspy":
@@ -1397,11 +1395,7 @@ class Plugin(indigo.PluginBase):
                 # config["SS_username_pass"] = ssuPw
                 config["SS_imageURL"] = "{}/++image?cameraNum={}".format(ssURL, ssCameraNum)
                 config["useMotionSensor"] = True
-                config["start_commands_extra"] = ("-rtsp_transport tcp "  # )
-                                                  #           "-fflags +igndts ")
-                                                  #
-                                                  "-probesize 64 "
-                                                  "-analyzeduration 0 ")
+                config["start_commands_extra"] = ("-probesize 64 -analyzeduration 0 ")
                 #      config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}/++video?cameraNum={}&width={}&height={}".format(ssURL, ssCameraNum, ssWidth, ssHeight)
 
                 if ssWidth > 1280:

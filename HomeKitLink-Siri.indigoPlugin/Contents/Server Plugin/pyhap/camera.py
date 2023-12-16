@@ -603,7 +603,7 @@ class Camera( Accessory):
 
         session_info = self.sessions.get(session_id)
         if not session_info:
-            logger.error(
+            logger.debug(
                 'Requested to stop stream for session %s, but no '
                 'such session was found',
                 session_id
