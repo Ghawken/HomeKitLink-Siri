@@ -13,7 +13,7 @@ import webbrowser
 import ifaddr
 from ipaddress import IPv4Address, IPv6Address, ip_address
 
-from queue import Queue
+from queue import Queue, Empty
 
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -291,7 +291,11 @@ class Plugin(indigo.PluginBase):
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
         self.previousVersion = self.pluginPrefs.get("previousVersion","0.0.1")
-        self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20))
+        self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20) )
+
+        self.camera_refresh_max_time = int(self.pluginPrefs.get("cameratime",30))
+        self.camera_passive_width = int(self.pluginPrefs.get("cameraupdate_width", 720))
+        self.camera_passive_time = int(self.pluginPrefs.get("cameraupdate", 30))
 
         self.debugDeviceid = -3  ## always set this to not on after restart.
 
@@ -418,6 +422,12 @@ class Plugin(indigo.PluginBase):
             except ValueError:
                 self.low_battery_threshold = 20
                 valuesDict['batterylow'] = 20
+            try:
+                self.camera_refresh_max_time = int (valuesDict.get("cameratime",30))
+            except ValueError:
+                self.camera_refresh_max_time = 30
+                valuesDict['cameratime'] = 30
+
 
             try:
                 self.debugDeviceid = int(valuesDict.get("debugDeviceid", -3))
@@ -1064,11 +1074,11 @@ class Plugin(indigo.PluginBase):
                 try:
                     self.sleep(0.05)  ## this made huge difference to CPU... would think would block below..
                     # self.listofenabledcameras
-                    (cameraRequested, image_width) = self.camera_snapShot_Requested_que.get(block=True)  ## blocks here
+                    (cameraRequested, image_width) = self.camera_snapShot_Requested_que.get(block=True, timeout=int(self.camera_passive_time * 60))  ## blocks here
                     ## use tuple for que
                     if self.debug7:
                         self.logger.debug("Got request Image for this camera {} & currently {} items in que".format(cameraRequested, self.camera_snapShot_Requested_que.qsize()))
-
+## Download as requested.
                     for camera in self.listofenabledcameras:
                         if "BI_name" in camera:
                             # self.logger.info("cameraREquested:{}  and canName:{}".format(cameraRequested, camera["BI_name"]))
@@ -1084,7 +1094,7 @@ class Plugin(indigo.PluginBase):
                                     timecheck = cameracheck[cameraRequested]  # requested=BI_name here ##value
                                     if self.debug7:
                                         self.logger.debug("Found Camera name:{} in camera check with timevalue:{}".format(cameraRequested, timecheck))
-                                    if t.time() - timecheck < 30:  ## 30 seconds update
+                                    if t.time() - timecheck < int(self.camera_refresh_max_time):  ## Plugin Config setting
                                         if self.debug7:
                                             self.logger.debug(" Skipping update as to soon, requested at timecheck difference {}".format(t.time() - timecheck))
                                         break
@@ -1174,6 +1184,68 @@ class Plugin(indigo.PluginBase):
                                     self.sleep(3)
                                 if self.debug7:
                                     self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
+                except Empty:
+                    ## Nothing downloaded for an hour update all images
+                    if self.debug7:
+                        self.logger.debug(f"Nothing in Camera Que for {int(self.camera_passive_time * 60)} seconds.  Updating Images...")
+                    for camera in self.listofenabledcameras:
+                        if self.debug7:
+                            self.logger.debug(f"Updating Images for {camera}")
+                        image_width = self.camera_passive_width
+                        if "BI_name" in camera:
+                            # self.logger.info("cameraREquested:{}  and canName:{}".format(cameraRequested, camera["BI_name"]))
+                            cameraRequested = camera["BI_name"]
+                            cameracheck[cameraRequested] = t.time()
+                            camName = camera["BI_name"]
+                            theURL = camera["BI_imageURL"] + "?w=" + str(image_width)
+                            username = camera["BI_username"]
+                            password = camera["BI_password"]
+                            start = t.time()
+                            path = self.cameraimagePath + '/' + camName + '.jpg'
+                            if self.debug7:
+                                self.logger.debug("{}".format(path))
+                            r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
+                            if r.status_code == 200:
+                                with open(path, 'wb') as f:
+                                    for chunk in r.iter_content(1024):
+                                        f.write(chunk)
+                                        if t.time() > (start + 10):
+                                            self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                            break
+                            else:
+                                self.logger.debug("Camera Unavailable returning, Status Code:{}".format(r.status_code))
+                                self.logger.debug("Will pause downloading thread here for a few seconds")
+                                self.sleep(3)
+                            if self.debug7:
+                                self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
+
+                        elif "SS_name" in camera:
+                            cameracheck[cameraRequested] = t.time()
+                            cameraRequested = camera["SS_name"]
+                            camName = camera["SS_name"]
+                            theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
+                            username = camera["SS_username"]
+                            password = camera["SS_password"]
+                            start = t.time()
+                            path = self.cameraimagePath + '/' + camName + '.jpg'
+                            if self.debug7:
+                                self.logger.debug("{}".format(path))
+                            r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
+                            if r.status_code == 200:
+                                with open(path, 'wb') as f:
+                                    for chunk in r.iter_content(1024):
+                                        f.write(chunk)
+                                        if t.time() > (start + 10):
+                                            self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                            break
+                            else:
+                                self.logger.debug("Error Downloading Camera Snashot, given Status Code:{}".format(r.status_code))
+                                self.logger.debug("Quite likely camera or Security Spy offline.  Having a slight pause for effect.")
+                                self.sleep(3)
+                            if self.debug7:
+                                self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
+                        self.sleep(0.1)
+
                 except:
                     self.logger.debug("exception in camera snapshots", exc_info=True)
         except self.StopThread:
@@ -2861,7 +2933,43 @@ class Plugin(indigo.PluginBase):
     def validatePrefsConfigUi(self, valuesDict):
 
         self.debugLog(u"validatePrefsConfigUi() method called.")
+
         error_msg_dict = indigo.Dict()
+        try:
+            self.low_battery_threshold = int(valuesDict.get("batterylow", 20))
+
+        except ValueError:
+            self.logger.info("Please set Battery Low Percentage to a number.  Defaulting to 20%")
+            self.low_battery_threshold = 20
+            valuesDict['batterylow'] = 20
+        try:
+            self.camera_refresh_max_time = int(valuesDict.get("cameratime", 30))
+        except ValueError:
+            self.logger.info("Please set Camera Refresh time to a number/integer. Defaulting to 30 seconds")
+            self.camera_refresh_max_time = 30
+            valuesDict['cameratime'] = 30
+
+        try:
+            self.camera_passive_time = int(valuesDict.get("cameraupdate", 30))
+        except ValueError:
+            self.logger.info("Please set Camera Refresh time to a number/integer. Defaulting to 60 minutes")
+            self.camera_passive_time = 60
+            valuesDict['cameraupdate'] = 60
+
+        try:
+            self.camera_passive_width = int(valuesDict.get("cameraupdate_width", 1280))
+        except ValueError:
+            self.logger.info("Please set Camera Update Width time to a number/integer. Defaulting to 1280 pixels")
+            self.camera_passive_width = 1280
+            valuesDict['cameraupdate_width'] = 1280
+
+        try:
+            self.debugDeviceid = int(valuesDict.get("debugDeviceid", -3))
+        except ValueError:
+            self.debugDeviceid = -3
+
+
+
         return (True, valuesDict)
 
         ## Generate QR COde for Homekit and open Web-Browser to display - is a PNG

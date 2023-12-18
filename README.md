@@ -18,9 +18,9 @@ Download latest and greatest HomeKitLinkSiri indigoplugin file
 
 Recommended to install the one library dependencies before enabling.
 
-In a terminal window enter:
+In a terminal window enter:  (likely will not be required with newer 2023 version Indigo)
 
-#### `sudo pip3 install cryptography`
+#### `pip3 install cryptography`
 
 Then:
 Double click download release file to install
@@ -363,6 +363,38 @@ https://apps.apple.com/us/app/discovery-dns-sd-browser/id1381004916?mt=12
 
 
 ## Changelog
+
+## Version 0.6.40
+
+### Camera Handling Updates
+
+Refactor ffmpeg and camera handling - BlueIris working well, hard to test SecuritySpy...
+Use tcp for rtp_transport avoids error and slight slowdown from ffmpeg
+Speed up streams and checking whether needed, or should already be closed.
+
+Hopefully avoids OS17.2 AppleTV issue where it opens all Camera streams live (needing ffmpeg instance for every stream)
+
+Add new Camera Settings:
+
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/PluginConfig.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/PluginConfig.png?raw=true)
+
+#### Camera Max Refresh Time:
+This enables setting of Maximum refresh time per camera.   Home App can request whatever it likes but if camera/Mac can't handle request gets a long que of never filled images.
+Defaults to 30 seconds, but can be as low as like.
+Lower numbers may impact CPU usage and BI/SS System CPU usage.
+
+#### Passive Camara Update Image Time
+This needs a shortened name!
+This refers to what timeframe HKLS will let pass before passively updated the stored images.
+Remembering that we need, and use a image buffer so this can be served to Home ASAP when requested.   At plugin startup this is the default camera image.
+If the Home app is not opened for hours or days, the inital image seen before quickly updated will be very old.
+This setting sets a limit as to how often HKLS will update these stored images when Home app is NOT requesting.
+e.g
+1 hour - so oldest image seen when reopening app after sometime will be an hour old.
+
+Width setting, refers to the Width of the image requested.
+
+
 
 ## Version 0.6.0
 
