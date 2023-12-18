@@ -2934,11 +2934,9 @@ class Plugin(indigo.PluginBase):
     def validatePrefsConfigUi(self, valuesDict):
 
         self.debugLog(u"validatePrefsConfigUi() method called.")
-
         error_msg_dict = indigo.Dict()
         try:
             self.low_battery_threshold = int(valuesDict.get("batterylow", 20))
-
         except ValueError:
             self.logger.info("Please set Battery Low Percentage to a number.  Defaulting to 20%")
             self.low_battery_threshold = 20
@@ -2949,28 +2947,22 @@ class Plugin(indigo.PluginBase):
             self.logger.info("Please set Camera Refresh time to a number/integer. Defaulting to 30 seconds")
             self.camera_refresh_max_time = 30
             valuesDict['cameratime'] = 30
-
         try:
             self.camera_passive_time = int(valuesDict.get("cameraupdate", 30))
         except ValueError:
             self.logger.info("Please set Camera Refresh time to a number/integer. Defaulting to 60 minutes")
             self.camera_passive_time = 60
             valuesDict['cameraupdate'] = 60
-
         try:
             self.camera_passive_width = int(valuesDict.get("cameraupdate_width", 1280))
         except ValueError:
             self.logger.info("Please set Camera Update Width time to a number/integer. Defaulting to 1280 pixels")
             self.camera_passive_width = 1280
             valuesDict['cameraupdate_width'] = 1280
-
         try:
             self.debugDeviceid = int(valuesDict.get("debugDeviceid", -3))
         except ValueError:
             self.debugDeviceid = -3
-
-
-
         return (True, valuesDict)
 
         ## Generate QR COde for Homekit and open Web-Browser to display - is a PNG
