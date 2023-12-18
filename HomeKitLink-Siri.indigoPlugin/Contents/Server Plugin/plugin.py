@@ -1812,7 +1812,8 @@ class Plugin(indigo.PluginBase):
 
 
                     if "setpointCool" in updated_device.states:
-                        self.logger.debug(f"setpointCool Found: Original: {original_device.states['setpointCool']} and updated:  {updated_device.states['setpointCool']} ")
+                        if self.debug2:
+                            self.logger.debug(f"setpointCool Found: Original: {original_device.states['setpointCool']} and updated:  {updated_device.states['setpointCool']} ")
                         if original_device.states["setpointCool"] != updated_device.states["setpointCool"]:
                             setpointCool = updated_device.states["setpointCool"]
                             if self.debug2:
