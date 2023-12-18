@@ -1189,62 +1189,66 @@ class Plugin(indigo.PluginBase):
                     if self.debug7:
                         self.logger.debug(f"Nothing in Camera Que for {int(self.camera_passive_time * 60)} seconds.  Updating Images...")
                     for camera in self.listofenabledcameras:
-                        if self.debug7:
-                            self.logger.debug(f"Updating Images for {camera}")
-                        image_width = self.camera_passive_width
-                        if "BI_name" in camera:
-                            # self.logger.info("cameraREquested:{}  and canName:{}".format(cameraRequested, camera["BI_name"]))
-                            cameraRequested = camera["BI_name"]
-                            cameracheck[cameraRequested] = t.time()
-                            camName = camera["BI_name"]
-                            theURL = camera["BI_imageURL"] + "?w=" + str(image_width)
-                            username = camera["BI_username"]
-                            password = camera["BI_password"]
-                            start = t.time()
-                            path = self.cameraimagePath + '/' + camName + '.jpg'
+                        try:
                             if self.debug7:
-                                self.logger.debug("{}".format(path))
-                            r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
-                            if r.status_code == 200:
-                                with open(path, 'wb') as f:
-                                    for chunk in r.iter_content(1024):
-                                        f.write(chunk)
-                                        if t.time() > (start + 10):
-                                            self.logger.debug(u' Download Image Taking to long.  Aborted.')
-                                            break
-                            else:
-                                self.logger.debug("Camera Unavailable returning, Status Code:{}".format(r.status_code))
-                                self.logger.debug("Will pause downloading thread here for a few seconds")
-                                self.sleep(3)
-                            if self.debug7:
-                                self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
+                                self.logger.debug(f"Updating Images for {camera}")
+                            image_width = self.camera_passive_width
+                            if "BI_name" in camera:
+                                # self.logger.info("cameraREquested:{}  and canName:{}".format(cameraRequested, camera["BI_name"]))
+                                cameraRequested = camera["BI_name"]
+                                cameracheck[cameraRequested] = t.time()
+                                camName = camera["BI_name"]
+                                theURL = camera["BI_imageURL"] + "?w=" + str(image_width)
+                                username = camera["BI_username"]
+                                password = camera["BI_password"]
+                                start = t.time()
+                                path = self.cameraimagePath + '/' + camName + '.jpg'
+                                if self.debug7:
+                                    self.logger.debug("{}".format(path))
+                                r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
+                                if r.status_code == 200:
+                                    with open(path, 'wb') as f:
+                                        for chunk in r.iter_content(1024):
+                                            f.write(chunk)
+                                            if t.time() > (start + 10):
+                                                self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                                break
+                                else:
+                                    self.logger.debug("Camera Unavailable returning, Status Code:{}".format(r.status_code))
+                                    self.logger.debug("Will pause downloading thread here for a few seconds")
+                                    self.sleep(3)
+                                if self.debug7:
+                                    self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
 
-                        elif "SS_name" in camera:
-                            cameracheck[cameraRequested] = t.time()
-                            cameraRequested = camera["SS_name"]
-                            camName = camera["SS_name"]
-                            theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
-                            username = camera["SS_username"]
-                            password = camera["SS_password"]
-                            start = t.time()
-                            path = self.cameraimagePath + '/' + camName + '.jpg'
-                            if self.debug7:
-                                self.logger.debug("{}".format(path))
-                            r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
-                            if r.status_code == 200:
-                                with open(path, 'wb') as f:
-                                    for chunk in r.iter_content(1024):
-                                        f.write(chunk)
-                                        if t.time() > (start + 10):
-                                            self.logger.debug(u' Download Image Taking to long.  Aborted.')
-                                            break
-                            else:
-                                self.logger.debug("Error Downloading Camera Snashot, given Status Code:{}".format(r.status_code))
-                                self.logger.debug("Quite likely camera or Security Spy offline.  Having a slight pause for effect.")
-                                self.sleep(3)
-                            if self.debug7:
-                                self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
-                        self.sleep(0.1)
+                            elif "SS_name" in camera:
+                                cameracheck[cameraRequested] = t.time()
+                                cameraRequested = camera["SS_name"]
+                                camName = camera["SS_name"]
+                                theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
+                                username = camera["SS_username"]
+                                password = camera["SS_password"]
+                                start = t.time()
+                                path = self.cameraimagePath + '/' + camName + '.jpg'
+                                if self.debug7:
+                                    self.logger.debug("{}".format(path))
+                                r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
+                                if r.status_code == 200:
+                                    with open(path, 'wb') as f:
+                                        for chunk in r.iter_content(1024):
+                                            f.write(chunk)
+                                            if t.time() > (start + 10):
+                                                self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                                break
+                                else:
+                                    self.logger.debug("Error Downloading Camera Snashot, given Status Code:{}".format(r.status_code))
+                                    self.logger.debug("Quite likely camera or Security Spy offline.  Having a slight pause for effect.")
+                                    self.sleep(3)
+                                if self.debug7:
+                                    self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
+                        except:
+                            self.logger.debug("Exception Caught with one camera",exc_info=True)
+                            pass
+                    self.sleep(0.1)
 
                 except:
                     self.logger.debug("exception in camera snapshots", exc_info=True)
