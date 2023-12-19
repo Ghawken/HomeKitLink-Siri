@@ -359,16 +359,19 @@ class Camera(HomeAccessory,  PyhapCamera):
             )
 
             ## if Blueiris modify.  No checks for that as yet.
-            input_source =  input_source + "&kbps="+str(output_vars["v_max_bitrate"]) #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
+            input_source =  input_source + "&kbps="+str(output_vars["v_max_bitrate"])+"&cache=1" #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
 
             input_source = "-rtsp_transport tcp -i " + input_source
 
-            stream = IndigoFFmpeg("./ffmpeg/ffmpeg"+str(self.plugin.ffmpeg_command_line))
+            _LOGGER.debug(fr"{input_source=}")
+
+            stream = IndigoFFmpeg(f"{str(self.plugin.ffmpeg_command_line)}")
+            extra_cmd_toadd = "-hide_banner -nostats "+str(extra_commands)
             opened = await stream.open(
                 cmd=[],
                 input_source=input_source,
                 output=output,
-                extra_cmd="-hide_banner -nostats "+str(extra_commands),
+                extra_cmd=extra_cmd_toadd,
                 stderr_pipe=True,
                 stdout_pipe=False,
             )
@@ -381,6 +384,15 @@ class Camera(HomeAccessory,  PyhapCamera):
                 session_info["id"],
                 stream.process.pid,
             )
+            self.plugin.ffmpeg_lastCommand = []
+            try:
+                self.plugin.ffmpeg_lastCommand.insert(0,f"{str(self.plugin.ffmpeg_command_line)}" )
+                self.plugin.ffmpeg_lastCommand.extend(input_source.split())
+                self.plugin.ffmpeg_lastCommand.extend(output.split())
+                self.plugin.ffmpeg_lastCommand.extend(extra_cmd_toadd.split())
+            except:
+                _LOGGER.debug(f"Error creating ffmpeg_lastCommand {self.plugin.ffmpeg_command_line=} {input_source=} {output=} {extra_cmd_toadd=}")
+                pass
 
             session_info["stream"] = stream
             session_info[FFMPEG_PID] = stream.process.pid
@@ -409,6 +421,10 @@ class Camera(HomeAccessory,  PyhapCamera):
             line = await stderr_reader.readline()
             if line == b"":
                 return
+            if 'Output file does not contain any stream' in line.rstrip():
+                _LOGGER.info("'Output file does not contain stream' error noted for video stream playback.  Often this means the stream does no have Audio and audio has been enabled.")
+                _LOGGER.info("Would suggest unpublish Camera, check gone in Home app, and then republish with Audio Disabled.")
+
             _LOGGER.debug("%s: ffmpeg: %s", self.display_name, line.rstrip())
 
     async def _async_ffmpeg_watch(self, session_id: str) -> bool:

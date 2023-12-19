@@ -12,7 +12,6 @@ _LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 FFMPEG_STDOUT = "stdout"
 FFMPEG_STDERR = "stderr"
 
-
 class IndigoFFmpeg:
     """HA FFmpeg process async.
 
@@ -62,11 +61,13 @@ class IndigoFFmpeg:
 
     def _put_input(self, input_source: str) -> None:
         """Put input string to ffmpeg command."""
-        input_cmd = shlex.split(str(input_source))
+       # input_cmd = newSplit(str(input_source))
+        input_cmd = shlex.split(str(input_source), posix=True)
         if len(input_cmd) > 1:
             self._argv.extend(input_cmd)
         else:
             self._argv.extend(["-i", input_source])
+        _LOGGER.debug(fr"_put_input: {self._argv}")
 
     def _put_output(self, output: Optional[str]) -> None:
         """Put output string to ffmpeg command."""
@@ -129,7 +130,7 @@ class IndigoFFmpeg:
                 subprocess.Popen,
                 self._argv,
                 bufsize=0,
-                stdin=subprocess.PIPE,
+               # stdin=subprocess.PIPE,
                 stdout=stdout,
                 stderr=stderr,
                 close_fds=False,

@@ -356,12 +356,13 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
 
             input_source = "-rtsp_transport tcp -i " + input_source
 
-            stream = IndigoFFmpeg("./ffmpeg/ffmpeg"+str(self.plugin.ffmpeg_command_line))
+            stream = IndigoFFmpeg(f"{str(self.plugin.ffmpeg_command_line)}")
+            extra_cmd_toadd = "-hide_banner -nostats "+str(extra_commands)
             opened = await stream.open(
                 cmd=[],
                 input_source=input_source,
                 output=output,
-                extra_cmd="-hide_banner -nostats "+str(extra_commands),
+                extra_cmd=extra_cmd_toadd,
                 stderr_pipe=True,
                 stdout_pipe=False,
             )
@@ -374,6 +375,15 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                 session_info["id"],
                 stream.process.pid,
             )
+
+            try:
+                self.plugin.ffmpeg_lastCommand.insert(0,f"{str(self.plugin.ffmpeg_command_line)}" )
+                self.plugin.ffmpeg_lastCommand.extend(input_source.split())
+                self.plugin.ffmpeg_lastCommand.extend(output.split())
+                self.plugin.ffmpeg_lastCommand.extend(extra_cmd_toadd.split())
+            except:
+                _LOGGER.debug(f"Error creating ffmpeg_lastCommand {self.plugin.ffmpeg_command_line=} {input_source=} {output=} {extra_cmd_toadd=}")
+                pass
 
             session_info["stream"] = stream
             session_info[FFMPEG_PID] = stream.process.pid
