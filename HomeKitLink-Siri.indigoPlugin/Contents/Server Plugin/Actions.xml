@@ -1,4 +1,26 @@
 <?xml version="1.0"?>
 <Actions>
+        <Action id="triggerHomeKitDevice">
+        <Name>Notify HomeKit Device</Name>
+        <CallbackMethod>action_triggerHomeKitDevice</CallbackMethod>
+        <ConfigUI>
+			<Field id="deviceIdlabel" type="label" fontColor="blue" fontSize="large" >
+				<Label>Select the device type:</Label>
+			</Field>
+			<Field id="type_device" type="menu" defaultValue="device" >
+				<Label>Select Type to List:</Label>
+        	 <List>
+				    <Option value="camera_motion_true">Camera Motion True</Option>
+				    <Option value="camera_motion_false">Camera Motion False </Option>
+				 	<Option value="camera_doorbell">Camera DoorBell Pressed</Option>
+                </List>
+				  <CallbackMethod>action_menuChanged</CallbackMethod>
+			</Field>
+			<Field id="deviceId" type="menu" defaultValue="">
+				<Label>Action Home App Device:</Label>
+				<List class="self" method="action_device_list_generator" dynamicReload="true"/>
+			</Field>
+        </ConfigUI>
+    </Action>
 </Actions>
 

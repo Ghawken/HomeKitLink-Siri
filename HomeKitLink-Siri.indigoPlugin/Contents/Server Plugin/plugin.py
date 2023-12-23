@@ -287,6 +287,7 @@ class Plugin(indigo.PluginBase):
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
         self.debug10 = self.pluginPrefs.get('debug10', False)
+        self.debug11 = self.pluginPrefs.get('debug11', False)
 
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
@@ -416,6 +417,7 @@ class Plugin(indigo.PluginBase):
             self.debug8 = valuesDict.get('debug8', False)
             self.debug9 = valuesDict.get('debug9', False)
             self.debug10 = valuesDict.get('debug10', False)
+            self.debug11 = valuesDict.get('debug11', False)
             self.logClientConnected = valuesDict.get("logClientConnected", True)
             try:
                 self.low_battery_threshold = int (valuesDict.get("batterylow",20))
@@ -1395,7 +1397,7 @@ class Plugin(indigo.PluginBase):
                 config[HKDevicesCamera.CONF_MAX_FPS] = int(biFPS)
                 config[HKDevicesCamera.CONF_VIDEO_MAP] = "0:0"
 
-                config["DoorBell_ID"] = indigo.devices[indigodeviceid].pluginProps.get("HomeKit_doorbellId", "")
+                config["DoorBell_ID"] = indigo.devices[indigodeviceid].pluginProps.get("HomeKit_doorbellId", 1)  ## Always enabled doorbell
                 config["BI_serverip"] = biServerIp
                 config["BI_serverport"] = biPort
                 config["BI_username"] = biUser
@@ -1462,7 +1464,7 @@ class Plugin(indigo.PluginBase):
                 config[HKDevicesCamera.CONF_MAX_FPS] = int(ssFPS)
                 config[HKDevicesCamera.CONF_VIDEO_MAP] = "0:0"
 
-                config["DoorBell_ID"] = indigo.devices[indigodeviceid].pluginProps.get("HomeKit_doorbellId", "")
+                config["DoorBell_ID"] = indigo.devices[indigodeviceid].pluginProps.get("HomeKit_doorbellId", 1)
                 config["SS_name"] = ssName
                 config["SS_serverip"] = ssServer.ownerProps["xaddress"]
                 config["SS_serverport"] = ssServer.ownerProps["port"]
@@ -1670,7 +1672,6 @@ class Plugin(indigo.PluginBase):
                     this_is_debug_device = True
 
                 updateddevice_subtype = self.device_list_internal[checkindex]["subtype"]
-
 
                 if str(updateddevice_subtype) == "Thermostat":
                     if self.debug2:
@@ -2076,14 +2077,16 @@ class Plugin(indigo.PluginBase):
 
                 elif str(updateddevice_subtype) == "BlueIrisCamera":
                     # if type(original_device) == indigo.RelayDevice:
-                    if updated_device.states['Motion'] != original_device.states['Motion']:
-                        newstate = updated_device.states["Motion"]
-                        if self.debug2:
-                            self.logger.debug("Motion Changed...and New State {}".format(newstate))
-                        if self.debug2:
-                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
-                        return
+                    motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
+                    if motionEnabled:
+                        if updated_device.states['Motion'] != original_device.states['Motion']:
+                            newstate = updated_device.states["Motion"]
+                            if self.debug2:
+                                self.logger.debug("Motion Changed...and New State {}".format(newstate))
+                            if self.debug2:
+                                self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                            self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
+                            return
 
                 elif str(updateddevice_subtype) == "Fan":
                     ## Fan device has a brightnessLevel below, likely dimmer update Rotation speed with that.
@@ -3074,7 +3077,90 @@ class Plugin(indigo.PluginBase):
         valuesDict["isDeviceSelected"] = False
         return valuesDict
 
+    def action_menuChanged(self, valuesDict, *args, **kwargs):  # typeId, devId):
+        if self.debug11:
+            self.logger.debug("action_menuChanged: {}".format(valuesDict))
+
+        return valuesDict
+    def action_device_list_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
+        try:
+            other_device_list = []
+            camera_device_list = []
+            devicetype = valuesDict.get("type_device", "")
+
+            if self.debug11:
+                self.logger.debug("Action Device list Generator:\n valuesDict {} \n typeId {}".format(valuesDict, typeId))
+
+            if devicetype !="":
+                for num in range(0, len(self.running_deviceids)):
+                    device = self.return_deviceorAG(self.running_deviceids[num])
+                    device_props = dict(device.pluginProps)
+                    devicename = device_props.get("homekit-name", "")
+                    deviceType = device_props.get("HomeKit_deviceSubtype", "")
+                    devicesensor = device_props.get("HomeKit_deviceSensor", "")
+                    try:
+                        deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+                    except ValueError:
+                        deviceBridgeID = 99
+                    if self.debug11:
+                        self.logger.debug("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
+                    if deviceType=="BlueIrisCamera" or deviceType=="SecuritySpyCamera":
+                        camera_device_list.append( (device.id, devicename))
+
+            if devicetype == "camera_doorbell":
+                return camera_device_list
+            elif devicetype in("camera_motion_true", "camera_motion_false") :
+                return camera_device_list
+            else:
+                return []
+        except:
+            self.logger.debug("Caught Exception action device list generator", exc_info=True)
+
     ### callbacks from device selection menus
+    def action_triggerHomeKitDevice(self, action):
+        try:
+            if self.debug11:
+                self.logger.debug(f"action Trigger HomeKit Device Called.  {action.props=}")
+            if self.pluginStartingUp:
+                self.logger.debug("Still starting up. Ignoring Trigger Currently")
+                return
+
+            type_device = action.props.get('type_device', '')
+            deviceId = action.props.get('deviceId', "")
+
+            if deviceId == "":
+                self.logger.info("DeviceId incorrect.  Please check menu items")
+                return
+
+            if int(deviceId) not in self.device_list_internal_idonly:
+                self.logger.info("Selected Device not in internal HomeKitLinkSiri database.  ? Selected device no longer active, enabled, or running")
+                return
+
+            checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == int(deviceId)), None)
+
+            if checkindex != None:
+                homekit_name = self.device_list_internal[checkindex]["devicename"]
+                if self.debug11:
+                    self.logger.debug(f"CheckIndex has found device with result {checkindex=}")
+                if type_device=="camera_doorbell":
+                    self.logger.info(f"Activating Camera DoorBell Notification in Home App, for Home device {homekit_name}")
+                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
+                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
+                    return
+                elif type_device=="camera_motion_true":
+                    self.logger.info(f"Setting Motion to Detected with Home Camera, for Home device {homekit_name}")
+                    self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(1)
+                    return
+                elif type_device=="camera_motion_false":
+                    self.logger.info(f"Setting Motion to False with Home Camera, for Home device {homekit_name}")
+                    self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(0)
+                    return
+
+            else:
+                self.logger.info(f"Device not able to be found.  ? Not running successfully in Homekit Plugin.")
+                return
+        except:
+            self.logger.exception(f"Caught Exception with Action Notification.")
 
     def doorbell_list_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
         try:
@@ -3513,6 +3599,7 @@ class Plugin(indigo.PluginBase):
             values_dict["deviceSensor"] = device.pluginProps.get("HomeKit_deviceSensor", "")  ## unless sensor device this isn't used. I believe. Hope.
             values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
             values_dict["tempSelector"] = device.pluginProps.get("HomeKit_tempSelector", False)
+            values_dict["motionEnabled"] = device.pluginProps.get("HomeKit_motionEnabled", True)
             values_dict["inverseSelector"] = device.pluginProps.get("HomeKit_inverseSelector",False)
             values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", False)
 
@@ -3602,7 +3689,12 @@ class Plugin(indigo.PluginBase):
                     if device_props.get("HomeKit_bridgeUniqueID") != bridge_id:
                         device_props["HomeKit_bridgeUniqueID"] = bridge_id
 
-                ## add temp selector
+                ## add motion Selector selector
+                if values_dict["motionEnabled"] != "":
+                    motionEnabled = values_dict['motionEnabled']
+                    if device_props.get("HomeKit_motionEnabled") != motionEnabled:
+                        device_props["HomeKit_motionEnabled"] = motionEnabled
+
                 if values_dict["tempSelector"] != "":
                     tempSelector = values_dict['tempSelector']
                     if device_props.get("HomeKit_tempSelector") != tempSelector:
@@ -3612,7 +3704,7 @@ class Plugin(indigo.PluginBase):
                     inverseSelector = values_dict['inverseSelector']
                     if device_props.get("HomeKit_inverseSelector") != inverseSelector:
                         device_props["HomeKit_inverseSelector"] = inverseSelector
-                        ## add temp selector
+
                 if values_dict["audioSelector"] != "":
                     audioSelector = values_dict['audioSelector']
                     if device_props.get("HomeKit_audioSelector") != audioSelector:
@@ -3637,6 +3729,7 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_deviceSensor"] = ""
                 device_props["homekit-name"] = ""
                 device_props["HomeKit_tempSelector"] = ""
+                device_props["HomeKit_motionEnabled"] = ""
                 device_props["HomeKit_inverseSelector"] = ""
                 device_props["HomeKit_audioSelector"] = ""
                 try:

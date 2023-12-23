@@ -83,6 +83,14 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If one =
 			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor" alwaysUseInDialogHeightCalc="true">
 				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
+			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camaera Motion ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera">
+				<Label/>
+				<Description>Motion Sensor Enabled</Description>
+			</Field>
+			<Field id="motionEnabledlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera" alwaysUseInDialogHeightCalc="true">
+				<Label>Enabled = use camera motion reports to trigger in HomeKit.
+Uncheck no motion sensor except through Action Group trigger.</Label>
+			</Field>
 			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will inverse Controls ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window,Door">
 				<Label/>
 				<Description>Enable to Inverse Controls</Description>

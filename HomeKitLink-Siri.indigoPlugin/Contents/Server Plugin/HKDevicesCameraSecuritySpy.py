@@ -260,30 +260,29 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             self.char_motion_detected = serv_motion.configure_char("MotionDetected", value=False) #), getter_callback=self.get_bulb )
             #oops...self.char_motion_detected.setter_callback = self._set_chars
 
-        if "DoorBell_ID" in config:
-            if config["DoorBell_ID"].isdigit():
-                if int(config["DoorBell_ID"]) > 1:
-                    _LOGGER.debug("using DoorBell Setting up..")
-                    self._char_doorbell_detected = None
-                    self._char_doorbell_detected_switch = None
-                    self.doorbellID = int(config["DoorBell_ID"] )  ## self
-                    serv_doorbell = self.add_preload_service("Doorbell")
+        if "DoorBell_ID" in config:  ## now always true
+            _LOGGER.debug("using DoorBell Setting up..")
+            self._char_doorbell_detected = None
+            self._char_doorbell_detected_switch = None
+            self.doorbellID = int(config["DoorBell_ID"] )  ## self
+            serv_doorbell = self.add_preload_service("Doorbell")
 
-                    self._char_doorbell_detected = serv_doorbell.configure_char(
-                        "ProgrammableSwitchEvent",
-                        value=0,
-                    )
-                    serv_stateless_switch = self.add_preload_service(
-                        "StatelessProgrammableSwitch"
-                    )
-                    self._char_doorbell_detected_switch = (
-                        serv_stateless_switch.configure_char(
-                            "ProgrammableSwitchEvent",
-                            value=0,
-                            valid_values={"SinglePress": 0},
-                        )
-                    )
-
+            self._char_doorbell_detected = serv_doorbell.configure_char(
+                "ProgrammableSwitchEvent",
+                value=0,
+            )
+            serv_stateless_switch = self.add_preload_service(
+                "StatelessProgrammableSwitch"
+            )
+            self._char_doorbell_detected_switch = (
+                serv_stateless_switch.configure_char(
+                    "ProgrammableSwitchEvent",
+                    value=0,
+                    valid_values={"SinglePress": 0},
+                )
+            )
+            serv_speaker = self.add_preload_service("Speaker")
+            serv_speaker.configure_char("Mute", value=0)
 
     async def run(self):
         #if self.plugin.debug6:

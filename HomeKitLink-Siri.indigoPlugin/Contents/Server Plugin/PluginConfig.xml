@@ -65,6 +65,10 @@
         <Label/>
         <Description>10. Debug mDNS (Verbose!) File Only.   </Description>
     </Field>
+    <Field id="debug11" type="checkbox" tooltip="Enabling will .">
+        <Label/>
+        <Description>11. Debug Actions.   </Description>
+    </Field>
     <Field id="debugDeviceid" type="menu" defaultValue="-3" alwaysUseInDialogHeightCalc="true" fontColor="orange">
         <Label>Debug Device:</Label>
         <List class="self" method="debug_device_generator" dynamicReload="true"/>
