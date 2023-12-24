@@ -4201,8 +4201,8 @@ class Plugin(indigo.PluginBase):
         except subprocess.TimeoutExpired as e:
             p1.kill()
             outs, errs = p1.communicate()
-            self.logger.info("{}".format(outs))
-            self.logger.warning("{}".format(errs))
+        self.logger.info("{}".format(outs))
+        self.logger.warning("{}".format(errs))
 
         self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command Ended  "))
         self.logger.info(u"{0:=^130}".format(" Hopefully this provides some troubleshooting help  "))
