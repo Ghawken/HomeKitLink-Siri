@@ -68,7 +68,7 @@ DOORBELL_DOUBLE_PRESS = 1
 DOORBELL_LONG_PRESS = 2
 
 VIDEO_OUTPUT = (
-    "-map {v_map} -an "
+    "-map {v_map} -an -sn -dn "
     "-c:v {v_codec} "
   #   "{v_profile}" 
  #  "-preset ultrafast "
@@ -87,40 +87,40 @@ VIDEO_OUTPUT = (
     "localrtcpport={v_port}&pkt_size={v_pkt_size}"
 )
 
-VIDEO_OUTPUT2 = (
-    "-map {v_map} "  #-an "
-    "-vcodec {v_codec} "
-  #  "-f rawvideo "
-    "{v_profile}"
-    "-pix_fmt yuv420p "
-    "-r {fps} "
-    "-f rawvideo "
-    "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
-    "-payload_type 99 "
-    "-ssrc {v_ssrc} -f rtp "
-    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
-    "srtp://{address}:{v_port}?rtcpport={v_port}&"
-    "localrtcpport={v_port}&pkt_size={v_pkt_size}"
-)
+# VIDEO_OUTPUT2 = (
+#     "-map {v_map} "  #-an "
+#     "-vcodec {v_codec} "
+#   #  "-f rawvideo "
+#     "{v_profile}"
+#     "-pix_fmt yuv420p "
+#     "-r {fps} "
+#     "-f rawvideo "
+#     "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
+#     "-payload_type 99 "
+#     "-ssrc {v_ssrc} -f rtp "
+#     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
+#     "srtp://{address}:{v_port}?rtcpport={v_port}&"
+#     "localrtcpport={v_port}&pkt_size={v_pkt_size}"
+# )
 
-AUDIO_OUTPUT2 = (
-    "-map {a_map} "#-vn "
-    "-strict -2 "
-    "-acodec {a_encoder} "
-    "-flags:a +global_header "
-  #  "{a_application}"
-    "-ac 1 -ar 24k " #-ar {a_sample_rate}k "
-    "-b:a 8k "#-bufsize 48k " # k{a_max_bitrate}k "#-bufsize {a_bufsize}k "
-    "-payload_type 110 "
-    "-ssrc {a_ssrc} -f rtp "
-    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {a_srtp_key} "
-    "srtp://{address}:{a_port}?rtcpport={a_port}&"
-    "localrtcpport={a_port}&pkt_size=188"#{a_pkt_size}"
-)
+# AUDIO_OUTPUT2 = (
+#     "-map {a_map} "#-vn "
+#     "-strict -2 "
+#     "-acodec {a_encoder} "
+#     "-flags:a +global_header "
+#   #  "{a_application}"
+#     "-ac 1 -ar 24k " #-ar {a_sample_rate}k "
+#     "-b:a 8k "#-bufsize 48k " # k{a_max_bitrate}k "#-bufsize {a_bufsize}k "
+#     "-payload_type 110 "
+#     "-ssrc {a_ssrc} -f rtp "
+#     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {a_srtp_key} "
+#     "srtp://{address}:{a_port}?rtcpport={a_port}&"
+#     "localrtcpport={a_port}&pkt_size=188"#{a_pkt_size}"
+# )
 
 
 AUDIO_OUTPUT = (
-    "-map {a_map} -vn "
+    "-map {a_map} -vn -sn -dn "
     "-c:a {a_encoder} "
     "{a_application}"
     '-profile:a aac_eld '
