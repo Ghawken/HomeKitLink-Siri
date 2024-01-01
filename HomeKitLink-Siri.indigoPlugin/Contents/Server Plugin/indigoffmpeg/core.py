@@ -163,7 +163,7 @@ class IndigoFFmpeg:
                 await self._loop.run_in_executor(None, _close)
                 _LOGGER.debug("Close FFmpeg process")
             except (subprocess.TimeoutExpired, ValueError):
-                _LOGGER.warning("Timeout while waiting of FFmpeg")
+                _LOGGER.warning("Timeout while waiting for FFmpeg")
                 self.kill()
             finally:
                 self._clear()

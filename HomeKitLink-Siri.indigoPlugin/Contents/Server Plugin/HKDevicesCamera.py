@@ -302,11 +302,12 @@ class Camera(HomeAccessory,  PyhapCamera):
     async def start_stream(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
         try:
-            _LOGGER.debug(
-                "[%s] Starting stream -I'm Here 2- with the following parameters: %s",
-                session_info["id"],
-                stream_config
-            )
+            if self.plugin.debug7:
+                _LOGGER.debug(
+                    "[%s] Starting stream -I'm Here 2- with the following parameters: %s",
+                    session_info["id"],
+                    stream_config
+                )
             self.base_config = stream_config
 
             input_source = self.config.get(CONF_STREAM_SOURCE)
@@ -402,7 +403,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
 
             async def watch_session():
-                _LOGGER.debug(f"Watch Session called")
+                #_LOGGER.debug(f"Watch Session called")
                 await self._async_ffmpeg_watch(session_info["id"])
 
             session_info[FFMPEG_LOGGER] = asyncio.create_task(
@@ -413,7 +414,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                 watch_session,
                 FFMPEG_WATCH_INTERVAL,
             )
-            _LOGGER.debug(f"Starting Watcher for ffmpeg stream")
+
             session_info[FFMPEG_WATCHER].start()
             _LOGGER.debug(f"Started Watcher for ffmpeg Stream.")
 
@@ -427,7 +428,8 @@ class Camera(HomeAccessory,  PyhapCamera):
             self, stderr_reader: asyncio.StreamReader
     ) -> None:
         """Log output from ffmpeg."""
-        _LOGGER.debug("%s: ffmpeg: started", self.display_name)
+        if self.plugin.debug7:
+            _LOGGER.debug("%s: ffmpeg: started", self.display_name)
         while True:
             line_bytes = await stderr_reader.readline()
             if line_bytes == b"":
@@ -439,15 +441,18 @@ class Camera(HomeAccessory,  PyhapCamera):
                 _LOGGER.info("Would suggest unpublish Camera, check gone in Home app, and then republish with Audio Disabled.")
             else:
                 # Log the line from stderr or handle it differently
-                _LOGGER.debug(f"{self.display_name}: ffmpeg: {line}")
+                if self.plugin.debug7:
+                    _LOGGER.debug(f"{self.display_name}: ffmpeg: {line}")
             #_LOGGER.debug("%s: ffmpeg: %s", self.display_name, line.rstrip())
 
     async def _async_ffmpeg_watch(self, session_id: str) -> bool:
         """Check to make sure ffmpeg is still running and cleanup if not."""
-        _LOGGER.debug("_async_ffmpeg_watch called")
+        if self.plugin.debug7:
+            _LOGGER.debug("_async_ffmpeg_watch called")
         ffmpeg_pid = self.sessions[session_id][FFMPEG_PID]
-        _LOGGER.debug(f"{self.sessions[session_id]=}")
         if pid_is_alive(ffmpeg_pid):
+            if self.plugin.debug7:
+                _LOGGER.debug(f"_async_ffmpeg_watch, PID {ffmpeg_pid} appears alive.  Returning.")
             return True
 
         _LOGGER.warning("Streaming process ended unexpectedly - PID %d", ffmpeg_pid)
@@ -461,14 +466,16 @@ class Camera(HomeAccessory,  PyhapCamera):
     def _async_stop_ffmpeg_watch(self, session_id: str) -> None:
         """Cleanup a streaming session after stopping."""
         try:
-            _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
+            if self.plugin.debug7:
+                _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
             self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
         except:
-            _LOGGER.exception(f"Exception in async stop ffmpeg stream")
+            _LOGGER.debug(f"Exception in async stop ffmpeg stream", exc_info=True)
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
-        _LOGGER.debug('RECONFIG STREAM CALLED: Interesting may be options for managing later\nSession Info {}\n\nStream Config\n{}\n'.format(session_info,stream_config))
+        if self.plugin.debug7:
+            _LOGGER.debug('RECONFIG STREAM CALLED: Interesting may be options for managing later\nSession Info {}\n\nStream Config\n{}\n'.format(session_info,stream_config))
       #  _LOGGER.debug("Attempting to stop current stream and reconfigure as requested....")
         # ## Stop stream in this async call
         session_id = session_info["id"]
@@ -604,13 +611,15 @@ class Camera(HomeAccessory,  PyhapCamera):
 
     async def stop_stream(self, session_info: dict[str, Any]) -> None:
         """Stop the stream for the given ``session_id``."""
-        _LOGGER.debug(f"*** stop_stream called")
+        if self.plugin.debug7:
+            _LOGGER.debug(f"*** stop_stream called")
         session_id = session_info["id"]
         if not (stream := session_info.get("stream")):
             _LOGGER.debug("No stream for session ID %s", session_id)
             return
         else:
-            _LOGGER.debug(f"Stream {stream=}")
+            if self.plugin.debug7:
+                _LOGGER.debug(f"Stream {stream=}")
         if FFMPEG_WATCHER in self.sessions[session_id]:
             await self.sessions[session_id][FFMPEG_WATCHER].stop()
             self.sessions[session_id].pop(FFMPEG_WATCHER)
