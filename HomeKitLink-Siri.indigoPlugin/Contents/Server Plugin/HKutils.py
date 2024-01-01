@@ -4,12 +4,19 @@ import colorsys
 import socket
 import ujson
 import os
+import asyncio
+from typing import Callable, Optional
+
+from datetime import timedelta, datetime
+import logging
 
 # Temperature units
 TEMP_CELSIUS = "°C"
 TEMP_FAHRENHEIT = "°F"
 TEMP_KELVIN = "K"
 MAX_PORT = 65535
+
+_LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 
 HOMEKIT_CHAR_TRANSLATIONS = {
     0: " ",  # nul
@@ -43,6 +50,57 @@ HOMEKIT_CHAR_TRANSLATIONS = {
     126: "-",  # ~
     127: "-",  # del
 }
+
+class SimpleIntervalScheduler:
+    def __init__(self, action: Callable[[], asyncio.Task], interval: timedelta):
+        self.action = action
+        self.interval = interval
+        self.task: Optional[asyncio.Task] = None
+        self.is_running = False
+        self.logger = logging.getLogger("Plugin.HomeKitSpawn")
+
+    async def _interval_listener(self):
+        """Handler for elapsed intervals. Runs the action repeatedly at specified intervals."""
+        while self.is_running:
+            await asyncio.sleep(0.5)
+            try:
+                next_run_time = datetime.utcnow() + self.interval
+                # Run the action
+                await self.action()
+                # Calculate the sleep time to maintain the interval
+                sleep_seconds = max(0, (next_run_time - datetime.utcnow()).total_seconds())
+                # Sleep until the next run time
+                await asyncio.sleep(sleep_seconds)
+            except Exception as e:
+                self.logger.debug(f"Error occurred in the scheduled action: {e}", exc_info=True)
+            except asyncio.CancelledError:
+                # The task was cancelled, exit the loop
+                self.logger.debug("Interval listener has been cancelled.")
+                return
+
+    def start(self):
+        """Begin the interval actions."""
+        if self.is_running:
+            self.logger.debug("Interval listener already running.")
+            return
+        self.is_running = True
+        self.task = asyncio.create_task(self._interval_listener())
+        self.logger.debug("Interval listener started.")
+
+    async def stop(self):
+        """Cease the interval actions."""
+        if not self.is_running or self.task is None:
+            self.logger.debug("Interval listener is not running.")
+            return
+        self.is_running = False
+        self.task.cancel()
+        try:
+            await self.task  # Wait for the task to be cancelled.
+        except asyncio.CancelledError:
+            self.logger.debug("Interval listener has been stopped.")
+        finally:
+            self.task = None
+            self.logger.debug("Interval listener cleanup completed.")
 
 def convert_to_float(state: Any) -> float | None:
     """Return float of state, catch errors."""

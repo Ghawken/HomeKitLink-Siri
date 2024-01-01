@@ -6,8 +6,10 @@ from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 import aiofiles
 from typing import Any
 from HKutils import pid_is_alive
+from HKutils import SimpleIntervalScheduler
 import time as t
-
+import datetime
+from typing import Callable
 
 from pyhap.camera import (
     VIDEO_CODEC_PARAM_LEVEL_TYPES,
@@ -178,6 +180,7 @@ CONFIG_DEFAULTS = {
     CONF_STREAM_COUNT: DEFAULT_STREAM_COUNT,
     CONF_STREAM_SOURCE: DEFAULT_STREAM_SOURCE
 }
+
 
 
 class Camera(HomeAccessory,  PyhapCamera):
@@ -398,12 +401,21 @@ class Camera(HomeAccessory,  PyhapCamera):
 
             stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
 
-            async def watch_session(_: Any) -> None:
+            async def watch_session():
+                _LOGGER.debug(f"Watch Session called")
                 await self._async_ffmpeg_watch(session_info["id"])
 
             session_info[FFMPEG_LOGGER] = asyncio.create_task(
                 self._async_log_stderr_stream(stderr_reader)
             )
+
+            session_info[FFMPEG_WATCHER] = SimpleIntervalScheduler(
+                watch_session,
+                FFMPEG_WATCH_INTERVAL,
+            )
+            _LOGGER.debug(f"Starting Watcher for ffmpeg stream")
+            session_info[FFMPEG_WATCHER].start()
+            _LOGGER.debug(f"Started Watcher for ffmpeg Stream.")
 
             return await self._async_ffmpeg_watch(session_info["id"])
 
@@ -417,32 +429,42 @@ class Camera(HomeAccessory,  PyhapCamera):
         """Log output from ffmpeg."""
         _LOGGER.debug("%s: ffmpeg: started", self.display_name)
         while True:
-            line = await stderr_reader.readline()
-            if line == b"":
+            line_bytes = await stderr_reader.readline()
+            if line_bytes == b"":
                 return
-            if 'Output file does not contain any stream' in line.rstrip():
-                _LOGGER.info("'Output file does not contain stream' error noted for video stream playback.  Often this means the stream does no have Audio and audio has been enabled.")
+            # Decode bytes to string using UTF-8 encoding
+            line = line_bytes.decode('utf-8').rstrip()
+            if 'Output file does not contain any stream' in line:
+                _LOGGER.info("'Output file does not contain stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
                 _LOGGER.info("Would suggest unpublish Camera, check gone in Home app, and then republish with Audio Disabled.")
-
-            _LOGGER.debug("%s: ffmpeg: %s", self.display_name, line.rstrip())
+            else:
+                # Log the line from stderr or handle it differently
+                _LOGGER.debug(f"{self.display_name}: ffmpeg: {line}")
+            #_LOGGER.debug("%s: ffmpeg: %s", self.display_name, line.rstrip())
 
     async def _async_ffmpeg_watch(self, session_id: str) -> bool:
         """Check to make sure ffmpeg is still running and cleanup if not."""
+        _LOGGER.debug("_async_ffmpeg_watch called")
         ffmpeg_pid = self.sessions[session_id][FFMPEG_PID]
+        _LOGGER.debug(f"{self.sessions[session_id]=}")
         if pid_is_alive(ffmpeg_pid):
             return True
 
         _LOGGER.warning("Streaming process ended unexpectedly - PID %d", ffmpeg_pid)
+        if FFMPEG_WATCHER in self.sessions[session_id]:
+            await self.sessions[session_id][FFMPEG_WATCHER].stop()
+            self.sessions[session_id].pop(FFMPEG_WATCHER)
         self._async_stop_ffmpeg_watch(session_id)
         self.set_streaming_available(self.sessions[session_id]["stream_idx"])
         return False
 
     def _async_stop_ffmpeg_watch(self, session_id: str) -> None:
         """Cleanup a streaming session after stopping."""
-        if FFMPEG_WATCHER not in self.sessions[session_id]:
-            return
-        self.sessions[session_id].pop(FFMPEG_WATCHER)()
-        self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
+        try:
+            _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
+            self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
+        except:
+            _LOGGER.exception(f"Exception in async stop ffmpeg stream")
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
@@ -580,21 +602,18 @@ class Camera(HomeAccessory,  PyhapCamera):
 
        # return True
 
-    def async_stop(self) -> None:
-        """Stop any streams when the accessory is stopped."""
-        for session_info in self.sessions.values():
-            self.hass.async_create_background_task(
-                self.stop_stream(session_info), "homekit.camera-stop-stream"
-            )
-        super().async_stop()
-
     async def stop_stream(self, session_info: dict[str, Any]) -> None:
         """Stop the stream for the given ``session_id``."""
+        _LOGGER.debug(f"*** stop_stream called")
         session_id = session_info["id"]
         if not (stream := session_info.get("stream")):
             _LOGGER.debug("No stream for session ID %s", session_id)
             return
-
+        else:
+            _LOGGER.debug(f"Stream {stream=}")
+        if FFMPEG_WATCHER in self.sessions[session_id]:
+            await self.sessions[session_id][FFMPEG_WATCHER].stop()
+            self.sessions[session_id].pop(FFMPEG_WATCHER)
         self._async_stop_ffmpeg_watch(session_id)
 
         if not pid_is_alive(stream.process.pid):

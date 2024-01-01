@@ -130,7 +130,7 @@ class IndigoFFmpeg:
                 subprocess.Popen,
                 self._argv,
                 bufsize=0,
-               # stdin=subprocess.PIPE,
+                stdin=subprocess.PIPE,
                 stdout=stdout,
                 stderr=stderr,
                 close_fds=False,
@@ -145,27 +145,30 @@ class IndigoFFmpeg:
 
     async def close(self, timeout=5) -> None:
         """Stop a ffmpeg instance."""
-        if not self.is_running:
-            _LOGGER.warning("FFmpeg isn't running!")
-            return
-
-        # Can't use communicate because we attach the output to a streamreader
-        def _close():
-            """Close ffmpeg."""
-            self._proc.stdin.write(b"q")
-            self._proc.wait(timeout=timeout)
-
-        # send stop to ffmpeg
+        _LOGGER.debug(f"Close Core called.  {self._proc=}")
         try:
-            await self._loop.run_in_executor(None, _close)
-            _LOGGER.debug("Close FFmpeg process")
+            if not self.is_running:
+                _LOGGER.warning("FFmpeg isn't running!")
+                return
 
-        except (subprocess.TimeoutExpired, ValueError):
-            _LOGGER.warning("Timeout while waiting of FFmpeg")
-            self.kill()
+            # Can't use communicate because we attach the output to a streamreader
+            def _close():
+                """Close ffmpeg."""
+                self._proc.stdin.write(b"q")
+                self._proc.stdin.flush()
+                self._proc.wait(timeout=timeout)
 
-        finally:
-            self._clear()
+            # send stop to ffmpeg
+            try:
+                await self._loop.run_in_executor(None, _close)
+                _LOGGER.debug("Close FFmpeg process")
+            except (subprocess.TimeoutExpired, ValueError):
+                _LOGGER.warning("Timeout while waiting of FFmpeg")
+                self.kill()
+            finally:
+                self._clear()
+        except:
+            _LOGGER.debug(f"close exception", exc_info=True)
 
     def kill(self) -> None:
         """Kill ffmpeg job."""
