@@ -19,6 +19,8 @@ import threading
 import subprocess
 import traceback
 import webbrowser
+import random
+from glob import glob
 
 try:
     import ifaddr
@@ -288,16 +290,12 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version) )
         self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
 
-        self.ffmpeg_command_line = "./ffmpeg/ffmpeg-x86"  ## default to x86
-        if platform.machine() == "x86_64":
-            self.ffmpeg_command_line = "./ffmpeg/ffmpeg-x86"
-            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Intel Silicon using x86"))
-        else:
-            self.ffmpeg_command_line = "./ffmpeg/ffmpeg-arm"
-            self.logger.info("{0:<30} {1}".format("Ffmpeg version:", "Detected Apple Silicon using Arm"))
+
+        self.ffmpeg_command_line = get_ffmpeg_binary()
 
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
+        self.logger.info(u"{0:<30} {1}".format("FFmpeg :", self.ffmpeg_command_line.replace('\n', '')))
         self.logger.info("")
         self.pluginprefDirectory = '{}/Preferences/Plugins/com.GlennNZ.indigoplugin.HomeKitLink-Siri'.format(indigo.server.getInstallFolderPath())
 
@@ -1091,8 +1089,11 @@ class Plugin(indigo.PluginBase):
                 else:
                     CameraName = ""
                 path = self.cameraimagePath + "/" + CameraName + ".jpg"
-                # path = self.pluginPath + '/cameras/' + CameraName + '.jpg'
-                snapshot_path = self.pluginPath + "/cameras/snapshot.jpg"
+                jpg_files = glob(os.path.join(self.pluginPath + "/cameras", '*.jpg'))
+                if jpg_files:
+                    snapshot_path = random.choice(jpg_files)
+                else:
+                    snapshot_path= "/System/Library/CoreServices/DefaultBackground.jpg"
                 shutil.copy(snapshot_path, path)
                 if self.debug7:
                     self.logger.debug("Startup Refresh Snapshots images to Default for Camera: {}".format(path))

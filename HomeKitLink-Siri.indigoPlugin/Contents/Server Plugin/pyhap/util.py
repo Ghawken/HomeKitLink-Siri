@@ -1,7 +1,7 @@
 import asyncio
 import base64
 import functools
-import ujson
+import orjson
 import random
 import socket
 from uuid import UUID
@@ -170,19 +170,21 @@ def hap_type_to_uuid(hap_type):
         return UUID(hap_type)
     return UUID("0" * (8 - len(hap_type)) + hap_type + BASE_UUID)
 
-## Use ujson x4 times as fast, not as good as orjson, but is installed by default in Indigo 2022.2 as Sanic/Webserver needs
-## Issue is orjson dumps = bytes output, json and ujson = string output hence need for encoding here.
+## Use orjson x20 faster.
+
 def to_hap_json(dump_obj):
     """Convert an object to HAP json."""
-    return ujson.dumps(dump_obj, separators=(",", ":")).encode("utf-8")  # pylint: disable=no-member
+    return orjson.dumps(dump_obj)  # pylint: disable=no-member
 
 def to_sorted_hap_json(dump_obj):
     """Convert an object to sorted HAP json."""
-    return ujson.dumps(dump_obj, sort_keys=True,separators=(",", ":")).encode("utf-8")
+    return orjson.dumps(  # pylint: disable=no-member
+        dump_obj, option=orjson.OPT_SORT_KEYS  # pylint: disable=no-member
+    )
 
 def from_hap_json(json_str):
     """Convert json to an object."""
-    return ujson.loads(json_str)  # pylint: disable=no-member
+    return orjson.loads(json_str)  # pylint: disable=no-member
 
 def async_create_background_task(func: Awaitable) -> asyncio.Task:
     """Create a background task and add it to the set of background tasks."""
