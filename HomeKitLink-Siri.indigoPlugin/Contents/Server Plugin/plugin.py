@@ -5,12 +5,26 @@
 Author: GlennNZ
 
 """
+
+try:
+    import indigo
+except:
+    pass
+import logging
+installation_output = ""
+from auto_installer import install_package_and_retry_import
+
 import asyncio
 import threading
 import subprocess
 import traceback
 import webbrowser
-import ifaddr
+
+try:
+    import ifaddr
+except:
+    installation_output = install_package_and_retry_import()
+
 from ipaddress import IPv4Address, IPv6Address, ip_address
 
 from queue import Queue, Empty
@@ -46,6 +60,12 @@ from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
 from zeroconf.asyncio import AsyncZeroconf, IPVersion, Zeroconf, InterfaceChoice
 
 from packaging import version
+
+try:
+    from homekitlink_ffmpeg import get_ffmpeg_binary
+except ImportError:
+    installation_output += install_package_and_retry_import()
+    from homekitlink_ffmpeg import get_ffmpeg_binary
 
 try:
     import indigo
@@ -148,7 +168,8 @@ class IndigoAsyncZeroconf(AsyncZeroconf):
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
-
+        global installation_output
+        self.packages_installed = False
         ################################################################################
         # Setup Logging
         ################################################################################
@@ -182,6 +203,12 @@ class Plugin(indigo.PluginBase):
             import cryptography
         except ImportError:
             raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting HomeKitLink-Siri Plugin  ", " Missing required Library; Cryptography missing ", " Run 'pip3 install cryptograph' in a Terminal window ", " and then restart plugin. ", "="))
+
+        if installation_output !="":
+            self.packages_installed = True
+            self.logger.warning(f"Dependencies Found for Plugin.  One time installation:\n{installation_output}")
+            self.logger.warning(f"Installed Correctly, now Starting plugin.")
+
 
         self.logger.debug(u"logLevel = " + str(self.logLevel))
         self.reStartBRIDGE = False
