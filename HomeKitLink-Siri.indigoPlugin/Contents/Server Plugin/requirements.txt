@@ -9,6 +9,7 @@ zeroconf
 async_timeout
 aiofiles
 tlv8
+base36
 pyqrcode
 slugify
 pypng

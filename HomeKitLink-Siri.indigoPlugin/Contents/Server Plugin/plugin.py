@@ -10,9 +10,6 @@ try:
     import indigo
 except:
     pass
-import logging
-installation_output = ""
-from auto_installer import install_package_and_retry_import
 
 import asyncio
 import threading
@@ -21,14 +18,8 @@ import traceback
 import webbrowser
 import random
 from glob import glob
-
-try:
-    import ifaddr
-except:
-    installation_output = install_package_and_retry_import()
-
+import ifaddr
 from ipaddress import IPv4Address, IPv6Address, ip_address
-
 from queue import Queue, Empty
 
 import logging
@@ -48,26 +39,18 @@ from os import path
 import colorsys
 import logging
 
-# import applescript
 import xml.dom.minidom
 import random
 import shutil
 from os import listdir
 from os.path import isfile, join
-
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
-
 from zeroconf.asyncio import AsyncZeroconf, IPVersion, Zeroconf, InterfaceChoice
 
 from packaging import version
-
-try:
-    from homekitlink_ffmpeg import get_ffmpeg_binary
-except ImportError:
-    installation_output += install_package_and_retry_import()
-    from homekitlink_ffmpeg import get_ffmpeg_binary
+from homekitlink_ffmpeg import get_ffmpeg_binary
 
 try:
     import indigo
@@ -170,7 +153,6 @@ class IndigoAsyncZeroconf(AsyncZeroconf):
 class Plugin(indigo.PluginBase):
     def __init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs):
         indigo.PluginBase.__init__(self, pluginId, pluginDisplayName, pluginVersion, pluginPrefs)
-        global installation_output
         self.packages_installed = False
         ################################################################################
         # Setup Logging
@@ -205,12 +187,6 @@ class Plugin(indigo.PluginBase):
             import cryptography
         except ImportError:
             raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting HomeKitLink-Siri Plugin  ", " Missing required Library; Cryptography missing ", " Run 'pip3 install cryptograph' in a Terminal window ", " and then restart plugin. ", "="))
-
-        if installation_output !="":
-            self.packages_installed = True
-            self.logger.warning(f"Dependencies Found for Plugin.  One time installation:\n{installation_output}")
-            self.logger.warning(f"Installed Correctly, now Starting plugin.")
-
 
         self.logger.debug(u"logLevel = " + str(self.logLevel))
         self.reStartBRIDGE = False
@@ -1081,6 +1057,7 @@ class Plugin(indigo.PluginBase):
         self.logger.debug("Thread for managing all camera snapshots created and started")
         # self.logger.debug("List of enabled Camers = {}".format(self.listofenabledcameras))
         try:
+            image_index = 0
             for camera in self.listofenabledcameras:
                 if "BI_name" in camera:
                     CameraName = camera["BI_name"]
@@ -1089,9 +1066,15 @@ class Plugin(indigo.PluginBase):
                 else:
                     CameraName = ""
                 path = self.cameraimagePath + "/" + CameraName + ".jpg"
-                jpg_files = glob(os.path.join(self.pluginPath + "/cameras", '*.jpg'))
+                jpg_files = sorted(glob(os.path.join(self.pluginPath + "/cameras", '*.jpg')))
                 if jpg_files:
-                    snapshot_path = random.choice(jpg_files)
+                    if jpg_files:
+                        # Ensure the index is within the bounds of available images
+                        image_index %= len(jpg_files)
+                        # Get the image path at the current index
+                        snapshot_path = jpg_files[image_index]
+                        # Increment the index for the next iteration
+                        image_index += 1
                 else:
                     snapshot_path= "/System/Library/CoreServices/DefaultBackground.jpg"
                 shutil.copy(snapshot_path, path)
