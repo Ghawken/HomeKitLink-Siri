@@ -14,34 +14,15 @@ Github : https://github.com/Ghawken/HomeKitLink-Siri
 Plugin Store Link:
 
 
-Download latest and greatest HomeKitLinkSiri indigoplugin file
+Download latest and greatest HomeKitLinkSiri indigoplugin file.
 
-Recommended to install the one library dependencies before enabling.
-
-In a terminal window enter:  (likely will not be required with newer 2023 version Indigo)
-
-#### `pip3 install cryptography`
-
-Then:
-Double click download release file to install
-
-Restart, or double click enable the plugin.
-
-Return to the terminal window and copy and paste the below:
-
-This removes the apple quarantine bit for downloaded files and is needed for full function.  Very annoyingly unlike the pip3 command it is needed everytime you upgrade!
-Arghh.. Apple...
-
-#### `sudo xattr -rd com.apple.quarantine /Library/Application\ Support/Perceptive\ Automation/Indigo\ 2022.1/Plugins`
-
-NB:
-With every update of the plugin this commands needs to be run unfortunately.  The plugin will now highlight this correct command when needed after an update.
+Now API 3.4 dependencies and xattr commands are not required.
 
 ### Limitations
 
 Only one indigo device, once only, can be published to any HomeKit Bridge.
 
-Each bridge has a maximum of 95 devices published within it.  Currently this is not enforced.  This is on TODO list.
+Each Indigo HKLS bridge device can have a maximum of 95 devices published within it.  Currently this is not enforced.  This is on TODO list.
 If you are getting close, would suggest creating a new HomeKitLink bridge.  The number of these bridges is unlimited.
 
 Add new HomeKitLink bridge devices as needed to increase device count, or to manage devices
@@ -115,6 +96,8 @@ To add Additional Devices (up to 95 per Indigo HomeKitLink Bridge) go to Edit an
 You can add as many devices as wished at once, before closing the Config Dialog and restarting Bridge with Save
 
 Note:
+** Please note you can add up to 99 Indigo devices per Homekitlink Bridge Device **
+
 When adding devices later to a existing bridge the new device just appear in the HomeKit app.
 It appears in the Default Room of the Bridge.
 

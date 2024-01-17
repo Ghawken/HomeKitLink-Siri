@@ -384,18 +384,18 @@ class Plugin(indigo.PluginBase):
 
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
-        try:
-            if version.parse(pluginVersion) != version.parse(self.previousVersion):
-                self.logger.info("HomeKitLink Updated Version Detected.  Please run xattr command as below (copy & paste to terminal)")
-                self.logger.info("")
-                self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
-                self.logger.info(u"{0:=^130}".format(" End of Setup "))
-                self.pluginPrefs['previousVersion']= pluginVersion
-                #self.pluginPrefs['mDNSipversion'] = "V4Only"
-                #self.logger.info(f"For this update setting mDNS IP Version to V4Only (strongly recommended)")
-                #self.select_ip_version = IPVersion.V4Only
-        except:
-            pass
+        # try:
+        #     if version.parse(pluginVersion) != version.parse(self.previousVersion):
+        #         self.logger.info("HomeKitLink Updated Version Detected.  Please run xattr command as below (copy & paste to terminal)")
+        #         self.logger.info("")
+        #         self.logger.info("{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
+        #         self.logger.info(u"{0:=^130}".format(" End of Setup "))
+        #         self.pluginPrefs['previousVersion']= pluginVersion
+        #         #self.pluginPrefs['mDNSipversion'] = "V4Only"
+        #         #self.logger.info(f"For this update setting mDNS IP Version to V4Only (strongly recommended)")
+        #         #self.select_ip_version = IPVersion.V4Only
+        # except:
+        #     pass
 
 
 
@@ -1058,6 +1058,8 @@ class Plugin(indigo.PluginBase):
         # self.logger.debug("List of enabled Camers = {}".format(self.listofenabledcameras))
         try:
             image_index = 0
+            jpg_files = sorted(glob(os.path.join(self.pluginPath + "/cameras", '*.jpg')))
+            total_images = len(jpg_files)
             for camera in self.listofenabledcameras:
                 if "BI_name" in camera:
                     CameraName = camera["BI_name"]
@@ -1066,17 +1068,17 @@ class Plugin(indigo.PluginBase):
                 else:
                     CameraName = ""
                 path = self.cameraimagePath + "/" + CameraName + ".jpg"
-                jpg_files = sorted(glob(os.path.join(self.pluginPath + "/cameras", '*.jpg')))
-                if jpg_files:
-                    if jpg_files:
-                        # Ensure the index is within the bounds of available images
-                        image_index %= len(jpg_files)
-                        # Get the image path at the current index
-                        snapshot_path = jpg_files[image_index]
-                        # Increment the index for the next iteration
-                        image_index += 1
+                if total_images > 0:
+                    # Ensure the index is within the bounds of available images
+                    image_index %= len(jpg_files)
+                    # Get the image path at the current index
+                    snapshot_path = jpg_files[image_index]
+                    # Increment the index for the next iteration
+                    image_index = (image_index + 1) % total_images
                 else:
                     snapshot_path= "/System/Library/CoreServices/DefaultBackground.jpg"
+                if self.debug7:
+                    self.logger.debug(f"{CameraName} ---------Using Snapshot Image {snapshot_path}")
                 shutil.copy(snapshot_path, path)
                 if self.debug7:
                     self.logger.debug("Startup Refresh Snapshots images to Default for Camera: {}".format(path))
