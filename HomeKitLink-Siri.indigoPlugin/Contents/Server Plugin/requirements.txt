@@ -1,9 +1,6 @@
 cryptography==41.0.7
 homekitlink_ffmpeg
-h11==0.14.0
-chacha20poly1305-reuseable==0.12.0
-orjson==3.9.10
-zeroconf==0.131.0
+orjson==3.8.10
 async_timeout==4.0.3
 aiofiles==23.2.1
 tlv8==0.10.0
@@ -11,3 +8,6 @@ base36==0.1.1
 pyqrcode==1.2.1
 slugify==0.0.1
 pypng==0.20220715.0
+h11==0.14.0
+zeroconf==0.131.0
+chacha20poly1305-reuseable==0.12.0
