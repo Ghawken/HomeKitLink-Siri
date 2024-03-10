@@ -2231,7 +2231,7 @@ class Plugin(indigo.PluginBase):
                         indigo.actionGroup.execute(accessoryself.indigodeviceid)
                 return  ## nothing more to do here
 
-            if statetoReturn == "Thermostat_state":
+            if str(statetoReturn) == "Thermostat_state":
                 unit = indigodevice.pluginProps.get("HomeKit_tempSelector", False)
                 ## need device to see if Cool or Heat to know what Target is referring to
                 # {'TargetTemperature': 22.5, 'CoolingThresholdTemperature': 24, 'HeatingThresholdTemperature': 21}
@@ -2252,6 +2252,8 @@ class Plugin(indigo.PluginBase):
                                  2: indigo.kHvacMode.Cool,
                                  3: indigo.kHvacMode.HeatCool}
 
+                if self.debug5:
+                    self.logger.debug("Thermostat Device State")
                 if hasattr(indigodevice, "hvacMode"):
                     currentMode = indigodevice.hvacMode
                     newMode = currentMode
@@ -2294,25 +2296,26 @@ class Plugin(indigo.PluginBase):
                                     accessoryself.set_temperature(HKutils.convert_to_float(setpointcool), "coolthresh")
                                     accessoryself.set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
 
-                    if "TargetTemperature" in valuetoSet:
-                        currentMode = newMode
-                        target_temp = valuetoSet['TargetTemperature']
-                        if unit:  ## if F select will need to convert
-                            target_temp = HKutils.celsius_to_fahrenheit(target_temp)  ## Homekit always in Celsius so if using F convert back. for Indigo.
-                            if self.debug5:
-                                self.logger.debug("TargetTemperature found and converted to {}".format(target_temp))
-                        if currentMode == indigo.kHvacMode.Off:
-                            ## ignore everything?
-                            pass
-                        elif currentMode == indigo.kHvacMode.Cool:
-                            if self.debug5:
-                                self.logger.debug("Mode kHvac Cool setting CoolSetpoint to {}".format(target_temp))
-                            indigo.thermostat.setCoolSetpoint(accessoryself.indigodeviceid, value=target_temp)
-                        elif currentMode == indigo.kHvacMode.Heat:
-                            if self.debug5:
-                                self.logger.debug("Mode kHvac Cool setting HeatSetPoint to {}".format(target_temp))
-                            indigo.thermostat.setHeatSetpoint(accessoryself.indigodeviceid, value=target_temp)
-                        elif currentMode == indigo.kHvacMode.HeatCool:
+                    if "TargetTemperature" in valuetoSet or "HeatingThresholdTemperature" in valuetoSet or "CoolingThresholdTemperature" in valuetoSet:
+                        if "TargetTemperature" in valuetoSet:
+                            currentMode = newMode
+                            target_temp = valuetoSet['TargetTemperature']
+                            if unit:  ## if F select will need to convert
+                                target_temp = HKutils.celsius_to_fahrenheit(target_temp)  ## Homekit always in Celsius so if using F convert back. for Indigo.
+                                if self.debug5:
+                                    self.logger.debug("TargetTemperature found and converted to {}".format(target_temp))
+                            if currentMode == indigo.kHvacMode.Off:
+                                ## ignore everything?
+                                pass
+                            elif currentMode == indigo.kHvacMode.Cool:
+                                if self.debug5:
+                                    self.logger.debug("Mode kHvac Cool setting CoolSetpoint to {}".format(target_temp))
+                                indigo.thermostat.setCoolSetpoint(accessoryself.indigodeviceid, value=target_temp)
+                            elif currentMode == indigo.kHvacMode.Heat:
+                                if self.debug5:
+                                    self.logger.debug("Mode kHvac Cool setting HeatSetPoint to {}".format(target_temp))
+                                indigo.thermostat.setHeatSetpoint(accessoryself.indigodeviceid, value=target_temp)
+                        if currentMode == indigo.kHvacMode.HeatCool:
                             if "CoolingThresholdTemperature" in valuetoSet:
                                 cooltarget = valuetoSet["CoolingThresholdTemperature"]
                                 if unit:  ## if F select will need to convert
