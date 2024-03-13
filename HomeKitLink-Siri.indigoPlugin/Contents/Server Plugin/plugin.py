@@ -2801,7 +2801,7 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug("hvacOperationMode Auto Thermostat.")
                         temp1 = indigodevice.states['setpointCool']
                         temp2 = indigodevice.states['setpointHeat']
-                        temptosend = (HKutils.convert_to_float(temp1)+HKutils.convert_to_float(temp2)) / 2
+                        temptosend = (HKutils.convert_to_float(temp1)+HKutils.convert_to_float(temp2) ) / 2
                         if self.debug4:
                             self.logger.debug("Updating Mode Auto: Target Temperature to {}".format(temptosend))
                         return temptosend
@@ -2814,8 +2814,19 @@ class Plugin(indigo.PluginBase):
                         if 'setpointHeat' in indigodevice.states:
                             temptosend = indigodevice.states['setpointHeat']
                             return temptosend
+            elif statetoGet == "Thermostat_heatthresh_temp":
+                if 'setpointHeat' in indigodevice.states:
 
-                    #return temptosend
+                    temptosend = indigodevice.states['setpointHeat']
+                    if self.debug4:
+                        self.logger.debug("Heat Thresh Temp Temperature to {}".format(temptosend))
+                    return temptosend
+            elif statetoGet == "Thermostat_coolthresh_temp":
+                if 'setpointCool' in indigodevice.states:
+                    temptosend = indigodevice.states['setpointCool']
+                    if self.debug4:
+                        self.logger.debug("Cool Thresh Temp Temperature to {}".format(temptosend))
+                    return temptosend
 
             elif statetoGet in ("Thermostat_targetState",):
                 if "hvacOperationModeIsAuto" in indigodevice.states:

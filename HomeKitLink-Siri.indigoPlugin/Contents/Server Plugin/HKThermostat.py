@@ -202,6 +202,7 @@ class Thermostat(HomeAccessory):
                     # default of 0.1 in order to have enough precision to convert
                     # temperature units and avoid setting to 73F will result in 74F
                     properties={PROP_MIN_VALUE: hc_min_temp, PROP_MAX_VALUE: hc_max_temp},
+                    getter_callback = self.get_cool_thresh_temp
                 )
             if CHAR_HEATING_THRESHOLD_TEMPERATURE in self.chars:
                 self.char_heating_thresh_temp = serv_thermostat.configure_char(
@@ -211,13 +212,13 @@ class Thermostat(HomeAccessory):
                     # default of 0.1 in order to have enough precision to convert
                     # temperature units and avoid setting to 73F will result in 74F
                     properties={PROP_MIN_VALUE: hc_min_temp, PROP_MAX_VALUE: hc_max_temp},
+                    getter_callback = self.get_heat_thresh_temp
                 )
 
             # As best as I can see Thermostat Device in Indigo doesn't really do fan speed
             # Disable this for the time being.
 
             serv_thermostat.setter_callback = self._set_chars  ## Setter for everything
-
         except:
             logger.exception("error in thermostat device")
 
@@ -227,7 +228,8 @@ class Thermostat(HomeAccessory):
         return HKutils.temperature_to_homekit(temp, self._unit)
 
     def set_temperature(self, temperature, type):
-        #logger.debug("set_tempcalled by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
+        if self.plugin.debug6:
+            logger.debug("set_tempcalled by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
         if type == "current":
             self.char_current_temp.set_value(self._temperature_to_homekit(temperature))
         elif type == "target":
@@ -246,14 +248,9 @@ class Thermostat(HomeAccessory):
                 elif type == "setpointHeat":
                     self.char_heating_thresh_temp.set_value(self._temperature_to_homekit(temperature))
 
-
     def update_all_temperatures(self):
         logger.debug("update_all_temperatures called by plugin")
         indigodevice = indigo.devices[self.indigodeviceid]
-
-
-
-
 
     def _set_fan_active(self, char_values):
         """This will be called every time the value of one of the
@@ -289,10 +286,10 @@ class Thermostat(HomeAccessory):
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_temp")
             if self.plugin.debug6:
                 logger.debug("Current Temp State:{}".format(value))
-            if value == None:
-                value =0
-            return self._temperature_to_homekit(value)
-            #
+            if isinstance(value, (int,float)):
+                return self._temperature_to_homekit(value)
+            return 0
+
         except:
             logger.exception("Exception in get temp")
 
@@ -301,12 +298,39 @@ class Thermostat(HomeAccessory):
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_target_temp")
             if self.plugin.debug6:
                 logger.debug("Current Target Temp State:{}".format(value))
-            if value == None:
-                value =0
-            return self._temperature_to_homekit(value)
-            #
+            if isinstance(value, (int,float)):
+                return self._temperature_to_homekit(value)
+            return 0
         except:
             logger.exception("Exception in get target temp")
+
+
+    def get_cool_thresh_temp(self):
+        try:
+            value = self.plugin.Plugin_getter_callback(self, "Thermostat_coolthresh_temp")
+            if self.plugin.debug6:
+                logger.debug("Current Cool Thresh Temp State:{}".format(value))
+                logger.error(f"{value}")
+            if isinstance(value, (int,float)):
+                return self._temperature_to_homekit(value)
+            return 23
+
+            #
+        except:
+            logger.exception("Exception in get cool thresh temp")
+
+    def get_heat_thresh_temp(self):
+        try:
+            value = self.plugin.Plugin_getter_callback(self, "Thermostat_heatthresh_temp")
+            if self.plugin.debug6:
+                logger.debug("Current Heat Thresh Temp State:{}".format(value))
+            if isinstance(value, (int,float)):
+                return self._temperature_to_homekit(value)
+            return 19
+            #
+        except:
+            logger.exception("Exception in get heat thresh temp")
+
 
     def get_currentState(self):
         try:
