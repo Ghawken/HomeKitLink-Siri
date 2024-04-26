@@ -2192,7 +2192,7 @@ class Plugin(indigo.PluginBase):
                                         self.device_list_internal[checkindex]["accessory"].Saturation.notify()
                                         self.device_list_internal[checkindex]["accessory"].char_color_temp.notify()
 
-                if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window","Door"):   ## work around to remnove this TODO
+                if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window","Door","LeakSensor", "OccupancySensor", "SmokeSensor", "ContactSensor", "CarbonMonoxideSensor", "MotionSensor", "CarbonDioxideSensor"):   ## work around to remnove this TODO
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
                         newstate = updated_device.states["onOffState"]
                         if self.debug2:
