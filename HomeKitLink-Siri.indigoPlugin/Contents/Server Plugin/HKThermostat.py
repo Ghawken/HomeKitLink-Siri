@@ -310,7 +310,7 @@ class Thermostat(HomeAccessory):
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_coolthresh_temp")
             if self.plugin.debug6:
                 logger.debug("Current Cool Thresh Temp State:{}".format(value))
-                logger.error(f"{value}")
+                logger.debug(f"{value}")
             if isinstance(value, (int,float)):
                 return self._temperature_to_homekit(value)
             return 23

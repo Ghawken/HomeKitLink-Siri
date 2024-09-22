@@ -17,6 +17,8 @@ import subprocess
 import traceback
 import webbrowser
 import random
+from pathlib import Path
+import tempfile
 from glob import glob
 import ifaddr
 from ipaddress import IPv4Address, IPv6Address, ip_address
@@ -317,7 +319,7 @@ class Plugin(indigo.PluginBase):
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
-        ip_version = self.pluginPrefs.get('mDNSipversion', "V4Only")
+        ip_version = self.pluginPrefs.get('mDNSipversion', "ALL")
         if ip_version == "ALL":
             self.select_ip_version = IPVersion.All
         elif ip_version == "V4Only":
@@ -325,7 +327,7 @@ class Plugin(indigo.PluginBase):
         elif ip_version == "V6Only":
             self.select_ip_version = IPVersion.V6Only
         else:
-            self.select_ip_version = IPVersion.V4Only
+            self.select_ip_version = IPVersion.All
             self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
 
         interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
@@ -2033,19 +2035,13 @@ class Plugin(indigo.PluginBase):
                             oldstate = original_device.states[stateName]
                             newstate = updated_device.states[stateName]
                             if newstate != oldstate:  # state has changed
-                                # Log Indigo device state change.
-                                # (VGD) debug code for papamac's Virtual Garage Door (VGD) changes
-                                # (VGD) self.logger.warning('Indigo device "{}" {} changed: {} --> {}'.format(updated_device.name, stateName, oldstate, newstate))
+
                                 if self.debug2:
                                     self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                                 if this_is_debug_device:
                                     self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                                 accessory = self.device_list_internal[checkindex]["accessory"]
-                                # (VGD) oldChars = self._getGarageDoorCharacteristics(accessory)
 
-                                # Update GarageDoor characteristics based on Indigo device state change.
-
-                                # CurrentDoorState must be 0 -> open, 1 -> closed, 2 -> opening, or 3 -> closing.
                                 currentDoorState = (0, 1, 2, 3, 0, 2)[newstate]
                                 accessory.char_current_state.set_value(currentDoorState)
 
@@ -2058,8 +2054,6 @@ class Plugin(indigo.PluginBase):
                                 if obstructionDetected is not None:
                                     accessory.char_obstruction_detected.set_value(obstructionDetected)
 
-                                # (VGD) newChars = self._getGarageDoorCharacteristics(accessory)
-                                # (VGD) self.logger.warning('GarageDoor characteristics changed by HKLS (c, t, o): {} --> {}'.format(oldChars, newChars))
                             break
                     return
 
@@ -2724,9 +2718,10 @@ class Plugin(indigo.PluginBase):
             elif statetoGet == "garageDoorState":
                 for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
                     if stateName in indigodevice.states:  # choose the first match
+                        doorState = indigodevice.states[stateName]  # Get Indigo doorState (0-5)
                         if self.debug4:
-                            self.logger.debug("Found {} using that..".format(stateName))
-                        return indigodevice.states[stateName]
+                            self.logger.debug(f"Found {stateName=} using that., converted to {doorState}")
+                        return (0, 1, 2, 3, 0, 2)[doorState]     # Return HomeKit currentDoorState (0-3)
 
             elif statetoGet == "lockState":
                 if "onOffState" in indigodevice.states:
@@ -4075,6 +4070,149 @@ class Plugin(indigo.PluginBase):
 
         self.update_deviceList()
         self.show_device_publications()
+
+    def check_dependencies(self):
+        current_directory = Path.cwd()
+        parent_directory = current_directory.parent
+        pip_path = f"/Library/Frameworks/Python.framework/Versions/{sys.version_info.major}.{sys.version_info.minor}/bin/pip{sys.version_info.major}.{sys.version_info.minor}"
+        pip_executable = pip_path  # e.g., "/Library/Frameworks/Python.framework/Versions/3.11/bin/pip3.11"
+        requirements_file = current_directory / "requirements.txt"
+
+        self.logger.info(u"{0:=^190}".format(""))
+        self.logger.info("🔍🔍🔍 Checking Library dependencies, downloading and/or compiling in tempdirectory, without installing. 🔍🔍🔍")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                result = subprocess.run([
+                    pip_executable, 'install', '--upgrade', '-r', str(requirements_file),
+                    '-t', str(temp_dir), '--disable-pip-version-check'
+                ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,encoding='utf-8', errors='replace')
+
+                if result.returncode == 0:
+                    self.logger.info("✅ All dependencies listed in 'requirements.txt' are available for installation.")
+                    self.logger.info(f"📝 Output:\n{result.stdout}")
+                    return True
+                else:
+                    self.logger.info("❌ Some dependencies could not be verified.")
+                    self.logger.info(f"📝 Output:\n{result.stdout}")
+
+                    return False
+            except FileNotFoundError as e:
+                self.logger.info(f"❌ File not found error: {e}")
+                return False
+            except Exception as e:
+                self.logger.info(f"❌ An unexpected error occurred: {e}")
+                return False
+    def logging_issues(self, *args, **kwargs):
+        # Write all published devices to the event log with their friendly name
+        self.logger.debug("Log any issues called...")
+        self.logger.info(u"{0:=^190}".format(""))
+        self.logger.info(u"{0:=^190}".format(" Logging info follows "))
+        self.logger.info(u"{0:=^190}".format(""))
+
+        self.logger.info("{0:=^130}".format(" Initializing New Plugin Session "))
+        self.logger.info("{0:<30} {1}".format("Plugin name:", self.pluginDisplayName))
+        self.logger.info("{0:<30} {1}".format("Plugin version:", self.pluginVersion))
+        self.logger.info("{0:<30} {1}".format("Plugin ID:", self.pluginId))
+        self.logger.info("{0:<30} {1}".format("Plugin Path:", self.pluginPath))
+        self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version) )
+        self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
+
+        self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
+        self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
+        self.logger.info(u"{0:<30} {1}".format("FFmpeg :", self.ffmpeg_command_line.replace('\n', '')))
+        self.logger.info("")
+        relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")
+
+        # Construct the absolute path to the target file
+        file_path = os.path.normpath(os.path.join(self.pluginPath, relative_path))
+
+        # Check if the file exists
+        if os.path.isfile(file_path):
+            try:
+                # Open and read the file contents with explicit encoding
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+
+                # Log the contents of the file
+                self.logger.info("{0:=^130}".format(" Contents of Library Install: "))
+                self.logger.info("Contents of 'pip-install-log-success.txt':\n%s", content)
+                self.logger.info(u"{0:=^190}".format(""))
+            except UnicodeDecodeError as ude:
+                # Handle decoding errors
+                self.logger.error("Unicode decoding error for file '%s': %s", file_path, ude)
+            except Exception as e:
+                # Handle other unforeseen exceptions
+                self.logger.error("Error reading the file '%s': %s", file_path, e)
+        else:
+            # Log that the file does not exist
+            self.logger.error("File '%s' does not exist.  This means Libraries have not correctly installed.", file_path)
+
+        self.check_dependencies()
+        self.logger.info(u"{0:=^190}".format(""))
+        try:
+            result = subprocess.run(
+                ['xcode-select', '-p'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            developer_path = result.stdout.strip()
+            if result.returncode == 0 and os.path.exists(developer_path):
+                self.logger.info("✅ Xcode Command Line Tools are installed at: %s", developer_path)
+            else:
+                self.logger.error("❌ Xcode Command Line Tools are NOT installed.")
+                self.logger.error("❌ This may causes issues with compiling library dependencies, and plugin Failure.  Attempting to install..")
+                try:
+                    subprocess.run(['xcode-select', '--install'], check=True)
+                    self.logger.info("✅ Initiated installation of Xcode Command Line Tools.")
+                except Exception as e:
+                    self.logger.error("❌ Failed to install Xcode Command Line Tools: %s", e)
+                    self.logger.error("❌ Failed to install Xcode Command Line Tools: From a Terminal run 'xcode-select --install'")
+                    self.logger.error("See Forum Post Xcode tools sticky for more options.")
+
+        except Exception as e:
+            self.logger.error("Error checking Xcode Command Line Tools: %s", e)
+
+        # Log self.select_ip_version
+        self.logger.info("{0:=^130}".format(" Advanced Settings: "))
+        # Log selected IP version using f-string
+        self.logger.info(f"Selected IP version: {self.select_ip_version}")
+
+        # Log select interfaces using f-string
+        self.logger.info(f"Select interfaces: {self.select_interfaces}")
+        if self.select_ip_version == IPVersion.V4Only:
+            self.logger.warning("Note: If using OS18 and AppleTV Hubs, IPVersion.All might be worth a trial if you experience connection issues.")
+
+        # Log HAPAdvertised_ipaddress using f-string
+        self.logger.info(f"HKLS Advertised Ip address: {self.HAPAdvertised_ipaddress}")
+
+        # Log HAPServeripaddress using f-string
+        self.logger.info(f"HKLS Server Ipaddress: {self.HAPServeripaddress}")
+
+        # Check and log explanations based on HAPAdvertised_ipaddress and HAPServeripaddress
+        if self.HAPAdvertised_ipaddress is None and self.HAPServeripaddress is None:
+            self.logger.info("HKLS Advertised Ipaddress and HKLS Server Ipaddress are None, which is acceptable. The server will decide the best option.")
+        else:
+            self.logger.warning("[HKLS Advertised Ipaddress and/or HKLS Server Ipaddress are set. Default is None.]")
+
+        if self.HAPAdvertised_ipaddress is not None or self.HAPServeripaddress is not None:
+            self.logger.info(
+                f"Using Advanced settings: HAP Server IP {self.HAPServeripaddress} "
+                f"(if NONE will be calculated) with advertised interfaces of: {self.HAPAdvertised_ipaddress}"
+            )
+
+            if self.HAPServeripaddress is not None and self.HAPAdvertised_ipaddress is not None:
+                if self.HAPServeripaddress not in self.HAPAdvertised_ipaddress:
+                    self.logger.warning(
+                        f"It would seem that your IP address running HomeKit ({self.HAPServeripaddress}) "
+                        "is not in the advertised IP addresses. This will likely cause issues, "
+                        f"I would suggest you add {self.HAPServeripaddress} to the list of advertised interfaces in advanced config."
+                    )
+
+
+        self.Menu_show_runningids()
+
 
     def delete_busy_home(self, *args, **kwargs):
         # Write all published devices to the event log with their friendly name
