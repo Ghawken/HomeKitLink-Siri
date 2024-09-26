@@ -1582,6 +1582,25 @@ class Plugin(indigo.PluginBase):
         self.device_list = set()  ## NB this is list of devices wished to be seen in HomeKit, self_device_list_internal - is list of Devices actually published
         self.logger.info('Finding devices to publish to HomeKit Given Startup...')
         self.logger.debug("Checking Plugin Prefs Directory")
+        current_directory = Path.cwd()  # Current directory
+        parent_directory = current_directory.parent  # Parent directoryrent directory
+        plugin_path = current_directory  # Assuming pluginPath is current_directory
+        # Construct the relative path to the pip-install-log-success.txt file
+        relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")  # Add ".." to go up one directory
+        # Construct the absolute path to the target file
+        file_path = os.path.normpath(os.path.join(plugin_path, relative_path))
+        if not os.path.exists(file_path):
+            message = f"❌ 'pip-install-log-success.txt' not found at: {file_path}"
+            indigo.server.log(message)
+            message = f"❌ This means that libraries have not been installed correctly. (and there is likely a lot of error messaging above)"
+            indigo.server.log(message)
+            message = f"❌ Commonly this is because compiler tools are needed for some dependencies.  This is a fairly big Xcode download, but only needs to be done once."
+            indigo.server.log(message)
+            message = f"❌ Initiating check for this ...  "
+            indigo.server.log(message)
+            if not self.install_xcode_tools():
+                return False
+            ## Shutting down plugin
 
         ## Create Prefs Directory and Camera for images directory
         self._check_cameraDir()
@@ -4103,6 +4122,38 @@ class Plugin(indigo.PluginBase):
             except Exception as e:
                 self.logger.info(f"❌ An unexpected error occurred: {e}")
                 return False
+
+    def install_xcode_tools(self):
+        # Proceed to check for Xcode Command Line Tools
+        try:
+            result = subprocess.run(
+                ['xcode-select', '-p'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            developer_path = result.stdout.strip()
+            if result.returncode == 0 and os.path.exists(developer_path):
+                self.logger.info("✅ Xcode Command Line Tools are installed at: %s", developer_path)
+                self.logger.info("✅ This means why have come to this point is not so simple and hopefully log message helps")
+                self.logger.info("✅ Because of this will continue Plugin Startup")
+                return True
+            else:
+                self.logger.info("❌ Xcode Command Line Tools are NOT installed.")
+                self.logger.info("❌ This may cause issues with compiling library dependencies and plugin failure. Attempting to install...")
+                try:
+                    subprocess.run(['xcode-select', '--install'], check=True)
+                    self.logger.info("✅ Initiated installation of Xcode Command Line Tools.")
+                    self.logger.info("✅ Please complete Pop up dialog, Install and restart plugin once completed.")
+
+                except Exception as e:
+                    self.logger.info("❌ Failed to install Xcode Command Line Tools: %s", e)
+                    self.logger.info("❌ Please run 'xcode-select --install' from a Terminal.")
+                    self.logger.info("ℹ️ See Forum Post Xcode tools sticky for more options.")
+                return False
+        except Exception as e:
+            self.logger.error("❌ Error checking Xcode Command Line Tools: %s", e)
+            return False
     def logging_issues(self, *args, **kwargs):
         # Write all published devices to the event log with their friendly name
         self.logger.debug("Log any issues called...")
@@ -4150,30 +4201,6 @@ class Plugin(indigo.PluginBase):
 
         self.check_dependencies()
         self.logger.info(u"{0:=^190}".format(""))
-        try:
-            result = subprocess.run(
-                ['xcode-select', '-p'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            developer_path = result.stdout.strip()
-            if result.returncode == 0 and os.path.exists(developer_path):
-                self.logger.info("✅ Xcode Command Line Tools are installed at: %s", developer_path)
-            else:
-                self.logger.error("❌ Xcode Command Line Tools are NOT installed.")
-                self.logger.error("❌ This may causes issues with compiling library dependencies, and plugin Failure.  Attempting to install..")
-                try:
-                    subprocess.run(['xcode-select', '--install'], check=True)
-                    self.logger.info("✅ Initiated installation of Xcode Command Line Tools.")
-                except Exception as e:
-                    self.logger.error("❌ Failed to install Xcode Command Line Tools: %s", e)
-                    self.logger.error("❌ Failed to install Xcode Command Line Tools: From a Terminal run 'xcode-select --install'")
-                    self.logger.error("See Forum Post Xcode tools sticky for more options.")
-
-        except Exception as e:
-            self.logger.error("Error checking Xcode Command Line Tools: %s", e)
-
         # Log self.select_ip_version
         self.logger.info("{0:=^130}".format(" Advanced Settings: "))
         # Log selected IP version using f-string
