@@ -4337,25 +4337,31 @@ class Plugin(indigo.PluginBase):
 
     def Menu_show_runningids(self, *args, **kwargs):
         self.logger.debug("Show Running Ids called...")
+        deleted_devices = []
         self.logger.info(u"{0:=^190}".format(""))
         self.logger.info(u"{0:=^190}".format(" Device Bridges enabled and up and Running "))
         self.logger.info(u"{0:=^190}".format(""))
         for num in range(0,len(self.running_deviceids)):
             device = self.return_deviceorAG(self.running_deviceids[num])
-            device_props = dict(device.pluginProps)
-            devicename = device_props.get("homekit-name", "")
-            deviceType = device_props.get("HomeKit_deviceSubtype", "")
-            devicesensor = device_props.get("HomeKit_deviceSensor", "")
-            try:
-                deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
-            except ValueError:
-                deviceBridgeID = 99
-            self.logger.info("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
+            if device == None:
+                ##  HomekitLink has this device listed but doesn't exist anymore.. Issue
+                deleted_devices.append(self.running_deviceids[num])
+            else:
+                device_props = dict(device.pluginProps)
+                devicename = device_props.get("homekit-name", "")
+                deviceType = device_props.get("HomeKit_deviceSubtype", "")
+                devicesensor = device_props.get("HomeKit_deviceSensor", "")
+                try:
+                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
+                except ValueError:
+                    deviceBridgeID = 99
+                self.logger.info("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
 
         missing_id = list(set(self.device_list_internal_idonly).difference(self.running_deviceids))
-        self.logger.info(u"{0:=^190}".format(""))
-        self.logger.info(u"{0:=^190}".format(" Enabled Bridge, yet not Running Devices "))
-        self.logger.info(u"{0:=^190}".format(""))
+        if len(missing_id) >0:
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" Enabled Bridge, yet not Running Devices "))
+            self.logger.info(u"{0:=^190}".format(""))
         for num in range(0, len(missing_id) ):
             device = self.return_deviceorAG(missing_id[num])
             device_props = dict(device.pluginProps)
@@ -4368,6 +4374,12 @@ class Plugin(indigo.PluginBase):
                 deviceBridgeID = 99
             self.logger.warning("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
         self.logger.info(u"{0:=^190}".format(""))
+        if len(deleted_devices)>0:
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" No longer in Indigo yet registered in HomeKit "))
+            self.logger.info(u"{0:=^190}".format(""))
+            for num in range(0, len(deleted_devices)):
+                self.logger.warning(f"Indigo Device ID:  Deleted but still in HomeKit.  Device Id:{num}")
 
         #self.logger.info(f"{missing_id}")
 
