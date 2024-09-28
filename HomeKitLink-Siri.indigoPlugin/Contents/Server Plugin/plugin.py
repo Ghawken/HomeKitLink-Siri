@@ -11,13 +11,18 @@ try:
 except:
     pass
 
+import preflight  # This runs the dependency checks immediately upon import
+import os
+from os import path
+from pathlib import Path
+
 import asyncio
 import threading
 import subprocess
 import traceback
 import webbrowser
 import random
-from pathlib import Path
+
 import tempfile
 from glob import glob
 import ifaddr
@@ -35,8 +40,7 @@ except:
 import time as t
 import platform
 import sys
-import os
-from os import path
+
 
 import colorsys
 import logging
@@ -1582,24 +1586,7 @@ class Plugin(indigo.PluginBase):
         self.device_list = set()  ## NB this is list of devices wished to be seen in HomeKit, self_device_list_internal - is list of Devices actually published
         self.logger.info('Finding devices to publish to HomeKit Given Startup...')
         self.logger.debug("Checking Plugin Prefs Directory")
-        current_directory = Path.cwd()  # Current directory
-        parent_directory = current_directory.parent  # Parent directoryrent directory
-        plugin_path = current_directory  # Assuming pluginPath is current_directory
-        # Construct the relative path to the pip-install-log-success.txt file
-        relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")  # Add ".." to go up one directory
-        # Construct the absolute path to the target file
-        file_path = os.path.normpath(os.path.join(plugin_path, relative_path))
-        if not os.path.exists(file_path):
-            message = f"❌ 'pip-install-log-success.txt' not found at: {file_path}"
-            indigo.server.log(message)
-            message = f"❌ This means that libraries have not been installed correctly. (and there is likely a lot of error messaging above)"
-            indigo.server.log(message)
-            message = f"❌ Commonly this is because compiler tools are needed for some dependencies.  This is a fairly big Xcode download, but only needs to be done once."
-            indigo.server.log(message)
-            message = f"❌ Initiating check for this ...  "
-            indigo.server.log(message)
-            if not self.install_xcode_tools():
-                return False
+
             ## Shutting down plugin
 
         ## Create Prefs Directory and Camera for images directory

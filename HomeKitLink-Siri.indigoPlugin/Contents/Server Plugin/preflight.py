@@ -1,112 +1,90 @@
-# preflight.py
+# dependency_checker.py
 
-# preflight.py
-
-import subprocess
 import os
-import sys
 from pathlib import Path
-import time
+import subprocess
 
-import indigo  # Assume indigo is always available
+# Attempt to import indigo for logging
+try:
+    import indigo
+    INDIGO_AVAILABLE = True
+except ImportError:
+    INDIGO_AVAILABLE = False
+    print("⚠️ Indigo library not found. Falling back to print statements for logging.")
+
+def log(message):
+    """
+    Logs messages using indigo.server.log if available, otherwise prints to console.
+    """
+    if INDIGO_AVAILABLE:
+        indigo.server.log(message)
+    else:
+        print(message)
 
 def install_xcode_tools():
+    """
+    Checks for Xcode Command Line Tools and attempts installation if missing.
+    """
     try:
-        installation_output = ""  # Initialize installation output
-        current_directory = Path.cwd()  # Current directory
-        parent_directory = current_directory.parent  # Parent directoryrent directory
-        plugin_path = current_directory  # Assuming pluginPath is current_directory
+        result = subprocess.run(
+            ['xcode-select', '-p'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        developer_path = result.stdout.strip()
+        if result.returncode == 0 and os.path.exists(developer_path):
+            log(f"✅ Xcode Command Line Tools are installed at: {developer_path}")
+            log("✅ Continuing Plugin Startup, Library install Failure has another basis")
+            return True
+        else:
+            log("❌ Xcode Command Line Tools are NOT installed.")
+            log("❌ This may cause issues with compiling library dependencies and plugin failure. Attempting to install...")
+            try:
+                subprocess.run(['xcode-select', '--install'], check=True)
+                log("✅ Initiated installation of Xcode Command Line Tools.")
+                log("✅ Please complete the installation dialog and restart the plugin once done.")
+            except Exception as e:
+                log(f"❌ Failed to install Xcode Command Line Tools: {e}")
+                log("❌ Please run 'xcode-select --install' from a Terminal.")
+                log("ℹ️ Refer to the forum post on Xcode tools for more options.")
+            return False
+    except Exception as e:
+        log(f"❌ Error checking Xcode Command Line Tools: {e}")
+        return False
 
-        # Construct the relative path to the pip-install-log-success.txt file
-        relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")  # Add ".." to go up one directory
-        # Construct the absolute path to the target file
-        file_path = os.path.normpath(os.path.join(plugin_path, relative_path))
+def check_dependencies():
+    """
+    Performs dependency checks and handles missing dependencies.
+    """
+    # Define paths
+    current_directory = Path.cwd()  # Current directory
+    parent_directory = current_directory.parent  # Parent directory
+    plugin_path = current_directory  # Assuming pluginPath is current_directory
 
-        # Check if the pip-install-log-success.txt file exists
-        if os.path.exists(file_path):
-            message = f"✅ Libraries correctly installed: Based on: {file_path}"
-            indigo.server.log(message)
-            installation_output += message + "\n"
+    # Construct the relative path to the pip-install-log-success.txt file
+    relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")  # Add ".." to go up one directory
 
-            message = "✅ Xcode Command Line Tools are not needed. Skipping installation."
-            indigo.server.log(message)
-            installation_output += message + "\n"
+    # Construct the absolute path to the target file
+    file_path = os.path.normpath(os.path.join(plugin_path, relative_path))
 
-            return installation_output  # Exit the function since Xcode tools are not needed
+    if not os.path.exists(file_path):
+        messages = [
+            f"❌ 'pip-install-log-success.txt' not found at: {file_path}",
+            "❌ This means that libraries have not been installed correctly. (and there is likely a lot of error messaging above)",
+            "❌ Commonly this is because compiler tools are needed for some dependencies. This is a fairly big Xcode download, but only needs to be done once.",
+            "❌ Initiating check for this ...  Once completed Restart Plugin"
+        ]
 
-        message = f"❌ 'pip-install-log-success.txt' not found at: {file_path}"
-        indigo.server.log(message)
-        installation_output += message + "\n"
+        for message in messages:
+            log(message)
 
-        message = "🔍 Proceeding to check for Xcode Command Line Tools..."
-        indigo.server.log(message)
-        installation_output += message + "\n"
-
-        # Proceed to check for Xcode Command Line Tools
-        try:
-            result = subprocess.run(
-                ['xcode-select', '-p'],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            developer_path = result.stdout.strip()
-            if result.returncode == 0 and os.path.exists(developer_path):
-                message = f"✅ Xcode Command Line Tools are installed at: {developer_path}"
-                indigo.server.log(message)
-                installation_output += message + "\n"
-            else:
-                message = "❌ Xcode Command Line Tools are NOT installed."
-                indigo.server.log(message)
-                installation_output += message + "\n"
-
-                message = "❌ This may cause issues with compiling library dependencies and plugin failure. Attempting to install..."
-                indigo.server.log(message)
-                installation_output += message + "\n"
-
-                try:
-                    # Initiate the installation
-                    subprocess.run(['xcode-select', '--install'], check=True)
-                    message = "✅ Initiated installation of Xcode Command Line Tools.  "
-                    indigo.server.log(message)
-                    installation_output += message + "\n"
-
-                    # Delay plugin startup and restart after installation is likely complete
-                    delay_seconds = 600  # Adjust as needed (e.g., 300 seconds = 5 minutes)
-                    message = f"⏳ Waiting {delay_seconds} seconds for installation to complete..."
-                    indigo.server.log(message)
-                    installation_output += message + "\n"
-
-                    time.sleep(delay_seconds)
-
-                    message = "🔄 Restarting plugin to complete installation."
-                    indigo.server.log(message)
-                    installation_output += message + "\n"
-
-                    # Restart the plugin
-                    indigo.server.restartPlugin("com.GlennNZ.indigoplugin.HomeKitLink-Siri")
-
-                    # Exit after initiating restart
-                    sys.exit(0)
-
-                except Exception as e:
-                    message = f"❌ Failed to initiate Xcode Command Line Tools installation: {e}"
-                    indigo.server.log(message)
-                    installation_output += message + "\n"
-
-                    message = "❌ Please run 'xcode-select --install' from a Terminal."
-                    indigo.server.log(message)
-                    installation_output += message + "\n"
-
-                    message = "ℹ️ See Forum Post Xcode tools sticky for more options."
-                    indigo.server.log(message)
-                    installation_output += message + "\n"
-
-        except Exception as e:
-            message = f"❌ Error checking Xcode Command Line Tools: {e}"
-            indigo.server.log(message)
-            installation_output += message + "\n"
-
-        return installation_output  # Return the collected installation output
-    except:
-        indigo.server.log("Exception Caught in Xcode Preflight check. Skipped.")
+        # Attempt to install Xcode Command Line Tools
+        if not install_xcode_tools():
+            log("❌ Dependency checks failed. Plugin will not start.")
+            # Optionally, you can raise an exception to halt further execution
+            raise RuntimeError("❌ Dependency checks failed. Plugin will not start.")
+    else:
+        log("✅ ✅  Confirmed Library Installs Completed  ✅ ✅ ")
+# Run the dependency checks upon import
+check_dependencies()
