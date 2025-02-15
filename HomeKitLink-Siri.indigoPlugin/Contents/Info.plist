@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PluginVersion</key>
+	<string>0.6.73</string>
+	<key>ServerApiVersion</key>
+	<string>3.4</string>
+	<key>IwsApiVersion</key>
+	<string>1.0.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>HomeKitLink Siri</string>
+	<key>CFBundleName</key>
+	<string>HomeKitLink-Siri</string>
+        <key>CFBundleIdentifier</key>
+	<string>com.GlennNZ.indigoplugin.HomeKitLink-Siri</string>
+	<key>CFBundleVersion</key>
+	<string>1.0.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>https://forums.indigodomo.com/viewforum.php?f=366</string>
+		</dict>
+	</array>
+</dict>
+</plist>
