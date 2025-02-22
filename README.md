@@ -182,7 +182,7 @@ Other cameras - basically aren't supported, and you would be better off running 
 
 ## Menu Items:
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/MenuItems1.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png?raw=true)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/MenuItems1.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/MenuItems1.png?raw=true)
 
 ### Show Device Publications
 
