@@ -20,31 +20,33 @@ Now API 3.4 dependencies and xattr commands are not required.
 
 ### Limitations
 
-Only one indigo device, once only, can be published to any HomeKit Bridge.
+An indigo device, can be published to any HomeKit Bridge, but only once. 
 
-Each Indigo HKLS bridge device can have a maximum of 95 devices published within it.  Currently this is not enforced.  This is on TODO list.
+Each Indigo HKLS bridge device can have a maximum of 95 indigo devices published within it.  Currently this is not enforced.  This is on TODO list.
 If you are getting close, would suggest creating a new HomeKitLink bridge.  The number of these bridges is unlimited.
 
 Add new HomeKitLink bridge devices as needed to increase device count, or to manage devices
-eg. Some users have a bridge per room for example.
+eg. Some users have a HKLS bridge per room for example, or bridge per device type.  Or one bridge for all.
+
 Multiple bridges for the sake of it - likely best avoided, but shouldn't add to much overhead.
 
 If you wish to publish seperate indigo devices but one physical device = **no problem eg. motion, light sensors**.
-If you wish the exactly same device eg. 2 dimmer devices to be available in homekit - potentially under different names this is not possible without some simple help.
+If you wish the exactly same device eg. 2 dimmer devices to be available in homekit - potentially under different names, this is not possible without some simple help.
 Simply use Masquerade plugin, or virtual devices and copy the device wished into a new device - use this new device within this plugin.  Repeat as many times as wished.
 
-*Everything*  is user selectable - for example a physical light switch, can be a motion sensor, or occupancy sensor if you really want it to be - or a Doorbell linked to a camera stream that notifies you...
+*Everything*  is user selectable - for example a physical light switch, can be a motion sensor, or occupancy sensor in Home if you really want it to be - or a Doorbell linked to a camera stream that notifies you...
 
 This leads to a bit of setup work, but once device is selected, and setup, saved, there should be no need ever to revisit.
-These details are also saved within Indigo, so migrate and move with indigo without problem.
+
+These details are also saved within Indigo Database, so migrate and move with indigo without problem.
 
 If you break HomeKit by your poor device option - in the normal course of events you simply remove the device from the HomeKit bridge and start again..
 
 **Important**:
-If you are changing a already published HomeKit device - eg. Switch to a Blind.
+If you are changing type of a already published HomeKit device - eg. Switch to a Blind.
 That will cause issues with the HomeKit app who will expect the old device.
-You MUST remove the Switch device first, unpublish, Save, Save config and alllow bridge to restart.
-Check in HomeKit app that the switch is gone (should just disappear...) and then readd again as new device type.
+You MUST remove the Switch device first, unpublish, Save, Save config and allow HKLS bridge to restart.
+Check in HomeKit app that the switch (old type) is gone (should just disappear...) and then re-add again as new device type.
 
 ### Quick, Basic Setup
 
@@ -52,6 +54,7 @@ Check in HomeKit app that the switch is gone (should just disappear...) and then
 2. Select a Indigo device to publish on this Bridge to HomeKit.
 
 For this simple example lets just pick a Light Device
+
 Click the Checkbox Publish Device
 
 Name the Device.  This is the HomeKit name - Homekit automatically removes the Room name from front of device.  Decide on your naming.
@@ -66,7 +69,7 @@ Please SAVE in the Device's Config Dialog.  (This will stop, start the HomeKitLi
 
 Name your newly created HomeKitLink Bridge something e.g HomeKitLink Bridge Lights
 
-4. Go to HomeKit app in iOS device
+4. Go to Home app in iOS device
 
 Use you existing Home, or create a new one
 
@@ -82,7 +85,7 @@ Click the Show QR Code button.
 
 This should open a Webpage with a QR Code
 
-Scan this QR Code on the HomeKit iOS App.
+Scan this QR Code on the Home iOS App.
 
 Name and setup you Bridge and Light.
 
@@ -92,7 +95,7 @@ This device should now be Setup within HomeKit
 
 Siri - can control - turn on Light-name, turn on Room lights etc.  Close/Open Blinds etc.etc
 
-To add Additional Devices (up to 95 per Indigo HomeKitLink Bridge) go to Edit and repeat Step 2.
+To add Additional Devices (up to 95 per Indigo HomeKitLink Bridge) go to Homekitlink Bridge Edit and repeat Step 2. selecting a new device and enabling its publishing.
 You can add as many devices as wished at once, before closing the Config Dialog and restarting Bridge with Save
 
 Note:
