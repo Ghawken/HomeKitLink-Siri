@@ -1,6 +1,6 @@
 # HomeKitLink Plugin
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png?raw=true)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/icon_256.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/icon_256.png?raw=true)
 
 This plugin (HKLS) aims to allow you to create HomeKit Bridges, which you add your indigo devices to and allows control from within Homekit and Siri control of your setup Apps.
 
@@ -182,7 +182,7 @@ Other cameras - basically aren't supported, and you would be better off running 
 
 ## Menu Items:
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png?raw=true)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/MenuItems1.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/MenuItems1.png?raw=true)
 
 ### Show Device Publications
 
@@ -404,7 +404,7 @@ Add HKLS support for new Beta version of plugin for AD2USB security systems - (T
 
 Adds Advanced Bonjour/mDNS options for troubleshooting, including Debug10 - a very verbose file only mDNS/Bonjour logging option.
 
-![https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/AdvancedOptions.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/AdvancedOptions.png?raw=true)
+![https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/AdvancedOptions.png?raw=true](https://github.com/Ghawken/HomeKitLink-Siri/blob/master/Images/AdvancedOptions.png?raw=true)
 
 **USE THESE WITH CAUTION**
 
