@@ -22,7 +22,7 @@
     <MenuItem id="sep12"/>
     <MenuItem id="sep13"/>
     <MenuItem id="loggingissues">
-        <Name>Support Information For Forum Posting</Name>
+        <Name>ℹ️ Support Information For Forum Posting️</Name>
         <CallbackMethod>logging_issues</CallbackMethod>
     </MenuItem>
     <MenuItem id="sep2"/>

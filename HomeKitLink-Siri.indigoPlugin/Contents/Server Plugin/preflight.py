@@ -85,6 +85,6 @@ def check_dependencies():
             # Optionally, you can raise an exception to halt further execution
             raise RuntimeError("❌ Dependency checks failed. Plugin will not start.")
     else:
-        log("✅ ✅  Confirmed Library Installs Completed  ✅ ✅ ")
+        log("✅ ✅  Confirmed Library Installs have been successfully Completed  ✅ ✅ ")
 # Run the dependency checks upon import
 check_dependencies()

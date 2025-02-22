@@ -4125,8 +4125,8 @@ class Plugin(indigo.PluginBase):
             developer_path = result.stdout.strip()
             if result.returncode == 0 and os.path.exists(developer_path):
                 self.logger.info("✅ Xcode Command Line Tools are installed at: %s", developer_path)
-                self.logger.info("✅ This means why have come to this point is not so simple and hopefully log message helps")
-                self.logger.info("✅ Because of this will continue Plugin Startup")
+                ##self.logger.info("✅ This means why have come to this point is not so simple and hopefully log message helps")
+                ##self.logger.info("✅ Because of this will continue Plugin Startup")
                 return True
             else:
                 self.logger.info("❌ Xcode Command Line Tools are NOT installed.")
@@ -4187,9 +4187,16 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("Error reading the file '%s': %s", file_path, e)
         else:
             # Log that the file does not exist
-            self.logger.error("File '%s' does not exist.  This means Libraries have not correctly installed.", file_path)
+            self.logger.error("❌ File '%s' does not exist.  This means Libraries have not correctly installed. ❌", file_path)
+
+        self.logger.info("{0:=^130}".format(" Xcode Command Line Tools Check: "))
+
+        self.logger.info("✅ Xcode Command Line Tools are needed.  Checking that they are Installed")
+        self.install_xcode_tools()
+        self.logger.info(u"{0:=^190}".format(""))
 
         self.check_dependencies()
+
         self.logger.info(u"{0:=^190}".format(""))
         # Log self.select_ip_version
         self.logger.info("{0:=^130}".format(" Advanced Settings: "))
