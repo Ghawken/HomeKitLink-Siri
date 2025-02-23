@@ -2160,7 +2160,7 @@ class Plugin(indigo.PluginBase):
                     # if Doorbell nothing further to do... return regardless
                     return
 
-                elif str(updateddevice_subtype) == "BlueIrisCamera":
+                elif str(updateddevice_subtype) == "BlueIrisCamera":  #update
                     # if type(original_device) == indigo.RelayDevice:
                     motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
                     if motionEnabled:
