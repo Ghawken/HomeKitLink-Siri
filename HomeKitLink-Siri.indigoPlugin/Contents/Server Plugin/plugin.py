@@ -41,7 +41,7 @@ import time as t
 import platform
 import sys
 
-
+import urllib
 import colorsys
 import logging
 
@@ -1189,9 +1189,23 @@ class Plugin(indigo.PluginBase):
 
                                 if 'auth=' in camera["SS_imageURL"]:
                                     theURL = camera['SS_imageURL']
+
+                                    parsed_theURL = urllib.parse.urlparse(theURL)
                                     if self.debug7:
-                                        self.logger.debug(f"Using Auth for Camera Image.  {theURL}")
-                                    r = session.get(theURL, stream=True, timeout=10)
+                                        self.logger.debug(f"Parsed URL {parsed_theURL}")
+                                    params_theURL = urllib.parse.parse_qs(parsed_theURL.query)
+                                    if self.debug7:
+                                        self.logger.debug(f"Parsed query {params_theURL}")
+                                    # Update Width
+                                    params_theURL['width'] = [str(image_width)]
+                                    ## Remove Height - hopefully auto adjusts aspect
+                                    params_theURL.pop('height', None)
+                                    new_query_theURL = urllib.parse.urlencode(params_theURL, doseq=True)
+                                    new_url = urllib.parse.urlunparse((parsed_theURL.scheme, parsed_theURL.netloc, parsed_theURL.path,
+                                                                       parsed_theURL.params, new_query_theURL, parsed_theURL.fragment))
+                                    if self.debug7:
+                                        self.logger.debug(f"Using Auth for Camera Image.  {new_url}")
+                                    r = session.get(new_url, stream=True, timeout=10)
                                 else:
                                     theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
                                     username = camera["SS_username"]
@@ -1517,8 +1531,7 @@ class Plugin(indigo.PluginBase):
             elif indigo.devices[indigodeviceid].pluginId == "com.flyingdiver.indigoplugin.securityspy":
                 # Get the device and it's SS server
                 ssDev = indigo.devices[indigodeviceid]
-                ## Awaiting State for Support
-                supportAudio = False
+                supportAudio = ssDev.pluginProps.get("HomeKit_audioSelector", False)
                 config["support_audio"] = supportAudio
 
                 ssWidth = 640
@@ -2159,6 +2172,24 @@ class Plugin(indigo.PluginBase):
                                 self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                             self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
                             return
+
+                elif str(updateddevice_subtype) == "SecuritySpyCamera":
+                    # if type(original_device) == indigo.RelayDevice:
+
+                    motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
+                    if self.debug2:
+                        self.logger.debug(f"Within the SecuritySpyCamera Moption Check. {motionEnabled=}")
+
+                    if motionEnabled:
+                        if 'event_on' in updated_device.states:  ## Other plugin doesnt have it
+                            if updated_device.states['event_on'] != original_device.states['event_on']:
+                                newstate = updated_device.states["event_on"]
+                                if self.debug2:
+                                    self.logger.debug("Motion Changed...and New State {}".format(newstate))
+                                if self.debug2:
+                                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                                self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
+                                return
 
                 elif str(updateddevice_subtype) == "Fan":
                     ## Fan device has a brightnessLevel below, likely dimmer update Rotation speed with that.
