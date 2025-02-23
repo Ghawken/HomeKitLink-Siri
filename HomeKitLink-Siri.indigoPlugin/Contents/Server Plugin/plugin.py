@@ -995,8 +995,8 @@ class Plugin(indigo.PluginBase):
                                                        "subtype": "Linked-DoorBell",
                                                        "bridgeID": int(bridgenumber),
                                                        "devicemodel": "Security Spy DoorBell",
-                                                       "devicesensor": "Securiy Spy DoorBell",
-                                                       "manufacturername": "Securiy Spy Linked"
+                                                       "devicesensor": "Security Spy DoorBell",
+                                                       "manufacturername": "Security Spy Linked"
                                                        }
                                                       )
                             self.device_list_internal_idonly.append(int(device_add_id))
@@ -1182,18 +1182,30 @@ class Plugin(indigo.PluginBase):
 
                                 cameracheck[cameraRequested] = t.time()
                                 camName = camera["SS_name"]
-                                theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
-                                username = camera["SS_username"]
-                                password = camera["SS_password"]
                                 start = t.time()
                                 path = self.cameraimagePath + '/' + camName + '.jpg'
                                 if self.debug7:
                                     self.logger.debug("{}".format(path))
+
+                                if 'auth=' in camera["SS_imageURL"]:
+                                    theURL = camera['SS_imageURL']
+                                    if self.debug7:
+                                        self.logger.debug(f"Using Auth for Camera Image.  {theURL}")
+                                    r = session.get(theURL, stream=True, timeout=10)
+                                else:
+                                    theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
+                                    username = camera["SS_username"]
+                                    password = camera["SS_password"]
+                                    r = session.get(theURL, auth=(str(username), str(password)), stream=True,
+                                                    timeout=10)
+
+
                                 # r = r.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
-                                r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
+                              #  r = session.get(theURL, auth=(str(username), str(password)), stream=True, timeout=10)
                                 # with open(path,"wb") as f:
                                 #     f.write(r.content)
                                 #     f.close()
+
 
                                 if r.status_code == 200:
                                     with open(path, 'wb') as f:
@@ -1501,6 +1513,50 @@ class Plugin(indigo.PluginBase):
                 if ssWidth > 1280:
                     ssWidth = 1280
                 config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}/stream?cameraNum={}&width={}".format(ssURL_rtsp, ssCameraNum, ssWidth)
+            ## Support FlyingDiver new SecuritySpy Plugin.  Add Motion
+            elif indigo.devices[indigodeviceid].pluginId == "com.flyingdiver.indigoplugin.securityspy":
+                # Get the device and it's SS server
+                ssDev = indigo.devices[indigodeviceid]
+                ## Awaiting State for Support
+                supportAudio = False
+                config["support_audio"] = supportAudio
+
+                ssWidth = 640
+                ssHeight = 480
+                ssFPS = 30
+
+                ssURL = ssDev.states['latest_image'] #u"http://{}{}".format(ssuPw, ssServer.ownerProps["address"])
+                ssURL_rtsp = ssDev.states['live_stream'] #'"rtsp://{}{}:{}".format(ssuPw, ssServer.ownerProps["address"], ssServer.ownerProps["port"])
+
+
+                ssWidth = int(ssDev.states['image_width']) #int(self._getElementValueByTagName(sscamera, u"width", required=False, default=u""))
+                ssHeight = int(ssDev.states['image_height']) #int(self._getElementValueByTagName(sscamera, u"height", required=False, default=u""))
+                ssFPS = round(float(ssDev.states['fps'])) #@int(float(self._getElementValueByTagName(sscamera, u"current-fps", required=False, default=u"")))
+                ssName = ssDev.name
+                if ssFPS < 10: ssFPS = 10
+
+                config[HKDevicesCamera.CONF_VIDEO_CODEC] = "libx264"  # "libx264"  # "openh264" #HKDevicesCamera.DEFAULT_VIDEO_CODEC
+                config[HKDevicesCamera.CONF_AUDIO_CODEC] = "libfdk_aac"  # "aac"
+                config[HKDevicesCamera.CONF_MAX_HEIGHT] = ssHeight
+                config[HKDevicesCamera.CONF_MAX_WIDTH] = ssWidth
+                config[HKDevicesCamera.CONF_MAX_FPS] = int(ssFPS)
+                config[HKDevicesCamera.CONF_VIDEO_MAP] = "0:0"
+
+                config["DoorBell_ID"] = indigo.devices[indigodeviceid].pluginProps.get("HomeKit_doorbellId", 1)
+                config["SS_name"] = ssName
+                config["SS_serverip"] = "IPAddress"
+                config["SS_serverport"] = "Port"
+                config["SS_username"] = "Username:UsingAuth"
+                config["SS_password"] = "Password:UsingAuth"
+                # config["SS_username_pass"] = ssuPw
+                config["SS_imageURL"] = ssURL
+                config["useMotionSensor"] = True
+                config["start_commands_extra"] = ("-probesize 64 -analyzeduration 0 ")
+                #      config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}/++video?cameraNum={}&width={}&height={}".format(ssURL, ssCameraNum, ssWidth, ssHeight)
+
+                if ssWidth > 1280:
+                    ssWidth = 1280
+                config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}&width={}".format(ssURL_rtsp,  ssWidth)
 
             else:  # Yikes not a camera
                 self.logger.warning("This device ID {} with Name {} ** CANNOT ** be a camera device in HomeKit. Please remove and update. ".format(indigodeviceid, indigo.devices[indigodeviceid].name))
@@ -3304,7 +3360,7 @@ class Plugin(indigo.PluginBase):
                     if actionGroup.id in self.device_list:
                         actionG_name = actionGroup.name
                         try:
-                            bridgeassigned = actionGroup.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                            bridgeassigned = int(actionGroup.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
                         except ValueError:
                             bridgeassigned = 99  ## shouldnt ever =99.
 
@@ -3323,7 +3379,7 @@ class Plugin(indigo.PluginBase):
                             if device.id in self.device_list:
                                 device_name = device.name
                                 try:
-                                    bridgeassigned = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                                    bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
                                 except ValueError:
                                     bridgeassigned = 99  ## shouldnt ever =99
                                 if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
@@ -3339,7 +3395,7 @@ class Plugin(indigo.PluginBase):
                         if device.id in self.device_list:
                             device_name = device.name
                             try:
-                                bridgeassigned = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
                             except ValueError:
                                 bridgeassigned = 99  ## shouldnt ever =99
                             if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
@@ -3356,7 +3412,26 @@ class Plugin(indigo.PluginBase):
                         if device.model == "Camera":
                             if device.id in self.device_list:
                                 device_name = device.name
-                                bridgeassigned = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                                try:
+                                    bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+                                except ValueError:
+                                    bridgeassigned = 99
+                                ## shouldnt ever =99
+                                if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
+                                    assigned_device_list.append((device.id, device_name))
+                                else:  ## assigned but by another Bridge.
+                                    assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + (device_name) + ":%%"))  ## disabled selection
+                            else:
+                                unassigned_device_list.append((device.id, device.name))
+                    elif device.pluginId == "com.flyingdiver.indigoplugin.securityspy":
+                        # self.logger.info("{}".format(device.model) )
+                        if device.model == "SecuritySpy Camera":
+                            if device.id in self.device_list:
+                                device_name = device.name
+                                try:
+                                    bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99)) ## shouldnt ever =99
+                                except ValueError:
+                                    bridgeassigned = 99
                                 if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
                                     assigned_device_list.append((device.id, device_name))
                                 else:  ## assigned but by another Bridge.
@@ -3370,7 +3445,10 @@ class Plugin(indigo.PluginBase):
                         if device.id in self.device_list:
                             device_name = device.name
                             ## is assigned to a bridgeget bridge it is assigned to
-                            bridgeassigned = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                            try:
+                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99) ) ## shouldnt ever =99
+                            except ValueError:
+                                bridgeassigned = 99
                             if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
                                 assigned_device_list.append((device.id, device_name))
                             else:  ## assigned but by another Bridge.
@@ -3385,7 +3463,7 @@ class Plugin(indigo.PluginBase):
                             device_name = device.name
                             ## is assigned to a bridgeget bridge it is assigned to
                             try:
-                                bridgeassigned = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)  ## shouldnt ever =99
+                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99) )## shouldnt ever =99
                             except ValueError:
                                 bridgeassigned = 99  ## shouldnt ever =99
                             if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
@@ -3458,7 +3536,7 @@ class Plugin(indigo.PluginBase):
                 if dev.deviceTypeId == 'Weather': return "service_TemperatureSensor"
                 if dev.deviceTypeId == 'Daily': return "service_HumiditySensor"
 
-            if dev.pluginId == "com.GlennNZ.indigoplugin.BlueIris" or dev.pluginId == "org.cynic.indigo.securityspy":
+            if dev.pluginId == "com.GlennNZ.indigoplugin.BlueIris" or dev.pluginId == "org.cynic.indigo.securityspy" or dev.pluginId == "com.flyingdiver.indigoplugin.securityspy":
                 return "service_Camera"
 
             elif dev.displayStateImageSel == "TemperatureSensor":

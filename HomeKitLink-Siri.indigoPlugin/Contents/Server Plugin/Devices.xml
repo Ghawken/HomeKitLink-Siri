@@ -16,7 +16,7 @@
 				    <Option value="switch">Indigo Relay Devices</Option>
 				    <Option value="sensor">Indigo Sensor Devices</Option>
 				    <Option value="BI_camera">Blue Iris Camera</Option>
-				 	<Option value="SS_camera">Securitry Spy Camera</Option>
+				 	<Option value="SS_camera">Security Spy Camera</Option>
                 </List>
 				  <CallbackMethod>menuChanged</CallbackMethod>
 			</Field>
