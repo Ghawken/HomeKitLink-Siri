@@ -8,7 +8,7 @@ import logging
 from typing import TYPE_CHECKING, Dict, Optional, Any
 from urllib.parse import ParseResult, parse_qs, urlparse
 import uuid
-import async_timeout
+from asyncio import timeout as async_timeout
 
 from chacha20poly1305_reuseable import ChaCha20Poly1305Reusable as ChaCha20Poly1305
 from cryptography.exceptions import InvalidSignature, InvalidTag

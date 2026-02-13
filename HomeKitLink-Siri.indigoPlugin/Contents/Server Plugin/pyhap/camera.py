@@ -24,7 +24,7 @@ import logging
 import struct
 from uuid import UUID
 
-import async_timeout
+from asyncio import timeout as async_timeout
 
 from pyhap import RESOURCE_DIR, tlv
 from pyhap.accessory import Accessory

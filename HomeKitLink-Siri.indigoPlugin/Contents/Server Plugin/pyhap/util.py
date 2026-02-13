@@ -5,7 +5,7 @@ import orjson
 import random
 import socket
 from uuid import UUID
-import async_timeout
+from asyncio import timeout as async_timeout
 from .const import BASE_UUID
 from typing import Awaitable, Set
 

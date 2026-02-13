@@ -3,7 +3,6 @@ import asyncio
 from datetime import timedelta
 import logging
 from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
-import aiofiles
 from typing import Any
 from HKutils import pid_is_alive
 from HKutils import SimpleIntervalScheduler

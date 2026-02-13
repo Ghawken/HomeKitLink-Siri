@@ -58,33 +58,35 @@ def check_dependencies():
     Performs dependency checks and handles missing dependencies.
     """
     # Define paths
-    current_directory = Path.cwd()  # Current directory
-    parent_directory = current_directory.parent  # Parent directory
-    plugin_path = current_directory  # Assuming pluginPath is current_directory
+    """
+        Performs dependency checks and handles missing dependencies.
+        Looks for any file whose name ends with 'pip-install-log-success.txt'
+        """
 
-    # Construct the relative path to the pip-install-log-success.txt file
-    relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")  # Add ".." to go up one directory
+    plugin_path = Path.cwd()
+    packages_dir = (plugin_path / ".." / "Packages").resolve()
 
-    # Construct the absolute path to the target file
-    file_path = os.path.normpath(os.path.join(plugin_path, relative_path))
+    # Match any file ending with the target name
+    success_files = list(packages_dir.glob("*pip-install-log-success.txt"))
 
-    if not os.path.exists(file_path):
+    if not success_files:
         messages = [
-            f"❌ 'pip-install-log-success.txt' not found at: {file_path}",
-            "❌ This means that libraries have not been installed correctly. (and there is likely a lot of error messaging above)",
-            "❌ Commonly this is because compiler tools are needed for some dependencies. This is a fairly big Xcode download, but only needs to be done once.",
-            "❌ Initiating check for this ...  Once completed Restart Plugin"
+            f"❌ No file ending with 'pip-install-log-success.txt' found in: {packages_dir}",
+            "❌ This means that libraries have not been installed correctly.",
+            "❌ (and there is likely a lot of error messaging above)",
+            "❌ Commonly this is because compiler tools are needed for some dependencies.",
+            "❌ Initiating check for this ... Once completed Restart Plugin"
         ]
 
         for message in messages:
             log(message)
 
-        # Attempt to install Xcode Command Line Tools
         if not install_xcode_tools():
             log("❌ Dependency checks failed. Plugin will not start.")
-            # Optionally, you can raise an exception to halt further execution
             raise RuntimeError("❌ Dependency checks failed. Plugin will not start.")
+
     else:
-        log("✅ ✅  Confirmed Library Installs have been successfully Completed  ✅ ✅ ")
+        log(f"✅ Found dependency success marker: {success_files[0].name}")
+        log("✅ ✅ Confirmed Library Installs have been successfully Completed ✅ ✅")
 # Run the dependency checks upon import
 check_dependencies()

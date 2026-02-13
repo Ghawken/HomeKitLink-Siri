@@ -5,7 +5,7 @@ import re
 from time import time
 from typing import Callable, Optional, Coroutine
 
-import async_timeout
+from asyncio import timeout as async_timeout
 
 from .core import FFMPEG_STDOUT, IndigoFFmpegWorker
 
