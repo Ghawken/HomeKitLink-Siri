@@ -2,6 +2,9 @@
 import asyncio
 from datetime import timedelta
 import logging
+
+from scipy.stats import false_discovery_control
+
 from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 from typing import Any
 from HKutils import pid_is_alive
@@ -647,7 +650,9 @@ class Camera(HomeAccessory,  PyhapCamera):
     def get_snapshot(self, image_size):  # pylint: disable=unused-argument, no-self-use
     #async def async_get_snapshot(self, image_size):
         try:
-
+            debug_function = False
+            if self.plugin.debug7:
+                debug_function = True
             if "BI_name" in self.config:
                 camname = self.config["BI_name"]
                 #_LOGGER.info("Get_Snapshot Config: called for this camera Name {}".format(camname ))
@@ -661,12 +666,30 @@ class Camera(HomeAccessory,  PyhapCamera):
             else:
                 ## or default saved to plugin packages
                 path = self.plugin.pluginPath + "/cameras/snapshot.jpg"
+            if debug_function:
+                _LOGGER.debug(f"Entering file read for: {path}")
 
-            with open(path, 'rb') as fp:
-                 return fp.read()
+            try:
+                _LOGGER.debug("Before open()")
+                with open(path, 'rb') as fp:
+                    if debug_function:
+                        _LOGGER.debug("After open(), before read()")
+                    data = fp.read()
+                    if debug_function:
+                        _LOGGER.debug("After read()")
+                        _LOGGER.debug(f"Data type: {type(data)}")
+                        _LOGGER.debug(f"Data length: {len(data)}")
+                        _LOGGER.debug(f"First 32 bytes: {data[:32]!r}")
+                        _LOGGER.debug(f"get_snapshot returning bytes len={len(data)} header={data[:8]!r}")
+                    return data
+            except Exception as e:
+                _LOGGER.debug(f"Exception during file read: {e}")
+                raise
 
         except:
             _LOGGER.debug("Error in get snapshot:",exc_info=True)
+            raise
+
 
     # the below craps out CPU usage enormously upto 50%
     #  Disabling resolves on my current testing.

@@ -95,7 +95,7 @@ class UnprivilegedRequestException(Exception):
 
 async def _run_with_timeout(coro, timeout: float) -> bytes:
     """Run a coroutine with a timeout."""
-    async with async_timeout.timeout(timeout):
+    async with async_timeout(timeout):
         return await coro
 
 
