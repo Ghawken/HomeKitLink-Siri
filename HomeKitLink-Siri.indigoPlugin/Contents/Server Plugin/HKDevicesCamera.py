@@ -6,6 +6,7 @@ import logging
 from scipy.stats import false_discovery_control
 
 from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
+from homekit_audio_proxy import AudioProxy
 from typing import Any
 from HKutils import pid_is_alive
 from HKutils import SimpleIntervalScheduler
@@ -19,6 +20,8 @@ from pyhap.camera import (
     Camera as PyhapCamera,
 )
 
+import os
+import sys
 from HomeKitDevices import HomeAccessory
 
 from pyhap.accessory import Accessory, Bridge
@@ -88,6 +91,20 @@ VIDEO_OUTPUT = (
     "localrtcpport={v_port}&pkt_size={v_pkt_size}"
 )
 
+VIDEO_OUTPUT_chatgpt = (
+    "-map {v_map} -an -sn -dn "
+    "-c:v {v_codec} "
+    "{v_profile}"
+    "-tune zerolatency -pix_fmt yuv420p "
+    "-r {fps} "
+    "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
+    "-payload_type 99 "
+    "-ssrc {v_ssrc} -f rtp "
+    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
+    "srtp://{address}:{v_port}?rtcpport={v_port}&"
+    "localrtcpport={v_port}&pkt_size={v_pkt_size}"
+)
+
 # VIDEO_OUTPUT2 = (
 #     "-map {v_map} "  #-an "
 #     "-vcodec {v_codec} "
@@ -125,20 +142,37 @@ FFMPEG_WATCHER = "ffmpeg_watcher"
 FFMPEG_PID = "ffmpeg_pid"
 SESSION_ID = "session_id"
 
+AUDIO_OUTPUT_aac = (
+    "-map {a_map} -vn -sn -dn "
+    "-c:a {a_encoder} "
+    "{a_application}" 
+    "-af asetpts=N/SR/TB "
+    '-profile:a aac_eld '
+    '-flags +global_header ' 
+    "-af asetpts=N/SR/TB "
+  #  "-f null "
+    "-ac 1 -ar {a_sample_rate}k "
+    "-b:a {a_max_bitrate}k -bufsize {a_bufsize}k "
+    "{a_frame_duration}"
+    "-payload_type 110 "
+    "-ssrc {a_ssrc} -f rtp "
+ #   "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {a_srtp_key} "
+ #   "srtp://{address}:{a_port}?rtcpport={a_port}&"
+ #   "localrtcpport={a_port}&pkt_size={a_pkt_size}"
+    "rtp://127.0.0.1:{a_proxy_port}?pkt_size={a_pkt_size}"
+)
+
 AUDIO_OUTPUT = (
     "-map {a_map} -vn -sn -dn "
     "-c:a {a_encoder} "
     "{a_application}"
-    '-profile:a aac_eld '
-    '-flags +global_header ' 
-    "-f null "
+        "-af asetpts=N/SR/TB "
     "-ac 1 -ar {a_sample_rate}k "
     "-b:a {a_max_bitrate}k -bufsize {a_bufsize}k "
+    "{a_frame_duration}"
     "-payload_type 110 "
     "-ssrc {a_ssrc} -f rtp "
-    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {a_srtp_key} "
-    "srtp://{address}:{a_port}?rtcpport={a_port}&"
-    "localrtcpport={a_port}&pkt_size={a_pkt_size}"
+    "rtp://127.0.0.1:{a_proxy_port}?pkt_size={a_pkt_size}"
 )
 SLOW_RESOLUTIONS = [
     (320, 180, 15),
@@ -167,6 +201,7 @@ FFMPEG_LOGGER = "ffmpeg_logger"
 FFMPEG_WATCHER = "ffmpeg_watcher"
 FFMPEG_PID = "ffmpeg_pid"
 SESSION_ID = "session_id"
+AUDIO_PROXY = "audio_proxy"
 
 CONFIG_DEFAULTS = {
     CONF_SUPPORT_AUDIO: DEFAULT_SUPPORT_AUDIO,
@@ -214,9 +249,9 @@ class Camera(HomeAccessory,  PyhapCamera):
         video_options = {
             "codec": {
                 "profiles": [
-                  #  VIDEO_CODEC_PARAM_PROFILE_ID_TYPES["BASELINE"],
+                    VIDEO_CODEC_PARAM_PROFILE_ID_TYPES["BASELINE"],
                     VIDEO_CODEC_PARAM_PROFILE_ID_TYPES["MAIN"],
-                  #  VIDEO_CODEC_PARAM_PROFILE_ID_TYPES["HIGH"],
+                    VIDEO_CODEC_PARAM_PROFILE_ID_TYPES["HIGH"],
                 ],
                 "levels": [
                     VIDEO_CODEC_PARAM_LEVEL_TYPES["TYPE3_1"],
@@ -228,9 +263,9 @@ class Camera(HomeAccessory,  PyhapCamera):
         }
         audio_options = {
             "codecs": [
-             #   {"type": "OPUS", "samplerate": 16},
-              #  {"type": "OPUS", "samplerate": 24},
-                {"type": "AAC-eld","samplerate":16}
+                {"type": "OPUS", "samplerate": 16},
+                {"type": "OPUS", "samplerate": 24},
+                #{"type": "AAC-eld","samplerate":16}
             ]
         }
 
@@ -328,10 +363,87 @@ class Camera(HomeAccessory,  PyhapCamera):
                 )
 
             audio_application = ""
+            audio_frame_duration = ""
+
             if self.config[CONF_AUDIO_CODEC] == "libopus":
                 audio_application = "-application lowdelay "
+                opus_frame_duration = stream_config.get('a_packet_time', 20)
+                valid_opus_durations = [2.5, 5, 10, 20, 40, 60, 80, 100, 120]
+                if opus_frame_duration not in valid_opus_durations:
+                    _LOGGER.debug(
+                        "[%s] Requested frame duration %s not valid for Opus, using 20",
+                        self.display_name, opus_frame_duration,
+                    )
+                    opus_frame_duration = 20
+                audio_frame_duration = f"-frame_duration {opus_frame_duration} "
+            # Start audio proxy to convert Opus RTP timestamps from 48kHz
+            # (FFmpeg's hardcoded Opus RTP clock rate per RFC 7587) to the
+            # sample rate negotiated by HomeKit (typically 16kHz).
+            # a_sample_rate is in kHz (e.g. 16 for 16000 Hz) from pyhap TLV.
+            audio_proxy: AudioProxy | None = None
+            if self.config[CONF_SUPPORT_AUDIO]:
+                target_clock = stream_config["a_sample_rate"] * 1000
+                _LOGGER.debug(
+                    "[%s] Creating AudioProxy: dest_addr=%s, dest_port=%s, "
+                    "srtp_key_b64=%s, target_clock_rate=%s",
+                    self.display_name,
+                    stream_config["address"],
+                    stream_config["a_port"],
+                    stream_config["a_srtp_key"],
+                    target_clock,
+                )
+                try:
+                    audio_proxy = AudioProxy(
+                        dest_addr=stream_config["address"],
+                        dest_port=stream_config["a_port"],
+                        srtp_key_b64=stream_config["a_srtp_key"],
+                        target_clock_rate=target_clock,
+                        python_path=os.path.join(sys.prefix, "bin", "python3"),
+                    )
+                    await audio_proxy.async_start()
+                except Exception:
+                    _LOGGER.exception(
+                        "[%s] AudioProxy raised an exception during start",
+                        self.display_name,
+                    )
+                    audio_proxy = None
 
-           # stream_config["v_max_bitrate"] = self.config["v_max_bitrate"]
+                if audio_proxy and not audio_proxy.local_port:
+                    stderr_output = ""
+                    if audio_proxy._process and audio_proxy._process.stderr:
+                        try:
+                            raw = await asyncio.wait_for(
+                                audio_proxy._process.stderr.read(), timeout=2.0
+                            )
+                            stderr_output = raw.decode(errors="replace").strip()
+                        except Exception:
+                            pass
+                    if not stderr_output and audio_proxy._process:
+                        _LOGGER.error(
+                            "[%s] Audio proxy failed — local_port=%s, returncode=%s, "
+                            "pid=%s (no stderr captured)",
+                            self.display_name,
+                            audio_proxy.local_port,
+                            audio_proxy._process.returncode,
+                            audio_proxy._process.pid,
+                        )
+                    else:
+                        _LOGGER.error(
+                            "[%s] Audio proxy failed — local_port=%s, subprocess stderr: %s",
+                            self.display_name,
+                            audio_proxy.local_port,
+                            stderr_output or "(empty)",
+                        )
+                    await audio_proxy.async_stop()
+                    audio_proxy = None
+                elif audio_proxy:
+                    _LOGGER.debug(
+                        "[%s] AudioProxy started on local port %s",
+                        self.display_name,
+                        audio_proxy.local_port,
+                    )
+
+            # stream_config["v_max_bitrate"] = self.config["v_max_bitrate"]
             output_vars = stream_config.copy()
             output_vars.update(
                 {
@@ -347,6 +459,8 @@ class Camera(HomeAccessory,  PyhapCamera):
                     "a_pkt_size": self.config[CONF_AUDIO_PACKET_SIZE],
                     "a_encoder": self.config[CONF_AUDIO_CODEC],
                     "a_application": audio_application,
+                    "a_frame_duration": audio_frame_duration,
+                    "a_proxy_port": audio_proxy.local_port if audio_proxy else 0,
                 }
             )
             output = VIDEO_OUTPUT.format(**output_vars)
@@ -382,6 +496,8 @@ class Camera(HomeAccessory,  PyhapCamera):
             )
             if not opened:
                 _LOGGER.error("Failed to open ffmpeg stream")
+                if audio_proxy:
+                    await audio_proxy.async_stop()
                 return False
 
             _LOGGER.info(
@@ -401,7 +517,7 @@ class Camera(HomeAccessory,  PyhapCamera):
 
             session_info["stream"] = stream
             session_info[FFMPEG_PID] = stream.process.pid
-
+            session_info[AUDIO_PROXY] = audio_proxy
             stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
 
             async def watch_session():
@@ -451,7 +567,13 @@ class Camera(HomeAccessory,  PyhapCamera):
         """Check to make sure ffmpeg is still running and cleanup if not."""
         if self.plugin.debug7:
             _LOGGER.debug("_async_ffmpeg_watch called")
+        if session_id not in self.sessions:
+            _LOGGER.debug("_async_ffmpeg_watch: session %s no longer exists, stopping watcher", session_id)
+            return False
         ffmpeg_pid = self.sessions[session_id][FFMPEG_PID]
+        if ffmpeg_pid is None:
+            _LOGGER.debug("_async_ffmpeg_watch: session %s has no PID, stopping watcher", session_id)
+            return False
         if pid_is_alive(ffmpeg_pid):
             if self.plugin.debug7:
                 _LOGGER.debug(f"_async_ffmpeg_watch, PID {ffmpeg_pid} appears alive.  Returning.")
@@ -462,6 +584,8 @@ class Camera(HomeAccessory,  PyhapCamera):
             await self.sessions[session_id][FFMPEG_WATCHER].stop()
             self.sessions[session_id].pop(FFMPEG_WATCHER)
         self._async_stop_ffmpeg_watch(session_id)
+        if session_id in self.sessions and "stream_idx" in self.sessions[session_id]:
+            self.set_streaming_available(self.sessions[session_id]["stream_idx"])
         self.set_streaming_available(self.sessions[session_id]["stream_idx"])
         return False
 
@@ -616,6 +740,8 @@ class Camera(HomeAccessory,  PyhapCamera):
         if self.plugin.debug7:
             _LOGGER.debug(f"*** stop_stream called")
         session_id = session_info["id"]
+        if proxy := session_info.pop(AUDIO_PROXY, None):
+            await proxy.async_stop()
         if not (stream := session_info.get("stream")):
             _LOGGER.debug("No stream for session ID %s", session_id)
             return

@@ -189,11 +189,6 @@ class Plugin(indigo.PluginBase):
         # Finish Logging changes
         ################################################################################
 
-        try:
-            import cryptography
-        except ImportError:
-            raise ImportError("\n{0:=^100}\n{1:=^100}\n{2:=^100}\n{3:=^100}\n{4:=^100}\n{5:=^100}\n".format("=", " Fatal Error Starting HomeKitLink-Siri Plugin  ", " Missing required Library; Cryptography missing ", " Run 'pip3 install cryptograph' in a Terminal window ", " and then restart plugin. ", "="))
-
         self.logger.debug(u"logLevel = " + str(self.logLevel))
         self.reStartBRIDGE = False
         self.portsinUse = set()
@@ -316,6 +311,10 @@ class Plugin(indigo.PluginBase):
             logging.getLogger("zeroconf").setLevel(logging.DEBUG)
         else:
             logging.getLogger("zeroconf").setLevel(logging.ERROR)
+
+        logging.getLogger("homekit_audio_proxy").addHandler(self.plugin_file_handler)
+        logging.getLogger("homekit_audio_proxy").addHandler(self.indigo_log_handler)
+        logging.getLogger("homekit_audio_proxy").setLevel(logging.DEBUG)
 
         self.ffmpeg_lastCommand = []
         self.running_deviceids = []   ## list of running device ids to get list of non running ids
@@ -1439,7 +1438,7 @@ class Plugin(indigo.PluginBase):
                 if biFPS <= 2: biFPS = 15
 
                 config[HKDevicesCamera.CONF_VIDEO_CODEC] = "copy"  # "openh264" #HKDevicesCamera.DEFAULT_VIDEO_CODEC
-                config[HKDevicesCamera.CONF_AUDIO_CODEC] = "libfdk_aac"  # "aac"
+                config[HKDevicesCamera.CONF_AUDIO_CODEC] = "libopus" #"libfdk_aac"  # "aac"
                 config[HKDevicesCamera.CONF_MAX_HEIGHT] = biHeight
                 config[HKDevicesCamera.CONF_MAX_WIDTH] = biWidth
                 config[HKDevicesCamera.CONF_MAX_FPS] = int(biFPS)
@@ -4253,8 +4252,9 @@ class Plugin(indigo.PluginBase):
         except Exception as e:
             self.logger.error("❌ Error checking Xcode Command Line Tools: %s", e)
             return False
+
     def logging_issues(self, *args, **kwargs):
-        # Write all published devices to the event log with their friendly name
+        """Write diagnostic info to the event log for troubleshooting."""
         self.logger.debug("Log any issues called...")
         self.logger.info(u"{0:=^190}".format(""))
         self.logger.info(u"{0:=^190}".format(" Logging info follows "))
@@ -4265,67 +4265,74 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:<30} {1}".format("Plugin version:", self.pluginVersion))
         self.logger.info("{0:<30} {1}".format("Plugin ID:", self.pluginId))
         self.logger.info("{0:<30} {1}".format("Plugin Path:", self.pluginPath))
-        self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version) )
-        self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
+        self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version))
+        self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine())))
 
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
         self.logger.info(u"{0:<30} {1}".format("FFmpeg :", self.ffmpeg_command_line.replace('\n', '')))
         self.logger.info("")
-        relative_path = os.path.join("..", "Packages", "pip-install-log-success.txt")
 
-        # Construct the absolute path to the target file
-        file_path = os.path.normpath(os.path.join(self.pluginPath, relative_path))
+        # ── Library Install Success Check ──
+        # The pip install process creates a file ending with 'pip-install-log-success.txt'
+        # in the Packages directory. The filename may be prefixed with a version or
+        # timestamp (e.g. '2.0.1-pip-install-log-success.txt'), so we use a glob
+        # pattern to find any matching file rather than looking for an exact name.
+        self.logger.info("{0:=^130}".format(" Library Install Status: "))
 
-        # Check if the file exists
-        if os.path.isfile(file_path):
-            try:
-                # Open and read the file contents with explicit encoding
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
+        packages_dir = Path(os.path.normpath(os.path.join(self.pluginPath, "..", "Packages")))
+        success_files = sorted(packages_dir.glob("*pip-install-log-success.txt"))
 
-                # Log the contents of the file
-                self.logger.info("{0:=^130}".format(" Contents of Library Install: "))
-                self.logger.info("Contents of 'pip-install-log-success.txt':\n%s", content)
-                self.logger.info(u"{0:=^190}".format(""))
-            except UnicodeDecodeError as ude:
-                # Handle decoding errors
-                self.logger.error("Unicode decoding error for file '%s': %s", file_path, ude)
-            except Exception as e:
-                # Handle other unforeseen exceptions
-                self.logger.error("Error reading the file '%s': %s", file_path, e)
+        if success_files:
+            # Report all found success markers (normally just one)
+            for success_file in success_files:
+                self.logger.info("✅ Found library install success marker: %s", success_file.name)
+                try:
+                    content = success_file.read_text(encoding='utf-8')
+                    self.logger.info("{0:=^130}".format(f" Contents of {success_file.name}: "))
+                    self.logger.info("Contents:\n%s", content)
+                except UnicodeDecodeError as ude:
+                    self.logger.error("Unicode decoding error reading '%s': %s", success_file.name, ude)
+                except Exception as e:
+                    self.logger.error("Error reading '%s': %s", success_file.name, e)
+
+            self.logger.info("✅ ✅ Confirmed Library Installs have been successfully Completed ✅ ✅")
         else:
-            # Log that the file does not exist
-            self.logger.error("❌ File '%s' does not exist.  This means Libraries have not correctly installed. ❌", file_path)
+            self.logger.info("❌ No file ending with 'pip-install-log-success.txt' found in: %s", packages_dir)
+            self.logger.info("❌ This means required Python libraries have NOT been installed correctly.")
+            self.logger.info("❌ The plugin may have encountered errors during pip install at startup.")
+            self.logger.info("❌ Common causes:")
+            self.logger.info("❌   1. Xcode Command Line Tools are not installed (needed to compile C extensions)")
+            self.logger.info("❌   2. Network issues prevented downloading packages from PyPI")
+            self.logger.info("❌   4. Insufficient disk space or file permission errors")
+            self.logger.info("❌ Check the plugin log above for pip install error output.")
+            self.logger.info("❌ You can also check for pip logs in: %s", packages_dir)
 
+        self.logger.info(u"{0:=^190}".format(""))
+
+        # ── Xcode Command Line Tools ──
         self.logger.info("{0:=^130}".format(" Xcode Command Line Tools Check: "))
-
-        self.logger.info("✅ Xcode Command Line Tools are needed.  Checking that they are Installed")
+        self.logger.info("✅ Xcode Command Line Tools are needed for compiling native dependencies. Checking...")
         self.install_xcode_tools()
         self.logger.info(u"{0:=^190}".format(""))
 
         self.check_dependencies()
 
         self.logger.info(u"{0:=^190}".format(""))
-        # Log self.select_ip_version
+        # ── Advanced Settings ──
         self.logger.info("{0:=^130}".format(" Advanced Settings: "))
-        # Log selected IP version using f-string
         self.logger.info(f"Selected IP version: {self.select_ip_version}")
-
-        # Log select interfaces using f-string
         self.logger.info(f"Select interfaces: {self.select_interfaces}")
         if self.select_ip_version == IPVersion.V4Only:
-            self.logger.warning("Note: If using OS18 and AppleTV Hubs, IPVersion.All might be worth a trial if you experience connection issues.")
+            self.logger.warning(
+                "Note: If using OS18 and AppleTV Hubs, IPVersion.All might be worth a trial if you experience connection issues.")
 
-        # Log HAPAdvertised_ipaddress using f-string
         self.logger.info(f"HKLS Advertised Ip address: {self.HAPAdvertised_ipaddress}")
-
-        # Log HAPServeripaddress using f-string
         self.logger.info(f"HKLS Server Ipaddress: {self.HAPServeripaddress}")
 
-        # Check and log explanations based on HAPAdvertised_ipaddress and HAPServeripaddress
         if self.HAPAdvertised_ipaddress is None and self.HAPServeripaddress is None:
-            self.logger.info("HKLS Advertised Ipaddress and HKLS Server Ipaddress are None, which is acceptable. The server will decide the best option.")
+            self.logger.info(
+                "HKLS Advertised Ipaddress and HKLS Server Ipaddress are None, which is acceptable. The server will decide the best option.")
         else:
             self.logger.warning("[HKLS Advertised Ipaddress and/or HKLS Server Ipaddress are set. Default is None.]")
 
@@ -4334,7 +4341,6 @@ class Plugin(indigo.PluginBase):
                 f"Using Advanced settings: HAP Server IP {self.HAPServeripaddress} "
                 f"(if NONE will be calculated) with advertised interfaces of: {self.HAPAdvertised_ipaddress}"
             )
-
             if self.HAPServeripaddress is not None and self.HAPAdvertised_ipaddress is not None:
                 if self.HAPServeripaddress not in self.HAPAdvertised_ipaddress:
                     self.logger.warning(
@@ -4342,7 +4348,6 @@ class Plugin(indigo.PluginBase):
                         "is not in the advertised IP addresses. This will likely cause issues, "
                         f"I would suggest you add {self.HAPServeripaddress} to the list of advertised interfaces in advanced config."
                     )
-
 
         self.Menu_show_runningids()
 
