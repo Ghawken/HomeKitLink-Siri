@@ -1505,7 +1505,7 @@ class Plugin(indigo.PluginBase):
                         self.logger.warning(u"Unable to retrieve SecuritySpy parameters for {}, defaulting to {}x{} and {} FPS".format(ssDev.name, ssWidth, ssHeight, ssFPS))
 
                 config[HKDevicesCamera.CONF_VIDEO_CODEC] = "libx264"  # "libx264"  # "openh264" #HKDevicesCamera.DEFAULT_VIDEO_CODEC
-                config[HKDevicesCamera.CONF_AUDIO_CODEC] = "libfdk_aac"  # "aac"
+                config[HKDevicesCamera.CONF_AUDIO_CODEC] = "libopus" #"libfdk_aac"  # "aac"
                 config[HKDevicesCamera.CONF_MAX_HEIGHT] = ssHeight
                 config[HKDevicesCamera.CONF_MAX_WIDTH] = ssWidth
                 config[HKDevicesCamera.CONF_MAX_FPS] = int(ssFPS)
