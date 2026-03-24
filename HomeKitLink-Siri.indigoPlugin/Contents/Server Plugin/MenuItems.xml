@@ -41,6 +41,11 @@
         <CallbackMethod>Menu_runffmpeg</CallbackMethod>
     </MenuItem>
 
+    <MenuItem id="ffmpegcmd-check">
+        <Name>Check or Update Camera Streams for Compatibility</Name>
+        <CallbackMethod>Menu_runffprobe</CallbackMethod>
+    </MenuItem>
+
     <MenuItem id="debugMenu">
         <Name>Debug Log Menu Options</Name>
         <ConfigUI>

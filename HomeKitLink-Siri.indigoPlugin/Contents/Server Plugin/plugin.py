@@ -1091,6 +1091,8 @@ class Plugin(indigo.PluginBase):
                 if self.debug7:
                     self.logger.debug("Startup Refresh Snapshots images to Default for Camera: {}".format(path))
 
+            # Probe all camera streams in background (debug-level output)
+            self._run_ffprobe(debug_only=True)
             session = requests.Session()
             cameracheck = {}
             while True:
@@ -4521,3 +4523,301 @@ class Plugin(indigo.PluginBase):
 
         self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command Ended  "))
         self.logger.info(u"{0:=^130}".format(" Hopefully this provides some troubleshooting help  "))
+
+
+    def Menu_runffprobe(self, *args, **kwargs):
+        """Menu callback: probe all enabled camera streams with ffprobe and log codec compatibility."""
+        self._run_ffprobe(debug_only=False)
+
+    def _run_ffprobe(self, debug_only=False):
+        """Probe all enabled camera streams with ffprobe and log codec compatibility.
+
+        :param debug_only: If True, all output uses debug level logging except one
+            info summary line. If False, uses info level for results.
+        """
+        import json
+        import subprocess
+
+        log = self.logger.debug if debug_only else self.logger.info
+
+        try:
+            from homekitlink_ffmpeg import get_ffprobe_binary
+            ffprobe_bin = get_ffprobe_binary()
+        except Exception:
+            self.logger.error("Could not locate ffprobe binary. Is homekitlink_ffmpeg installed and up to date?")
+            return
+
+        if debug_only:
+            self.logger.info("Checking camera streams in background for HomeKit compatibility (see 'Check Camera Stream Compatibility' menu item for full output)")
+        else:
+            log("=" * 100)
+            log("Camera Stream Compatibility Check")
+            log("=" * 100)
+
+        for cam in self.listofenabledcameras:
+            stream_source = cam.get("stream_source", "")
+            cam_name = cam.get("cameraName", cam.get("BI_name", cam.get("SS_name", "Unknown")))
+            video_codec_cfg = cam.get("video_codec", "libx264")
+            audio_codec_cfg = cam.get("audio_codec", "libopus")
+            support_audio = cam.get("support_audio", False)
+
+            # Reset probe results for this camera
+            cam["ffprobe_ok"] = False
+            cam["ffprobe_video"] = None
+            cam["ffprobe_audio"] = None
+
+            if not stream_source:
+                log("[%s] No stream_source configured — skipping.", cam_name)
+                continue
+
+            if not debug_only:
+                log("-" * 80)
+            log("[%s] Probing: %s", cam_name, stream_source)
+
+            # --- Stream info probe ---
+            cmd = [
+                ffprobe_bin,
+                "-rtsp_transport", "tcp",
+                "-v", "error",
+                "-show_entries", "stream=index,codec_name,codec_type,width,height,r_frame_rate,pix_fmt,profile,level,sample_rate,channels,channel_layout",
+                "-of", "json",
+                "-i", stream_source,
+            ]
+
+            try:
+                result = subprocess.run(cmd, capture_output=True, timeout=15)
+            except subprocess.TimeoutExpired:
+                self.logger.error("[%s] ffprobe timed out after 15 seconds.", cam_name)
+                continue
+            except Exception:
+                self.logger.exception("[%s] Failed to run ffprobe.", cam_name)
+                continue
+
+            if result.returncode != 0:
+                err_text = result.stderr.decode(errors="replace").strip() if result.stderr else "(no output)"
+                self.logger.error("[%s] ffprobe exited with code %d: %s", cam_name, result.returncode, err_text)
+                continue
+
+            try:
+                probe = json.loads(result.stdout.decode(errors="replace"))
+            except json.JSONDecodeError:
+                self.logger.error("[%s] ffprobe returned invalid JSON.", cam_name)
+                continue
+
+            streams = probe.get("streams", [])
+            if not streams:
+                log("[%s] No streams found in source.", cam_name)
+                continue
+
+            cam["ffprobe_ok"] = True
+            video_stream = None
+            audio_stream = None
+            for s in streams:
+                if s.get("codec_type") == "video" and video_stream is None:
+                    video_stream = s
+                elif s.get("codec_type") == "audio" and audio_stream is None:
+                    audio_stream = s
+
+            # --- GOP detection (read a few seconds of frames) ---
+            # --- GOP detection ---
+            gop_frames = None
+            gop_seconds = None
+            if video_stream:
+                gop_cmd = [
+                    ffprobe_bin,
+                    "-rtsp_transport", "tcp",
+                    "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries", "packet=flags,pts_time,dts_time",
+                    "-of", "csv=p=0",
+                    "-read_intervals", "%+5",
+                    "-i", stream_source,
+                ]
+                try:
+                    gop_result = subprocess.run(gop_cmd, capture_output=True, timeout=15)
+                    stdout_text = gop_result.stdout.decode(errors="replace").strip()
+                    if gop_result.returncode == 0 and stdout_text:
+                        lines = stdout_text.splitlines()
+                        keyframe_indices = []
+                        keyframe_times = []
+                        for i, line in enumerate(lines):
+                            parts = [p.strip() for p in line.split(",")]
+                            # CSV order from ffprobe: pts_time, dts_time, flags
+                            # Find which part contains the flags (has K or _)
+                            flags = ""
+                            time_val = None
+                            for p in parts:
+                                if "K" in p or p.startswith("_"):
+                                    flags = p
+                                else:
+                                    if time_val is None and p != "N/A":
+                                        try:
+                                            time_val = float(p)
+                                        except (ValueError, TypeError):
+                                            pass
+
+                            if "K" in flags:
+                                keyframe_indices.append(i)
+                                if time_val is not None:
+                                    keyframe_times.append(time_val)
+
+                        if len(keyframe_indices) >= 2:
+                            gop_frames = keyframe_indices[1] - keyframe_indices[0]
+                            if len(keyframe_times) >= 2:
+                                gop_seconds = round(keyframe_times[1] - keyframe_times[0], 1)
+                            elif v_fps and v_fps > 0:
+                                gop_seconds = round(gop_frames / v_fps, 1)
+                        elif len(keyframe_indices) == 1 and len(lines) > 1:
+                            gop_frames = len(lines)
+                            if v_fps and v_fps > 0:
+                                gop_seconds = round(len(lines) / v_fps, 1)
+                except subprocess.TimeoutExpired:
+                    self.logger.debug("[%s] GOP probe timed out — skipping GOP detection.", cam_name)
+                except Exception:
+                    self.logger.debug("[%s] GOP probe failed — skipping GOP detection.", cam_name, exc_info=True)
+
+            # --- Video analysis ---
+            if video_stream:
+                v_codec = video_stream.get("codec_name", "unknown")
+                v_width = video_stream.get("width", 0)
+                v_height = video_stream.get("height", 0)
+                v_profile = video_stream.get("profile", "unknown")
+                v_pix_fmt = video_stream.get("pix_fmt", "unknown")
+                v_fps_raw = video_stream.get("r_frame_rate", "0/1")
+                try:
+                    num, den = v_fps_raw.split("/")
+                    v_fps = round(int(num) / int(den), 1) if int(den) else 0.0
+                except Exception:
+                    v_fps = 0.0
+
+                v_can_copy = v_codec == "h264"
+                v_pix_ok = v_pix_fmt == "yuv420p"
+                v_level = video_stream.get("level", -99)
+                v_level_ok = 0 < v_level <= 40
+                v_profile_ok = v_profile not in ("High 10", "High 4:2:2", "High 4:4:4 Predictive")
+                v_res_ok = v_width > 0 and v_height > 0 and v_width % 2 == 0 and v_height % 2 == 0
+
+                # GOP check — warn if too large for HomeKit (>4s is problematic)
+                v_gop_ok = True
+                if gop_seconds is not None and gop_seconds > 5.0:
+                    v_gop_ok = False
+                elif gop_frames is not None and gop_seconds is None and v_fps > 0:
+                    estimated_secs = gop_frames / v_fps
+                    if estimated_secs > 5.0:
+                        v_gop_ok = False
+
+                v_copy_safe = v_can_copy and v_pix_ok and v_profile_ok and v_res_ok
+
+                cam["ffprobe_video"] = {
+                    "codec": v_codec,
+                    "width": v_width,
+                    "height": v_height,
+                    "fps": v_fps,
+                    "profile": v_profile,
+                    "level": v_level,
+                    "pix_fmt": v_pix_fmt,
+                    "copy_safe": v_copy_safe,
+                    "gop_frames": gop_frames,
+                    "gop_seconds": gop_seconds,
+                    "gop_ok": v_gop_ok,
+                    "level_ok": v_level_ok,
+                    "profile_ok": v_profile_ok,
+                    "pix_ok": v_pix_ok,
+                    "res_ok": v_res_ok,
+                    "action": "copy" if (v_copy_safe and video_codec_cfg == "copy") else "transcode",
+                }
+
+                self.logger.debug("[%s]   ffprobe_video: %s", cam_name, cam["ffprobe_video"])
+
+                log("[%s]   Video: codec=%s  profile=%s  pix_fmt=%s  %sx%s @ %s fps",
+                    cam_name, v_codec, v_profile, v_pix_fmt, v_width, v_height, v_fps)
+
+                # GOP reporting
+                if gop_frames is not None:
+                    if gop_seconds is not None:
+                        log("[%s]   GOP: %d frames (%.1fs between keyframes)", cam_name, gop_frames, gop_seconds)
+                    else:
+                        log("[%s]   GOP: %d+ frames (only 1 keyframe in ~10s sample)", cam_name, gop_frames)
+                    if not v_gop_ok:
+                        self.logger.warning(
+                            "[%s]   ⚠ GOP is very large (%s). HomeKit needs frequent keyframes (every 2-4s). "
+                            "Stream may take a long time to start or fail entirely. "
+                            "Reduce the GOP/keyframe interval in your camera or NVR encoder settings.",
+                            cam_name,
+                            f"{gop_seconds:.1f}s" if gop_seconds else f"{gop_frames}+ frames",
+                        )
+                else:
+                    log("[%s]   GOP: could not determine (no keyframes found in sample)", cam_name)
+
+                if v_copy_safe:
+                    log( "[%s]   ✓ H.264 + yuv420p — safe for copy/passthrough.", cam_name)
+                if v_level:
+                    log(f"[%s]   Level={v_level} (HomeKit advertises best ≤4.0) ", cam_name)
+                elif v_can_copy and not v_pix_ok:
+                    self.logger.warning("[%s]   ⚠ H.264 but pix_fmt=%s (HomeKit expects yuv420p). Copy may cause playback issues.", cam_name, v_pix_fmt)
+                else:
+                    log("[%s]   ✗ Source is %s — must transcode.", cam_name, v_codec)
+                if v_can_copy and not v_copy_safe:
+                    reasons = []
+                    if not v_pix_ok:
+                        reasons.append(f"pix_fmt={v_pix_fmt} (need yuv420p)")
+
+                    if not v_profile_ok:
+                        reasons.append(f"profile={v_profile} (unsupported by HomeKit)")
+                    if not v_res_ok:
+                        reasons.append(f"resolution={v_width}x{v_height} (odd or zero)")
+                    log("[%s]   ⚠ H.264 but not copy-safe: %s", cam_name, ", ".join(reasons))
+                if v_copy_safe and video_codec_cfg == "copy":
+                    log("[%s]   Config: video_codec=copy — passthrough active. Good.", cam_name)
+                elif v_copy_safe and video_codec_cfg != "copy":
+                    log("[%s]   Config: video_codec=%s — transcoding unnecessarily.", cam_name, video_codec_cfg)
+                else:
+                    log("[%s]   Config: video_codec=%s — transcode required.", cam_name, video_codec_cfg)
+            else:
+                self.logger.warning("[%s]   No video stream found!", cam_name)
+
+            # --- Audio analysis ---
+            if support_audio:
+                if audio_stream:
+                    a_codec = audio_stream.get("codec_name", "unknown")
+                    a_rate = audio_stream.get("sample_rate", "0")
+                    a_channels = audio_stream.get("channels", 0)
+
+                    try:
+                        a_rate_int = int(a_rate)
+                    except (ValueError, TypeError):
+                        a_rate_int = 0
+
+                    cam["ffprobe_audio"] = {
+                        "codec": a_codec,
+                        "sample_rate": a_rate_int,
+                        "channels": a_channels,
+                        "action": "transcode",
+                    }
+
+                    log("[%s]   Audio: codec=%s  rate=%s  channels=%s",
+                        cam_name, a_codec, a_rate_int, a_channels)
+                    log("[%s]   Config encoder: %s — will transcode from %s.",
+                        cam_name, audio_codec_cfg, a_codec)
+                    if a_channels > 1:
+                        log("[%s]   ℹ Source has %d channels — ffmpeg will downmix to mono for HomeKit.",
+                            cam_name, a_channels)
+                else:
+                    cam["ffprobe_audio"] = {"present": False}
+                    self.logger.warning("[%s]   Audio ENABLED but NO audio stream found in source!", cam_name)
+                    self.logger.warning("[%s]   This will cause 'Output file does not contain any stream' errors.", cam_name)
+                    self.logger.warning("[%s]   Consider disabling audio for this camera.", cam_name)
+            else:
+                has_audio = audio_stream is not None
+                if has_audio:
+                    a_codec = audio_stream.get("codec_name", "unknown")
+                    cam["ffprobe_audio"] = {"codec": a_codec, "present": True, "enabled": False}
+                    log("[%s]   Audio stream present (%s) but DISABLED in config.", cam_name, a_codec)
+                else:
+                    cam["ffprobe_audio"] = {"present": False, "enabled": False}
+                    log("[%s]   No audio stream (audio disabled — OK).", cam_name)
+
+        if not debug_only:
+            log("=" * 100)
+            log("Camera Stream Check Complete")
+            log("=" * 100)

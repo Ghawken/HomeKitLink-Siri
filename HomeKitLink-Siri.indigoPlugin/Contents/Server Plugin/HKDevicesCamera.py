@@ -72,7 +72,8 @@ DOORBELL_SINGLE_PRESS = 0
 DOORBELL_DOUBLE_PRESS = 1
 DOORBELL_LONG_PRESS = 2
 
-VIDEO_OUTPUT = (
+
+VIDEO_OUTPUT_base = (
     "-map {v_map} -an -sn -dn "
     "-c:v {v_codec} "
      "{v_profile}" 
@@ -91,50 +92,49 @@ VIDEO_OUTPUT = (
     "localrtcpport={v_port}&pkt_size={v_pkt_size}"
 )
 
-VIDEO_OUTPUT_chatgpt = (
+VIDEO_OUTPUT_COPY = (
+    "-map {v_map} -an -sn -dn "
+    "-c:v copy "
+    "-payload_type 99 "
+    "-ssrc {v_ssrc} -f rtp "
+    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
+    "srtp://{address}:{v_port}?rtcpport={v_port}&pkt_size={v_pkt_size}"
+)
+
+
+VIDEO_OUTPUT = (
     "-map {v_map} -an -sn -dn "
     "-c:v {v_codec} "
+     "{v_profile}" 
+    "-payload_type 99 "
+    "-ssrc {v_ssrc} -f rtp "
+    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
+    "srtp://{address}:{v_port}?rtcpport={v_port}&pkt_size={v_pkt_size}"
+ #   "localrtcpport={v_port}&pkt_size={v_pkt_size}"
+)
+
+
+
+VIDEO_OUTPUT_TRANSCODE = (
+    "-map {v_map} -an -sn -dn "
+    "-c:v libx264 "
     "{v_profile}"
-    "-tune zerolatency -pix_fmt yuv420p "
+    "-bf 0 "
+    "-preset ultrafast "
+    "-tune zerolatency "
+    "-pix_fmt yuv420p "
+    "-color_range mpeg "
+    "-g 15 "
+    "-keyint_min 15 "
     "-r {fps} "
     "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
     "-payload_type 99 "
     "-ssrc {v_ssrc} -f rtp "
     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
-    "srtp://{address}:{v_port}?rtcpport={v_port}&"
-    "localrtcpport={v_port}&pkt_size={v_pkt_size}"
+    "srtp://{address}:{v_port}?rtcpport={v_port}&pkt_size={v_pkt_size}"
+ #   "localrtcpport={v_port}&pkt_size={v_pkt_size}"
 )
 
-# VIDEO_OUTPUT2 = (
-#     "-map {v_map} "  #-an "
-#     "-vcodec {v_codec} "
-#   #  "-f rawvideo "
-#     "{v_profile}"
-#     "-pix_fmt yuv420p "
-#     "-r {fps} "
-#     "-f rawvideo "
-#     "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
-#     "-payload_type 99 "
-#     "-ssrc {v_ssrc} -f rtp "
-#     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
-#     "srtp://{address}:{v_port}?rtcpport={v_port}&"
-#     "localrtcpport={v_port}&pkt_size={v_pkt_size}"
-# )
-
-# AUDIO_OUTPUT2 = (
-#     "-map {a_map} "#-vn "
-#     "-strict -2 "
-#     "-acodec {a_encoder} "
-#     "-flags:a +global_header "
-#   #  "{a_application}"
-#     "-ac 1 -ar 24k " #-ar {a_sample_rate}k "
-#     "-b:a 8k "#-bufsize 48k " # k{a_max_bitrate}k "#-bufsize {a_bufsize}k "
-#     "-payload_type 110 "
-#     "-ssrc {a_ssrc} -f rtp "
-#     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {a_srtp_key} "
-#     "srtp://{address}:{a_port}?rtcpport={a_port}&"
-#     "localrtcpport={a_port}&pkt_size=188"#{a_pkt_size}"
-# )
 
 FFMPEG_WATCH_INTERVAL = timedelta(seconds=5)
 FFMPEG_LOGGER = "ffmpeg_logger"
@@ -174,6 +174,180 @@ AUDIO_OUTPUT = (
     "-ssrc {a_ssrc} -f rtp "
     "rtp://127.0.0.1:{a_proxy_port}?pkt_size={a_pkt_size}"
 )
+
+
+def resolve_video_strategy(
+        ffprobe_video: dict | None,
+        video_codec_cfg: str,
+        stream_width: int,
+        stream_height: int,
+        max_width: int,
+        max_height: int,
+) -> dict:
+    """Decide whether to copy or transcode, and build any needed filters.
+
+    This is a pure function — no side effects, no logging, no I/O.
+    Call it from start_stream, from diagnostics, from tests, etc.
+
+    Parameters
+    ----------
+    ffprobe_video : dict or None
+        The ``cam["ffprobe_video"]`` dict produced by ``_run_ffprobe``.
+        ``None`` means ffprobe was never run or failed entirely.
+    video_codec_cfg : str
+        The user's configured video codec, e.g. ``"copy"`` or ``"libx264"``.
+    stream_width : int
+        Width HomeKit requested for this stream session (from ``stream_config["width"]``).
+    stream_height : int
+        Height HomeKit requested for this stream session (from ``stream_config["height"]``).
+    max_width : int
+        Max width from camera config (``CONF_MAX_WIDTH``).
+    max_height : int
+        Max height from camera config (``CONF_MAX_HEIGHT``).
+
+    Returns
+    -------
+    dict with keys:
+        use_copy : bool
+            True → use VIDEO_OUTPUT_COPY template.
+            False → use VIDEO_OUTPUT_TRANSCODE template.
+        reasons : list[str]
+            Human-readable list of reasons for the decision.
+            Empty when copy is chosen with no concerns.
+        v_scale : str
+            The ``-vf …`` scale/pad filter string for the transcode template.
+            Empty string ``""`` when no scaling is needed or when copying.
+        input_extra : str
+            Extra input flags needed, e.g. larger probesize for HEVC.
+            Empty string ``""`` when none needed.
+        warnings : list[str]
+            Non-fatal warnings to log (e.g. "no ffprobe data", "GOP borderline").
+        source_codec : str
+            The source codec name from ffprobe, or "unknown".
+        source_resolution : tuple[int, int]
+            (width, height) from ffprobe, or (0, 0).
+        target_resolution : tuple[int, int]
+            (width, height) that will be output. Same as source for copy,
+            or the scaled size for transcode.
+    """
+    result = {
+        "use_copy": False,
+        "reasons": [],
+        "v_scale": "",
+        "input_extra": "",
+        "warnings": [],
+        "source_codec": "unknown",
+        "source_resolution": (0, 0),
+        "target_resolution": (0, 0),
+        "min_bitrate_kbps": 0,  # NEW: suggested minimum bitrate for transcode
+    }
+
+    # -----------------------------------------------------------------
+    # Fallback: no ffprobe data at all
+    # -----------------------------------------------------------------
+    if ffprobe_video is None:
+        # No probe data — honour user config blindly, but warn
+        result["use_copy"] = (video_codec_cfg == "copy")
+        result["warnings"].append(
+            f"No ffprobe data available — falling back to config video_codec='{video_codec_cfg}'. "
+            "Run 'Check Camera Stream Compatibility' for reliable detection."
+        )
+        if not result["use_copy"]:
+            result["reasons"].append("user config (no probe data)")
+        return result
+
+    # -----------------------------------------------------------------
+    # Extract ffprobe fields
+    # -----------------------------------------------------------------
+    src_codec = ffprobe_video.get("codec", "unknown")
+    src_w = ffprobe_video.get("width", 0)
+    src_h = ffprobe_video.get("height", 0)
+    copy_safe = ffprobe_video.get("copy_safe", False)
+    gop_ok = ffprobe_video.get("gop_ok", True)
+    gop_frames = ffprobe_video.get("gop_frames")
+    gop_seconds = ffprobe_video.get("gop_seconds")
+    pix_fmt = ffprobe_video.get("pix_fmt", "unknown")
+    level = ffprobe_video.get("level", -1)
+    profile = ffprobe_video.get("profile", "unknown")
+
+    result["source_codec"] = src_codec
+    result["source_resolution"] = (src_w, src_h)
+
+    # -----------------------------------------------------------------
+    # Decision: can we copy?
+    # -----------------------------------------------------------------
+    # Start from user preference
+    wants_copy = (video_codec_cfg == "copy")
+
+    if wants_copy and copy_safe and gop_ok:
+        # ✅ Best case: user wants copy, stream supports it, GOP is fine
+        result["use_copy"] = True
+        result["target_resolution"] = (src_w, src_h)
+        return result
+
+    # If we get here, we're transcoding. Collect reasons why.
+    result["use_copy"] = False
+
+    if not wants_copy:
+        # User explicitly chose to transcode
+        result["reasons"].append(f"user config video_codec='{video_codec_cfg}'")
+    else:
+        # User wanted copy but we can't honour it
+        if src_codec != "h264":
+            result["reasons"].append(f"codec={src_codec} (not H.264, must transcode)")
+            # HEVC needs larger probesize to find keyframes reliably
+            if src_codec == "hevc":
+                result["input_extra"] = "-probesize 5000000 -analyzeduration 3000000 "
+        if not copy_safe and src_codec == "h264":
+            # H.264 but something else is wrong
+            if pix_fmt != "yuv420p":
+                result["reasons"].append(f"pix_fmt={pix_fmt} (HomeKit needs yuv420p)")
+            if not (0 < level <= 40):
+                result["reasons"].append(f"level={level} (HomeKit needs ≤4.0)")
+            if profile in ("High 10", "High 4:2:2", "High 4:4:4 Predictive"):
+                result["reasons"].append(f"profile={profile} (unsupported chroma/bit-depth)")
+            if src_w <= 0 or src_h <= 0 or src_w % 2 != 0 or src_h % 2 != 0:
+                result["reasons"].append(f"resolution={src_w}x{src_h} (odd or zero)")
+        if not gop_ok:
+            if gop_seconds is not None:
+                result["reasons"].append(f"GOP={gop_seconds:.1f}s (too large, HomeKit needs ≤4s)")
+            elif gop_frames is not None:
+                result["reasons"].append(f"GOP={gop_frames}+ frames (too large)")
+            else:
+                result["reasons"].append("GOP could not be measured")
+
+    # -----------------------------------------------------------------
+    # Output resolution and minimum bitrate
+    # -----------------------------------------------------------------
+    # Resolution scaling is intentionally disabled. Both -vf scale= and
+    # -s WxH produce valid H.264 output that plays correctly in local
+    # files, but HomeKit fails to render the scaled stream via SRTP.
+    # The root cause is unknown — the encoded output, profile, level,
+    # bitrate, GOP, pkt_size, and color metadata are all identical to
+    # the working (unscaled) case. Sending the full source resolution
+    # works reliably; HomeKit downscales on the client device.
+    # TODO: investigate why any form of ffmpeg resolution scaling breaks
+    #       HomeKit SRTP playback despite producing valid H.264.
+    # -----------------------------------------------------------------
+    if src_w > 0 and src_h > 0:
+        result["target_resolution"] = (src_w, src_h)
+    else:
+        target_w = min(stream_width, max_width) if stream_width > 0 else max_width
+        target_h = min(stream_height, max_height) if stream_height > 0 else max_height
+        result["target_resolution"] = (target_w, target_h)
+
+    # Minimum bitrate for the actual output resolution
+    out_w, out_h = result["target_resolution"]
+    if out_w > 0 and out_h > 0:
+        target_pixels = out_w * out_h
+        result["min_bitrate_kbps"] = max(300, target_pixels * 15 // 20000)
+    else:
+        result["min_bitrate_kbps"] = 300
+
+    return result
+
+
+##
 SLOW_RESOLUTIONS = [
     (320, 180, 15),
     (320, 240, 15),
@@ -336,7 +510,330 @@ class Camera(HomeAccessory,  PyhapCamera):
         #?#await super().run()
     # _LOGGER.info("In Camera:\nOptions:\n{}\nConfig{}\n".format(options, config))
 
+
+
     async def start_stream(self, session_info, stream_config):
+        """Start a new stream with the given configuration."""
+        try:
+            if self.plugin.debug7:
+                _LOGGER.debug(
+                    "[%s] Starting stream with the following parameters: %s",
+                    session_info["id"],
+                    stream_config,
+                )
+
+            self.base_config = stream_config
+            input_source = self.config.get(CONF_STREAM_SOURCE)
+            ffprobe_video = self.config.get("ffprobe_video")
+            ffprobe_audio = self.config.get("ffprobe_audio")
+
+            # --- Log ffprobe results if available ---
+            if ffprobe_video:
+                _LOGGER.debug(
+                    "[%s] ffprobe video: codec=%s %sx%s@%sfps pix_fmt=%s profile=%s copy_safe=%s gop=%s/%s",
+                    self.display_name,
+                    ffprobe_video.get("codec"),
+                    ffprobe_video.get("width"),
+                    ffprobe_video.get("height"),
+                    ffprobe_video.get("fps"),
+                    ffprobe_video.get("pix_fmt"),
+                    ffprobe_video.get("profile"),
+                    ffprobe_video.get("copy_safe"),
+                    ffprobe_video.get("gop_frames"),
+                    ffprobe_video.get("gop_seconds"),
+                )
+                if ffprobe_video.get("codec") == "unknown":
+                    _LOGGER.info(
+                        "\n[%s] ffprobe could not identify the video codec in this stream.\n"
+                        "This usually means the camera's RTSP sub-stream is not properly configured\n"
+                        "(e.g. H.265 sub-streams in Blue Iris are not supported over RTSP).\n"
+                        "We always use Stream 2 in BlueIris Web Server Setup, adjust there.\n",
+                        self.display_name,
+                    )
+            else:
+                _LOGGER.debug(
+                    "[%s] No ffprobe data available — run 'Check Camera Stream Compatibility' menu item",
+                    self.display_name,
+                )
+
+            if self.config[CONF_SUPPORT_AUDIO] and ffprobe_audio:
+                if ffprobe_audio.get("present") is False or (
+                    not ffprobe_audio.get("codec") and not ffprobe_audio.get("sample_rate")
+                ):
+                    _LOGGER.warning(
+                        "[%s] Audio ENABLED but ffprobe found NO audio stream in source — expect errors",
+                        self.display_name,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[%s] ffprobe audio: codec=%s rate=%s channels=%s",
+                        self.display_name,
+                        ffprobe_audio.get("codec"),
+                        ffprobe_audio.get("sample_rate"),
+                        ffprobe_audio.get("channels"),
+                    )
+            _LOGGER.debug(
+                "[%s] HomeKit negotiated: width=%s height=%s v_max_bitrate=%s fps=%s",
+                self.display_name,
+                stream_config.get("width"),
+                stream_config.get("height"),
+                stream_config.get("v_max_bitrate"),
+                self.config[CONF_MAX_FPS],
+            )
+            # ============================================================
+            # Resolve copy vs transcode
+            # ============================================================
+            strategy = resolve_video_strategy(
+                ffprobe_video=ffprobe_video,
+                video_codec_cfg=self.config[CONF_VIDEO_CODEC],
+                stream_width=stream_config.get("width", 0),
+                stream_height=stream_config.get("height", 0),
+                max_width=self.config[CONF_MAX_WIDTH],
+                max_height=self.config[CONF_MAX_HEIGHT],
+            )
+
+            # Log warnings from strategy
+            for w in strategy["warnings"]:
+                _LOGGER.warning("[%s] %s", self.display_name, w)
+            # ============================================================
+            # Enforce minimum bitrate for transcode  <-- HERE
+            # ============================================================
+            if not strategy["use_copy"]:
+                min_br = strategy.get("min_bitrate_kbps", 0)
+                actual_br = stream_config.get("v_max_bitrate", 0)
+                if min_br > 0 and actual_br < min_br:
+                    _LOGGER.info(
+                        "[%s] HomeKit requested %dk bitrate but minimum for %sx%s transcode is %dk — overriding",
+                        self.display_name, actual_br,
+                        strategy["target_resolution"][0],
+                        strategy["target_resolution"][1],
+                        min_br,
+                    )
+                    stream_config["v_max_bitrate"] = min_br
+
+            # Log the decision
+            if strategy["use_copy"]:
+                _LOGGER.info(
+                    "[%s] Video: COPY passthrough (%sx%s %s)",
+                    self.display_name,
+                    strategy["source_resolution"][0],
+                    strategy["source_resolution"][1],
+                    strategy["source_codec"],
+                )
+            else:
+                _LOGGER.info(
+                    "[%s] Video: TRANSCODE %s %sx%s → libx264 %sx%s — %s",
+                    self.display_name,
+                    strategy["source_codec"],
+                    strategy["source_resolution"][0],
+                    strategy["source_resolution"][1],
+                    strategy["target_resolution"][0],
+                    strategy["target_resolution"][1],
+                    ", ".join(strategy["reasons"]) if strategy["reasons"] else "user config",
+                )
+
+            # ============================================================
+            # Build ffmpeg arguments
+            # ============================================================
+            extra_commands = self.config.get("start_commands_extra", "")
+
+            video_profile = ""
+            if not strategy["use_copy"]:
+                video_profile = (
+                    "-profile:v "
+                    + VIDEO_PROFILE_NAMES[
+                        int.from_bytes(stream_config["v_profile_id"], byteorder="big")
+                    ]
+                    + " "
+                )
+
+            audio_application = ""
+            audio_frame_duration = ""
+
+            if self.config[CONF_AUDIO_CODEC] == "libopus":
+                audio_application = "-application lowdelay "
+                opus_frame_duration = stream_config.get("a_packet_time", 20)
+                valid_opus_durations = [2.5, 5, 10, 20, 40, 60, 80, 100, 120]
+                if opus_frame_duration not in valid_opus_durations:
+                    _LOGGER.debug(
+                        "[%s] Requested frame duration %s not valid for Opus, using 20",
+                        self.display_name,
+                        opus_frame_duration,
+                    )
+                    opus_frame_duration = 20
+                audio_frame_duration = f"-frame_duration {opus_frame_duration} "
+
+            # --- Audio proxy ---
+            audio_proxy: AudioProxy | None = None
+            if self.config[CONF_SUPPORT_AUDIO]:
+                target_clock = stream_config["a_sample_rate"] * 1000
+                _LOGGER.debug(
+                    "[%s] Creating AudioProxy: dest_addr=%s, dest_port=%s, "
+                    "srtp_key_b64=%s, target_clock_rate=%s",
+                    self.display_name,
+                    stream_config["address"],
+                    stream_config["a_port"],
+                    stream_config["a_srtp_key"],
+                    target_clock,
+                )
+                try:
+                    audio_proxy = AudioProxy(
+                        dest_addr=stream_config["address"],
+                        dest_port=stream_config["a_port"],
+                        srtp_key_b64=stream_config["a_srtp_key"],
+                        target_clock_rate=target_clock,
+                        python_path=os.path.join(sys.prefix, "bin", "python3"),
+                    )
+                    await audio_proxy.async_start()
+                except Exception:
+                    _LOGGER.exception(
+                        "[%s] AudioProxy raised an exception during start",
+                        self.display_name,
+                    )
+                    audio_proxy = None
+
+                if audio_proxy and not audio_proxy.local_port:
+                    stderr_output = ""
+                    if audio_proxy._process and audio_proxy._process.stderr:
+                        try:
+                            raw = await asyncio.wait_for(
+                                audio_proxy._process.stderr.read(), timeout=2.0
+                            )
+                            stderr_output = raw.decode(errors="replace").strip()
+                        except Exception:
+                            pass
+                    if not stderr_output and audio_proxy._process:
+                        _LOGGER.error(
+                            "[%s] Audio proxy failed — local_port=%s, returncode=%s, pid=%s (no stderr captured)",
+                            self.display_name,
+                            audio_proxy.local_port,
+                            audio_proxy._process.returncode,
+                            audio_proxy._process.pid,
+                        )
+                    else:
+                        _LOGGER.error(
+                            "[%s] Audio proxy failed — local_port=%s, subprocess stderr: %s",
+                            self.display_name,
+                            audio_proxy.local_port,
+                            stderr_output or "(empty)",
+                        )
+                    await audio_proxy.async_stop()
+                    audio_proxy = None
+                elif audio_proxy:
+                    _LOGGER.debug(
+                        "[%s] AudioProxy started on local port %s",
+                        self.display_name,
+                        audio_proxy.local_port,
+                    )
+
+            # ============================================================
+            # Build output_vars and format templates
+            # ============================================================
+            output_vars = stream_config.copy()
+            output_vars.update(
+                {
+                    "v_profile": video_profile,
+                    "v_bufsize": stream_config["v_max_bitrate"] * 4,
+                    "v_map": self.config[CONF_VIDEO_MAP],
+                    "fps": self.config[CONF_MAX_FPS],
+                    "v_pkt_size": self.config[CONF_VIDEO_PACKET_SIZE],
+                    "v_codec": self.config[CONF_VIDEO_CODEC],
+                    "v_scale": strategy["v_scale"],
+                    "a_bufsize": stream_config["a_max_bitrate"] * 4,
+                    "a_map": self.config[CONF_AUDIO_MAP],
+                    "a_pkt_size": self.config[CONF_AUDIO_PACKET_SIZE],
+                    "a_encoder": self.config[CONF_AUDIO_CODEC],
+                    "a_application": audio_application,
+                    "a_frame_duration": audio_frame_duration,
+                    "a_proxy_port": audio_proxy.local_port if audio_proxy else 0,
+                }
+            )
+
+            if strategy["use_copy"]:
+                output = VIDEO_OUTPUT_COPY.format(**output_vars)
+            else:
+                output = VIDEO_OUTPUT_TRANSCODE.format(**output_vars)
+
+            if self.config[CONF_SUPPORT_AUDIO]:
+                output = output + " " + AUDIO_OUTPUT.format(**output_vars)
+
+            _LOGGER.debug("FFmpeg output settings: %s", output)
+
+            # ============================================================
+            # Build input source
+            # ============================================================
+            input_source = input_source + "&kbps=" + str(output_vars["v_max_bitrate"]) + "&cache=1"
+
+            if strategy["input_extra"]:
+                # HEVC or other codecs needing larger probe
+                input_source = strategy["input_extra"] + "-rtsp_transport tcp -i " + input_source
+            else:
+                input_source = "-rtsp_transport tcp -i " + input_source
+
+            _LOGGER.debug("INPUT SOURCE: %s", input_source)
+
+            # ============================================================
+            # Launch ffmpeg
+            # ============================================================
+            stream = IndigoFFmpeg(f"{str(self.plugin.ffmpeg_command_line)}")
+            extra_cmd_toadd = "-hide_banner -nostats " + str(extra_commands)
+            opened = await stream.open(
+                cmd=[],
+                input_source=input_source,
+                output=output,
+                extra_cmd=extra_cmd_toadd,
+                stderr_pipe=True,
+                stdout_pipe=False,
+            )
+            if not opened:
+                _LOGGER.error("Failed to open ffmpeg stream")
+                if audio_proxy:
+                    await audio_proxy.async_stop()
+                return False
+
+            _LOGGER.info(
+                "[%s] Started video stream process - PID %d",
+                session_info["id"],
+                stream.process.pid,
+            )
+            self.plugin.ffmpeg_lastCommand = []
+            try:
+                self.plugin.ffmpeg_lastCommand.insert(0, f"{str(self.plugin.ffmpeg_command_line)}")
+                self.plugin.ffmpeg_lastCommand.extend(input_source.split())
+                self.plugin.ffmpeg_lastCommand.extend(output.split())
+                self.plugin.ffmpeg_lastCommand.extend(extra_cmd_toadd.split())
+            except:
+                _LOGGER.debug(
+                    "Error creating ffmpeg_lastCommand %s %s %s %s",
+                    self.plugin.ffmpeg_command_line, input_source, output, extra_cmd_toadd,
+                )
+
+            session_info["stream"] = stream
+            session_info[FFMPEG_PID] = stream.process.pid
+            session_info[AUDIO_PROXY] = audio_proxy
+            stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
+
+            async def watch_session():
+                await self._async_ffmpeg_watch(session_info["id"])
+
+            session_info[FFMPEG_LOGGER] = asyncio.create_task(
+                self._async_log_stderr_stream(stderr_reader)
+            )
+
+            session_info[FFMPEG_WATCHER] = SimpleIntervalScheduler(
+                watch_session,
+                FFMPEG_WATCH_INTERVAL,
+            )
+
+            session_info[FFMPEG_WATCHER].start()
+            _LOGGER.debug("Started Watcher for ffmpeg Stream.")
+
+            return await self._async_ffmpeg_watch(session_info["id"])
+
+        except:
+            _LOGGER.exception("Start Stream Exception")
+
+    async def start_stream_old(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
         try:
             if self.plugin.debug7:
@@ -348,7 +845,69 @@ class Camera(HomeAccessory,  PyhapCamera):
             self.base_config = stream_config
 
             input_source = self.config.get(CONF_STREAM_SOURCE)
+
+            # --- Log ffprobe results if available ---
+            ffprobe_video = self.config.get("ffprobe_video")
+            ffprobe_audio = self.config.get("ffprobe_audio")
+
+            if ffprobe_video:
+                _LOGGER.debug(
+                    "[%s] ffprobe video: codec=%s %sx%s@%sfps pix_fmt=%s profile=%s copy_safe=%s action=%s",
+                    self.display_name,
+                    ffprobe_video.get("codec"),
+                    ffprobe_video.get("width"),
+                    ffprobe_video.get("height"),
+                    ffprobe_video.get("fps"),
+                    ffprobe_video.get("pix_fmt"),
+                    ffprobe_video.get("profile"),
+                    ffprobe_video.get("copy_safe"),
+                    ffprobe_video.get("action"),
+                )
+                if ffprobe_video.get("copy_safe") and self.config[CONF_VIDEO_CODEC] != "copy":
+                    _LOGGER.info(
+                        "[%s] Stream is H.264+yuv420p — video_codec is '%s' but could use 'copy' to save CPU",
+                        self.display_name, self.config[CONF_VIDEO_CODEC],
+                    )
+                elif ffprobe_video.get("codec") == "unknown":
+                    _LOGGER.info(
+                        "\n[%s] ffprobe could not identify the video codec in this stream. \n"
+                        "This usually means the camera's RTSP sub-stream is not properly configured\n "
+                        "(e.g. H.265 sub-streams in Blue Iris are not supported over RTSP).\n"
+                        "We always use Stream 2 in BlueIris Web Server Setup, adjust there\n",
+                                       self.display_name,
+                    )
+                elif not ffprobe_video.get("copy_safe") and self.config[CONF_VIDEO_CODEC] == "copy":
+                    _LOGGER.debug(
+                        "[%s] video_codec is 'copy' but ffprobe says copy is NOT safe (codec=%s pix_fmt=%s) — will transcode instead",
+                        self.display_name,
+                        ffprobe_video.get("codec"),
+                        ffprobe_video.get("pix_fmt"),
+                    )
+            else:
+                _LOGGER.debug("[%s] No ffprobe data available — run 'Check Camera Stream Compatibility' menu item",
+                              self.display_name)
+
+
+## ffprobe audio
+            if self.config[CONF_SUPPORT_AUDIO] and ffprobe_audio:
+                if ffprobe_audio.get("present") is False or (
+                        not ffprobe_audio.get("codec") and not ffprobe_audio.get("sample_rate")):
+                    _LOGGER.warning(
+                        "[%s] Audio ENABLED but ffprobe found NO audio stream in source — expect errors",
+                        self.display_name,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[%s] ffprobe audio: codec=%s rate=%s channels=%s",
+                        self.display_name,
+                        ffprobe_audio.get("codec"),
+                        ffprobe_audio.get("sample_rate"),
+                        ffprobe_audio.get("channels"),
+                    )
+
+
             extra_commands = self.config.get("start_commands_extra", "")
+            # HEVC transcode needs larger probe to find a keyframe
 
             _LOGGER.debug("Input Source\n{}".format(input_source))
 
@@ -463,13 +1022,35 @@ class Camera(HomeAccessory,  PyhapCamera):
                     "a_proxy_port": audio_proxy.local_port if audio_proxy else 0,
                 }
             )
-            output = VIDEO_OUTPUT.format(**output_vars)
+
+            # Select video output: transcode only if ffprobe says copy is NOT safe
+            if ffprobe_video and ffprobe_video.get("copy_safe") is False:
+                _LOGGER.info("[%s] ffprobe: source not copy-safe (codec=%s pix_fmt=%s) — transcoding with libx264",
+                             self.display_name, ffprobe_video.get("codec"), ffprobe_video.get("pix_fmt"))
+                output = VIDEO_OUTPUT_TRANSCODE.format(**output_vars)
+            else:
+                # Default: copy passthrough (existing behaviour, also used when no ffprobe data)
+                output = VIDEO_OUTPUT.format(**output_vars)
 
             if self.config[CONF_SUPPORT_AUDIO]:
                 output = output + " " + AUDIO_OUTPUT.format(**output_vars)
 
             _LOGGER.debug(f"FFmpeg output_vars {output_vars}")
             _LOGGER.debug("FFmpeg output settings: %s", output)
+
+            # --- Summary: config vs probe ---
+            if ffprobe_video:
+                _LOGGER.debug(
+                    "[%s] Stream summary: source=%sx%s@%sfps(%s) → config video_codec=%s, audio_codec=%s, support_audio=%s",
+                    self.display_name,
+                    ffprobe_video.get("width"),
+                    ffprobe_video.get("height"),
+                    ffprobe_video.get("fps"),
+                    ffprobe_video.get("codec"),
+                    self.config[CONF_VIDEO_CODEC],
+                    self.config[CONF_AUDIO_CODEC],
+                    self.config[CONF_SUPPORT_AUDIO],
+                )
 
             _LOGGER.debug(
                '[%s] Starting stream with the following parameters: %s',
@@ -480,9 +1061,14 @@ class Camera(HomeAccessory,  PyhapCamera):
             ## if Blueiris modify.  No checks for that as yet.
             input_source =  input_source + "&kbps="+str(output_vars["v_max_bitrate"])+"&cache=1" #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
 
-            input_source = "-rtsp_transport tcp -i " + input_source
+            # HEVC transcode needs larger probe to find a keyframe
+            if ffprobe_video and ffprobe_video.get("codec") == "hevc":
+                input_source = "-probesize 5000000 -analyzeduration 3000000 -rtsp_transport tcp -i " + input_source
+                _LOGGER.debug("[%s] HEVC source — larger probesize for transcode", self.display_name)
+            else:
+                input_source = "-rtsp_transport tcp -i " + input_source
 
-            _LOGGER.debug(fr"{input_source=}")
+            _LOGGER.debug(fr"\nINPUT SOURCE:\n{input_source=}")
 
             stream = IndigoFFmpeg(f"{str(self.plugin.ffmpeg_command_line)}")
             extra_cmd_toadd = "-hide_banner -nostats "+str(extra_commands)
@@ -557,6 +1143,23 @@ class Camera(HomeAccessory,  PyhapCamera):
             if 'Output file does not contain any stream' in line:
                 _LOGGER.info("'Output file does not contain stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
                 _LOGGER.info("Would suggest unpublish Camera, check gone in Home app, and then republish with Audio Disabled.")
+            elif any(err in line for err in (
+                "Connection refused",
+                "Connection timed out",
+                "401 Unauthorized",
+                "403 Forbidden",
+                "404 Not Found",
+                "Server returned",
+                "HTTP error",
+                "method DESCRIBE failed",
+                "AVERROR_EXIT",
+                "No route to host",
+                "Network is unreachable",
+            )):
+                _LOGGER.error(
+                    "[%s] ffmpeg stream error: %s",
+                    self.display_name, line,
+                )
             else:
                 # Log the line from stderr or handle it differently
                 if self.plugin.debug7:
