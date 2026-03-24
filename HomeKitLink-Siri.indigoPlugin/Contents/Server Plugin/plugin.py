@@ -4739,7 +4739,7 @@ class Plugin(indigo.PluginBase):
                     else:
                         log("[%s]   GOP: %d+ frames (only 1 keyframe in ~10s sample)", cam_name, gop_frames)
                     if not v_gop_ok:
-                        self.logger.warning(
+                        log(
                             "[%s]   ⚠ GOP is very large (%s). HomeKit needs frequent keyframes (every 2-4s). "
                             "Stream may take a long time to start or fail entirely. "
                             "Reduce the GOP/keyframe interval in your camera or NVR encoder settings.",
@@ -4754,7 +4754,7 @@ class Plugin(indigo.PluginBase):
                 if v_level:
                     log(f"[%s]   Level={v_level} (HomeKit advertises best ≤4.0) ", cam_name)
                 elif v_can_copy and not v_pix_ok:
-                    self.logger.warning("[%s]   ⚠ H.264 but pix_fmt=%s (HomeKit expects yuv420p). Copy may cause playback issues.", cam_name, v_pix_fmt)
+                    log("[%s]   ⚠ H.264 but pix_fmt=%s (HomeKit expects yuv420p). Copy may cause playback issues.", cam_name, v_pix_fmt)
                 else:
                     log("[%s]   ✗ Source is %s — must transcode.", cam_name, v_codec)
                 if v_can_copy and not v_copy_safe:
@@ -4774,7 +4774,7 @@ class Plugin(indigo.PluginBase):
                 else:
                     log("[%s]   Config: video_codec=%s — transcode required.", cam_name, video_codec_cfg)
             else:
-                self.logger.warning("[%s]   No video stream found!", cam_name)
+                log("[%s]   No video stream found!", cam_name)
 
             # --- Audio analysis ---
             if support_audio:
@@ -4804,9 +4804,9 @@ class Plugin(indigo.PluginBase):
                             cam_name, a_channels)
                 else:
                     cam["ffprobe_audio"] = {"present": False}
-                    self.logger.warning("[%s]   Audio ENABLED but NO audio stream found in source!", cam_name)
-                    self.logger.warning("[%s]   This will cause 'Output file does not contain any stream' errors.", cam_name)
-                    self.logger.warning("[%s]   Consider disabling audio for this camera.", cam_name)
+                    log("[%s]   Audio ENABLED but NO audio stream found in source!", cam_name)
+                    log("[%s]   This will cause 'Output file does not contain any stream' errors.", cam_name)
+                    log("[%s]   Consider disabling audio for this camera.", cam_name)
             else:
                 has_audio = audio_stream is not None
                 if has_audio:
