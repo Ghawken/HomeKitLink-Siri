@@ -422,12 +422,24 @@ class AccessoryDriver:
 
         if not self.advertiser:
             zc_args = {}
-            if self.interface_choice is not None:
-                zc_args["ip_version"] = self.interface_choice
             if self.zeroconf_interfaces is not None:
+                # Explicit interface list provided — pass it directly.
+                # Don't also pass ip_version; zeroconf ignores it when
+                # interfaces is a list and auto-detects from the addresses.
                 zc_args["interfaces"] = self.zeroconf_interfaces
+                if self.interface_choice is not None:
+                    logger.debug(
+                        "mDNS: Explicit interfaces override ip_version; "
+                        "ip_version=%s will not be passed to zeroconf",
+                        self.interface_choice,
+                    )
+            elif self.interface_choice is not None:
+                # No explicit interfaces — let zeroconf enumerate all
+                # adapters (its default InterfaceChoice.All) filtered by
+                # the requested ip_version.
+                zc_args["ip_version"] = self.interface_choice
             self.advertiser = AsyncZeroconf(**zc_args)
-            logger.debug(f"mDNS Creating own instance of AsyncZeroconf with standard arguments.  {zc_args=}")
+            logger.debug(f"mDNS Creating own instance of AsyncZeroconf with {zc_args=}")
         else:
             logger.debug(f"mDNS using joint async ZeroConf Server {self.advertiser=}")
 

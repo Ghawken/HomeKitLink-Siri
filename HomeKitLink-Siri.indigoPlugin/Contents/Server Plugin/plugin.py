@@ -335,14 +335,14 @@ class Plugin(indigo.PluginBase):
 
         interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
         if interfaces == "":
-            self.select_interfaces = InterfaceChoice.All
+            self.select_interfaces = None
         elif "," in interfaces:
             self.select_interfaces = interfaces.split(",")
             self.logger.debug(f"mDNS Interface List to use: {self.select_interfaces}")
         elif "." in interfaces:
             self.select_interfaces = [interfaces]
         else:
-            self.select_interfaces = InterfaceChoice.All
+            self.select_interfaces = None
             self.logger.warning("Select_Interface: Advanced plugin Properties in error, using default, please check plugin Config")
 
         #self.apple_2p2 = self.pluginPrefs.get('mDNSapple_p2p', False)
