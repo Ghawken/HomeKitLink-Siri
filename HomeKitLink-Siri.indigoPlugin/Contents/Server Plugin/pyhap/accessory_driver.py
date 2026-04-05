@@ -210,6 +210,7 @@ class AccessoryDriver:
         listen_address=None,
         advertised_address=None,
         interface_choice=None,
+        zeroconf_interfaces=None,
         async_zeroconf_instance=None,
         zeroconf_server=None
     ):
@@ -252,8 +253,13 @@ class AccessoryDriver:
             If not given, the value of the address parameter will be used.
         :type advertised_address: str | list[str]
 
-        :param interface_choice: The zeroconf interfaces to listen on.
-        :type InterfacesType: [InterfaceChoice.Default, InterfaceChoice.All]
+        :param interface_choice: The zeroconf IP version to use (IPVersion enum).
+        :type interface_choice: IPVersion
+
+        :param zeroconf_interfaces: Explicit list of network interface IP addresses
+            for zeroconf to bind to, or an InterfaceChoice enum value.
+            If None, zeroconf defaults to InterfaceChoice.All.
+        :type zeroconf_interfaces: list[str] | InterfaceChoice | None
 
         :param async_zeroconf_instance: An AsyncZeroconf instance. When running multiple accessories or
             bridges a single zeroconf instance can be shared to avoid the overhead
@@ -278,6 +284,7 @@ class AccessoryDriver:
             self.executor = None
 
         logger.debug(f"\n\nInit mDNS: Using interface choices for Zeroconf of {interface_choice=}\n" +
+        f"Init mDNS: Using zeroconf_interfaces of {zeroconf_interfaces=}\n" +
         f"Init mDNS: Using HAP addresses of {address=}\n" +
         f"Init mDNS: Using Listen addresses of {listen_address=}\n" +
         f"Init mDNS: Using Advertised addresses of {advertised_address=}\n" +
@@ -289,6 +296,7 @@ class AccessoryDriver:
         self.advertiser = async_zeroconf_instance
         self.zeroconf_server = zeroconf_server
         self.interface_choice = interface_choice
+        self.zeroconf_interfaces = zeroconf_interfaces
         self.advertised_address = advertised_address
         self.persist_file = os.path.expanduser(persist_file)
         self.encoder = encoder or AccessoryEncoder()
@@ -310,6 +318,7 @@ class AccessoryDriver:
 
         listen_address = listen_address or address
         logger.debug(f"\nmDNS: Using interface choices for Zeroconf of {self.interface_choice=}\n" +
+        f"mDNS: Using zeroconf_interfaces of {self.zeroconf_interfaces=}\n" +
         f"mDNS: Using HAP addresses of {address=}\n" +
         f"mDNS: Using Listen addresses of {listen_address=}\n" +
         f"mDNS: Using Advertised addresses of {advertised_address=}\n" +
@@ -415,12 +424,9 @@ class AccessoryDriver:
             zc_args = {}
             if self.interface_choice is not None:
                 zc_args["ip_version"] = self.interface_choice
-            if self.advertised_address is not None:
-                if isinstance(self.advertised_address, str):
-                    zc_args["interfaces"] = self.advertised_address
-                else:
-                    zc_args["interfaces"] = [self.advertised_address]
-            self.advertiser = AsyncZeroconf(**zc_args)  ## create new zeroconf async - with arguments.
+            if self.zeroconf_interfaces is not None:
+                zc_args["interfaces"] = self.zeroconf_interfaces
+            self.advertiser = AsyncZeroconf(**zc_args)
             logger.debug(f"mDNS Creating own instance of AsyncZeroconf with standard arguments.  {zc_args=}")
         else:
             logger.debug(f"mDNS using joint async ZeroConf Server {self.advertiser=}")
