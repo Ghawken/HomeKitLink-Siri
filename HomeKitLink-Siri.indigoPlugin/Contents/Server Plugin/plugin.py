@@ -332,6 +332,7 @@ class Plugin(indigo.PluginBase):
         else:
             self.select_ip_version = IPVersion.All
             self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
+        self.logger.info(f"mDNS IP version selected:      {self.select_ip_version}")
 
         interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
         if interfaces == "":
@@ -1324,7 +1325,7 @@ class Plugin(indigo.PluginBase):
            # self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces, apple_p2p=self.apple_2p2)
            # self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
            # self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
-            self.logger.debug(f"\nmDNS: Starting Driver listen_address={self.HAPServeripaddress=} && advertised_address={self.HAPAdvertised_ipaddress=} && zeroconf_interfaces={self.select_interfaces=}")
+            self.logger.debug(f"\nmDNS: Starting Driver interface_choice(ip_version)={self.select_ip_version} && listen_address={self.HAPServeripaddress=} && advertised_address={self.HAPAdvertised_ipaddress=} && zeroconf_interfaces={self.select_interfaces=}")
             self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local" , interface_choice=self.select_ip_version, zeroconf_interfaces=self.select_interfaces, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
 
             #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
