@@ -4439,8 +4439,8 @@ class Plugin(indigo.PluginBase):
             self._mdns_run_command("Check mDNSResponder process", ["/usr/bin/pgrep", "-l", "mDNSResponder"], timeout=5)
             self._mdns_run_command("mDNSResponder launchd status", ["/bin/launchctl", "list", "com.apple.mDNSResponder"], timeout=5)
             self._mdns_run_command("mDNSResponder recent logs (last 2m, faults/errors only)",
-                                  ["/usr/bin/log", "show", "--predicate", 'process == "mDNSResponder"',
-                                   "--last", "2m", "--style", "compact", "--level", "error"],
+                                  ["/usr/bin/log", "show", "--predicate", 'process == "mDNSResponder" AND (messageType == error OR messageType == fault)',
+                                   "--last", "2m", "--style", "compact"],
                                   timeout=10)
             self._mdns_run_command("networksetup -listallhardwareports", ["/usr/sbin/networksetup", "-listallhardwareports"], timeout=5)
             self._mdns_run_command("Check firewall status (socketfilterfw)", ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"], timeout=5)
@@ -4450,7 +4450,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info(u"{0:=^130}".format(" Recommendations "))
             self.logger.info("1. IPVersion.V4Only is strongly recommended since the HAP server is IPv4-only.")
             self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running and launchd shows a valid PID (see above).")
-            self.logger.info("3. If mDNSResponder logs show errors, try restarting it: sudo killall mDNSResponder")
+            self.logger.info("3. If mDNSResponder logs show errors, try restarting it in Terminal: sudo killall mDNSResponder")
             self.logger.info("4. If using a custom interface, ensure the IP address is correct and reachable.")
             self.logger.info("5. If the firewall is enabled, ensure HomeKit/Indigo are allowed through the firewall.")
             self.logger.info("6. Verify your bridges appear in the Zeroconf browse with ** THIS PLUGIN ** tag and show [paired].")
