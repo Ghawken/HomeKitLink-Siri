@@ -36,6 +36,11 @@
         <CallbackMethod>Menu_runffmpeg</CallbackMethod>
     </MenuItem>
 
+    <MenuItem id="mdnsTroubleshoot">
+        <Name>mDNS Troubleshooting</Name>
+        <CallbackMethod>Menu_mDNS_troubleshoot</CallbackMethod>
+    </MenuItem>
+
     <MenuItem id="debugMenu">
         <Name>Debug Log Menu Options</Name>
         <ConfigUI>

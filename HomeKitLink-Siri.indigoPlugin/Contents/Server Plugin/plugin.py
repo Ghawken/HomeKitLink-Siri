@@ -4206,3 +4206,202 @@ class Plugin(indigo.PluginBase):
 
         self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command Ended  "))
         self.logger.info(u"{0:=^130}".format(" Hopefully this provides some troubleshooting help  "))
+
+    ########################################
+    ## mDNS Troubleshooting
+    ########################################
+    def Menu_mDNS_troubleshoot(self, *args, **kwargs):
+        """Standalone mDNS troubleshooting function callable from the plugin menu.
+        Runs through a series of diagnostic checks and logs the results."""
+        try:
+            import socket
+            from zeroconf._utils.net import get_all_addresses, get_all_addresses_v6
+
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" mDNS Troubleshooting "))
+            self.logger.info(u"{0:=^190}".format(""))
+
+            ## ── Step 1: Log current plugin advanced settings ──
+            self.logger.info(u"{0:=^130}".format(" Advanced Settings: "))
+
+            self.logger.info(f"Selected IP version: {self.select_ip_version}")
+
+            if isinstance(self.select_interfaces, list):
+                self.logger.info(f"Select interfaces: {self.select_interfaces}")
+            else:
+                self.logger.info(f"Select interfaces: {self.select_interfaces if self.select_interfaces != InterfaceChoice.All else 'None'}")
+
+            # Derive default_listen_address from IP version
+            if self.select_ip_version == IPVersion.V4Only:
+                default_listen_address = "0.0.0.0"
+            elif self.select_ip_version == IPVersion.V6Only:
+                default_listen_address = "::"
+            else:
+                default_listen_address = None
+            self.logger.info(f"  default_listen_address:         {default_listen_address}")
+
+            # IP version recommendation
+            if self.select_ip_version == IPVersion.V4Only:
+                self.logger.info(f"  \u26a0 ip_version is {self.select_ip_version} Good.  The HAP server is IPv4-only. Selecting anything else means that IPv6 mDNS sockets are created but serve no purpose. IPVersion.V4Only is strongly recommended.")
+            elif self.select_ip_version == IPVersion.V6Only:
+                self.logger.warning(f"  \u26a0 ip_version is {self.select_ip_version}.  The HAP server is IPv4-only and cannot serve IPv6 connections. This setting will likely cause issues. IPVersion.V4Only is strongly recommended.")
+            else:
+                self.logger.warning(f"  \u26a0 ip_version is {self.select_ip_version}.  The HAP server is IPv4-only. IPv6 mDNS sockets will be created but serve no purpose. IPVersion.V4Only is strongly recommended.")
+
+            self.logger.info(f"HKLS Advertised Ip address: {self.HAPAdvertised_ipaddress}")
+            self.logger.info(f"HKLS Server Ipaddress: {self.HAPServeripaddress}")
+
+            if self.HAPAdvertised_ipaddress is None and self.HAPServeripaddress is None:
+                self.logger.info("HKLS Advertised Ipaddress and HKLS Server Ipaddress are None, which is acceptable. The server will decide the best option.")
+            elif self.HAPServeripaddress is not None and self.HAPAdvertised_ipaddress is not None:
+                if self.HAPServeripaddress not in self.HAPAdvertised_ipaddress:
+                    self.logger.warning(f"It would seem that your IP address running HomeKit ({self.HAPServeripaddress}) is not in the advertised IP addresses ({self.HAPAdvertised_ipaddress}).  This will likely cause issues.")
+                else:
+                    self.logger.info(f"HKLS Server IP ({self.HAPServeripaddress}) is in the advertised addresses. Good.")
+
+            self.logger.info(f"Starting Port Number: {self.startingPortNumber}")
+            self.logger.info(f"Ports currently in use: {self.portsinUse}")
+
+            ## ── Step 2: Log running bridges and drivers ──
+            self.logger.info(u"{0:=^130}".format(" Running Bridges / Drivers "))
+            self.logger.info(f"Number of active drivers: {len(self.driver_multiple)}")
+            self.logger.info(f"Number of active bridges: {len(self.bridge_multiple)}")
+            for idx, driver in enumerate(self.driver_multiple):
+                try:
+                    self.logger.info(f"  Driver[{idx}]: port={driver.state.port}, address={driver.state.address}, mac={driver.state.mac}, paired={driver.state.paired}")
+                except Exception:
+                    self.logger.info(f"  Driver[{idx}]: unable to read state")
+
+            ## ── Step 3: Enumerate network adapters ──
+            self.logger.info(u"{0:=^130}".format(" Network Adapters (ifaddr) "))
+            try:
+                for adapter in ifaddr.get_adapters():
+                    for ip in adapter.ips:
+                        ip_str = ip.ip if isinstance(ip.ip, str) else ip.ip[0]
+                        ip_version_str = "IPv4" if ip.is_IPv4 else "IPv6"
+                        self.logger.info(f"  {adapter.nice_name:<20} {ip_version_str:<5}  {ip_str}")
+            except Exception:
+                self.logger.error("Failed to enumerate network adapters", exc_info=True)
+
+            ## ── Step 4: Zeroconf detected addresses ──
+            self.logger.info(u"{0:=^130}".format(" Zeroconf Detected Addresses "))
+            try:
+                v4_addrs = get_all_addresses()
+                self.logger.info(f"  IPv4 addresses: {v4_addrs}")
+            except Exception:
+                self.logger.error("  Failed to get IPv4 addresses", exc_info=True)
+            try:
+                v6_addrs = get_all_addresses_v6()
+                self.logger.info(f"  IPv6 addresses: {v6_addrs}")
+            except Exception:
+                self.logger.error("  Failed to get IPv6 addresses", exc_info=True)
+
+            ## ── Step 5: Socket local address resolution ──
+            self.logger.info(u"{0:=^130}".format(" Socket Local Address Detection "))
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    s.connect(('10.255.255.255', 80))
+                    local_addr = s.getsockname()[0]
+                    self.logger.info(f"  Detected local IPv4 address: {local_addr}")
+                except Exception:
+                    self.logger.warning("  Failed to detect local IPv4 address via socket", exc_info=True)
+                finally:
+                    s.close()
+            except Exception:
+                self.logger.error("  Failed to create socket for address detection", exc_info=True)
+
+            ## ── Step 6: Check IPv6 availability ──
+            self.logger.info(u"{0:=^130}".format(" IPv6 Support Check "))
+            has_ipv6 = socket.has_ipv6
+            self.logger.info(f"  socket.has_ipv6: {has_ipv6}")
+            if has_ipv6:
+                self.logger.info("  IPv6 is available on this system (but the HAP server is IPv4-only).")
+            else:
+                self.logger.info("  IPv6 is NOT available on this system.")
+
+            ## ── Step 7: Zeroconf service browse for _hap._tcp ──
+            self.logger.info(u"{0:=^130}".format(" Zeroconf: Browse _hap._tcp.local. Services "))
+            try:
+                discovered_services = []
+
+                def on_service_state_change(zeroconf, service_type, name, state_change):
+                    discovered_services.append((name, state_change))
+
+                zc = Zeroconf(ip_version=self.select_ip_version)
+                from zeroconf import ServiceBrowser, ServiceStateChange, ServiceInfo
+                browser = ServiceBrowser(zc, "_hap._tcp.local.", handlers=[on_service_state_change])
+                t.sleep(5)  # allow time for service discovery
+                browser.cancel()
+
+                if discovered_services:
+                    self.logger.info(f"  Found {len(discovered_services)} HAP service(s):")
+                    for svc_name, svc_state in discovered_services:
+                        self.logger.info(f"    {svc_state.name:>8}: {svc_name}")
+                        try:
+                            info = ServiceInfo("_hap._tcp.local.", svc_name)
+                            if info.request(zc, 3000):
+                                addresses = [socket.inet_ntoa(addr) if len(addr) == 4 else socket.inet_ntop(socket.AF_INET6, addr) for addr in info.addresses]
+                                props = {k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v for k, v in info.properties.items()}
+                                self.logger.info(f"      addresses={addresses}  port={info.port}  server={info.server}")
+                                self.logger.info(f"      properties={props}")
+                            else:
+                                self.logger.warning(f"      Could not resolve service info for: {svc_name}")
+                        except Exception:
+                            self.logger.debug(f"      Error resolving service: {svc_name}", exc_info=True)
+                else:
+                    self.logger.warning("  No HAP (_hap._tcp) services discovered on the local network.")
+                    self.logger.warning("  This may indicate mDNS is not functioning correctly, or no bridges are running.")
+
+                zc.close()
+            except Exception:
+                self.logger.error("  Failed to browse for _hap._tcp services", exc_info=True)
+
+            ## ── Step 8: Subprocess terminal diagnostic commands ──
+            self.logger.info(u"{0:=^130}".format(" Terminal Diagnostic Commands "))
+            self._mdns_run_command("dns-sd -B _hap._tcp local.", ["dns-sd", "-B", "_hap._tcp", "local."], timeout=6)
+            self._mdns_run_command("scutil --dns (DNS Configuration)", ["scutil", "--dns"], timeout=5)
+            self._mdns_run_command("ifconfig (Network Interfaces)", ["ifconfig"], timeout=5)
+            self._mdns_run_command("Check mDNSResponder process", ["pgrep", "-l", "mDNSResponder"], timeout=5)
+            self._mdns_run_command("networksetup -listallhardwareports", ["networksetup", "-listallhardwareports"], timeout=5)
+            self._mdns_run_command("Check firewall status", ["defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate"], timeout=5)
+
+            ## ── Step 9: Summary and recommendations ──
+            self.logger.info(u"{0:=^130}".format(" Recommendations "))
+            self.logger.info("1. IPVersion.V4Only is strongly recommended since the HAP server is IPv4-only.")
+            self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running (see above).")
+            self.logger.info("3. If using a custom interface, ensure the IP address is correct and reachable.")
+            self.logger.info("4. If the firewall globalstate is 1 or 2, ensure HomeKit/Indigo are allowed through the firewall.")
+            self.logger.info("5. Copy and paste the above log output when reporting mDNS issues for faster troubleshooting.")
+
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" mDNS Troubleshooting Complete "))
+            self.logger.info(u"{0:=^190}".format(""))
+
+        except Exception:
+            self.logger.error("mDNS Troubleshooting encountered an unexpected error", exc_info=True)
+
+    def _mdns_run_command(self, description, command, timeout=5):
+        """Helper to run a subprocess command and log its output for mDNS troubleshooting."""
+        try:
+            self.logger.info(f"  --- {description} ---")
+            p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+            try:
+                stdout, stderr = p.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                stdout, stderr = p.communicate()
+                self.logger.info(f"  (command timed out after {timeout}s, partial output below)")
+            if stdout and stdout.strip():
+                for line in stdout.strip().splitlines():
+                    self.logger.info(f"    {line}")
+            else:
+                self.logger.info(f"    (no output)")
+            if stderr and stderr.strip():
+                for line in stderr.strip().splitlines():
+                    self.logger.warning(f"    {line}")
+        except FileNotFoundError:
+            self.logger.info(f"    Command not found: {command[0]} (may not be available on this system)")
+        except Exception:
+            self.logger.error(f"    Failed to run: {description}", exc_info=True)
