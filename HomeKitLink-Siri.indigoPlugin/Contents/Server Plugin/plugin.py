@@ -4342,7 +4342,17 @@ class Plugin(indigo.PluginBase):
                         try:
                             info = ServiceInfo("_hap._tcp.local.", svc_name)
                             if info.request(zc, 3000):
-                                addresses = [socket.inet_ntoa(addr) if len(addr) == 4 else socket.inet_ntop(socket.AF_INET6, addr) for addr in info.addresses]
+                                addresses = []
+                                for addr in info.addresses:
+                                    try:
+                                        if len(addr) == 4:
+                                            addresses.append(socket.inet_ntoa(addr))
+                                        elif len(addr) == 16:
+                                            addresses.append(socket.inet_ntop(socket.AF_INET6, addr))
+                                        else:
+                                            addresses.append(f"<unknown {len(addr)} bytes>")
+                                    except Exception:
+                                        addresses.append(f"<error decoding {len(addr)} bytes>")
                                 props = {k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v for k, v in info.properties.items()}
                                 self.logger.info(f"      addresses={addresses}  port={info.port}  server={info.server}")
                                 self.logger.info(f"      properties={props}")
