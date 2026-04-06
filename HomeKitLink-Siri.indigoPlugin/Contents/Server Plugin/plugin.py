@@ -5195,9 +5195,37 @@ class Plugin(indigo.PluginBase):
             self.logger.info("6. Verify your bridges appear in the Zeroconf browse with ** THIS PLUGIN ** tag and show [paired].")
             self.logger.info("7. Copy and paste the above log output when reporting mDNS issues for faster troubleshooting.")
 
+            ## ── Step 13: Manual Terminal commands (require sudo / root) ──
+            self.logger.info(u"{0:=^130}".format(" Manual Terminal Commands (require sudo) "))
+            self.logger.info("The following commands require root privileges and cannot be run by the plugin.")
+            self.logger.info("Open Terminal.app and run them manually for deeper diagnostics:")
+            self.logger.info("")
+            self.logger.info("  sudo tcpdump -i en0 -n port 5353 -v")
+            self.logger.info("      Capture live mDNS (port 5353) traffic on your network interface.")
+            self.logger.info("      Look for _hap._tcp entries to confirm HAP announcements are being sent/received.")
+            self.logger.info("      Optionally pipe through grep:  sudo tcpdump -i en0 -n port 5353 -v 2>&1 | grep -i hap")
+            self.logger.info("      Press Ctrl-C to stop. Replace 'en0' with your active interface if different.")
+            self.logger.info("")
+            self.logger.info("  sudo lsof -i UDP:5353")
+            self.logger.info("      Show all processes with open UDP sockets on port 5353 (mDNS).")
+            self.logger.info("      Helps identify if mDNSResponder or another process is bound to the mDNS port.")
+            self.logger.info("")
+            self.logger.info("  sudo killall mDNSResponder")
+            self.logger.info("      Restart mDNSResponder (macOS auto-restarts it within seconds).")
+            self.logger.info("      Use if mDNSResponder appears stuck, crash-looping, or has high CPU usage.")
+            self.logger.info("")
+            self.logger.info("  sudo launchctl list com.apple.mDNSResponder")
+            self.logger.info("      Check the launchd status of the mDNSResponder service.")
+            self.logger.info("      Shows PID, exit status, and whether the service is loaded in the system domain.")
+            self.logger.info("")
+            self.logger.info("  sudo log stream --predicate 'process == \"mDNSResponder\"' --info --style compact")
+            self.logger.info("      Stream live mDNSResponder system logs. Useful to see registration/deregistration events,")
+            self.logger.info("      errors, and query activity in real time. Press Ctrl-C to stop.")
+
             self.logger.info(u"{0:=^190}".format(""))
             self.logger.info(u"{0:=^190}".format(" mDNS Troubleshooting Complete "))
             self.logger.info(u"{0:=^190}".format(""))
+
 
         except Exception:
             self.logger.error("mDNS Troubleshooting encountered an unexpected error", exc_info=True)
