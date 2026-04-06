@@ -4432,10 +4432,16 @@ class Plugin(indigo.PluginBase):
             ## ── Step 10: Subprocess terminal diagnostic commands ──
             self.logger.info(u"{0:=^130}".format(" Terminal Diagnostic Commands "))
             self.logger.info("  (Note: dns-sd is a continuous browse command; timeout is expected)")
-            self._mdns_run_command("dns-sd -B _hap._tcp local.", ["dns-sd", "-B", "_hap._tcp", "local."], timeout=6)
+            self._mdns_run_command("dns-sd -B _hap._tcp local.", ["/usr/bin/dns-sd", "-B", "_hap._tcp", "local."], timeout=6)
             self._mdns_run_command("scutil --dns (DNS Configuration)", ["/usr/sbin/scutil", "--dns"], timeout=5)
             self._mdns_run_command("ifconfig (Network Interfaces)", ["/sbin/ifconfig"], timeout=5)
-            self._mdns_run_command("Check mDNSResponder process", ["pgrep", "-l", "mDNSResponder"], timeout=5)
+            ## mDNSResponder diagnostics
+            self._mdns_run_command("Check mDNSResponder process", ["/usr/bin/pgrep", "-l", "mDNSResponder"], timeout=5)
+            self._mdns_run_command("mDNSResponder launchd status", ["/bin/launchctl", "list", "com.apple.mDNSResponder"], timeout=5)
+            self._mdns_run_command("mDNSResponder recent logs (last 2m, faults/errors only)",
+                                  ["/usr/bin/log", "show", "--predicate", 'process == "mDNSResponder"',
+                                   "--last", "2m", "--style", "compact", "--level", "error"],
+                                  timeout=10)
             self._mdns_run_command("networksetup -listallhardwareports", ["/usr/sbin/networksetup", "-listallhardwareports"], timeout=5)
             self._mdns_run_command("Check firewall status (socketfilterfw)", ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"], timeout=5)
             self._mdns_run_command("lsof mDNS port 5353", ["/usr/sbin/lsof", "-i", "UDP:5353", "-P", "-n"], timeout=5)
@@ -4443,11 +4449,12 @@ class Plugin(indigo.PluginBase):
             ## ── Step 11: Summary and recommendations ──
             self.logger.info(u"{0:=^130}".format(" Recommendations "))
             self.logger.info("1. IPVersion.V4Only is strongly recommended since the HAP server is IPv4-only.")
-            self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running (see above).")
-            self.logger.info("3. If using a custom interface, ensure the IP address is correct and reachable.")
-            self.logger.info("4. If the firewall is enabled, ensure HomeKit/Indigo are allowed through the firewall.")
-            self.logger.info("5. Verify your bridges appear in the Zeroconf browse with ** THIS PLUGIN ** tag and show [paired].")
-            self.logger.info("6. Copy and paste the above log output when reporting mDNS issues for faster troubleshooting.")
+            self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running and launchd shows a valid PID (see above).")
+            self.logger.info("3. If mDNSResponder logs show errors, try restarting it: sudo killall mDNSResponder")
+            self.logger.info("4. If using a custom interface, ensure the IP address is correct and reachable.")
+            self.logger.info("5. If the firewall is enabled, ensure HomeKit/Indigo are allowed through the firewall.")
+            self.logger.info("6. Verify your bridges appear in the Zeroconf browse with ** THIS PLUGIN ** tag and show [paired].")
+            self.logger.info("7. Copy and paste the above log output when reporting mDNS issues for faster troubleshooting.")
 
             self.logger.info(u"{0:=^190}".format(""))
             self.logger.info(u"{0:=^190}".format(" mDNS Troubleshooting Complete "))
