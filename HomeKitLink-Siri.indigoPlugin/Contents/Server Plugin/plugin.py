@@ -4562,7 +4562,8 @@ class Plugin(indigo.PluginBase):
                     for line in lines:
                         self.logger.info(f"    {line}")
                 else:
-                    self.logger.info(f"    (no matching output{' for filter: ' + grep_filter if grep_filter else ''})")
+                    filter_msg = f" for filter: {grep_filter}" if grep_filter else ""
+                    self.logger.info(f"    (no matching output{filter_msg})")
             else:
                 self.logger.info(f"    (no output)")
             if stderr and stderr.strip():
