@@ -4438,7 +4438,7 @@ class Plugin(indigo.PluginBase):
             self._mdns_run_command("Check mDNSResponder process", ["pgrep", "-l", "mDNSResponder"], timeout=5)
             self._mdns_run_command("networksetup -listallhardwareports", ["/usr/sbin/networksetup", "-listallhardwareports"], timeout=5)
             self._mdns_run_command("Check firewall status (socketfilterfw)", ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"], timeout=5)
-            self._mdns_run_command("lsof mDNS port 5353", ["lsof", "-i", "UDP:5353", "-P", "-n"], timeout=5)
+            self._mdns_run_command("lsof mDNS port 5353", ["/usr/sbin/lsof", "-i", "UDP:5353", "-P", "-n"], timeout=5)
 
             ## ── Step 11: Summary and recommendations ──
             self.logger.info(u"{0:=^130}".format(" Recommendations "))
