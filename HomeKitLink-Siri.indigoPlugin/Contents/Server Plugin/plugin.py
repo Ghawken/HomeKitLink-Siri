@@ -5144,7 +5144,7 @@ class Plugin(indigo.PluginBase):
             self._mdns_run_command(
                 "mDNSResponder recent logs (last 2m, errors/faults)",
                 ["/usr/bin/log", "show", "--predicate",
-                 'process == "mDNSResponder" AND (messageType == error OR messageType == fault)',
+                 'process == "mDNSResponder" AND (messageType == error OR messageType == fault) AND NOT composedMessage CONTAINS "NSEC"',
                  "--last", "2m", "--style", "compact"],
                 timeout=10
             )
@@ -5152,7 +5152,8 @@ class Plugin(indigo.PluginBase):
             # 11e: Recent info-level logs (last 30s) — shows registrations, port binds, etc.
             self._mdns_run_command(
                 "mDNSResponder recent logs (last 30s, all levels incl. info)",
-                ["/usr/bin/log", "show", "--predicate", 'process == "mDNSResponder"',
+                ["/usr/bin/log", "show", "--predicate",
+                 'process == "mDNSResponder" AND NOT composedMessage CONTAINS "NSEC"',
                  "--last", "30s", "--style", "compact", "--info"],
                 timeout=10
             )
