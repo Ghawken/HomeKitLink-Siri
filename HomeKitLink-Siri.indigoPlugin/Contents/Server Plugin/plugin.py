@@ -4461,13 +4461,19 @@ class Plugin(indigo.PluginBase):
             )
 
             # 11d: launchd status (PID, last exit status)
-            self._mdns_run_command("mDNSResponder launchd status", ["/bin/launchctl", "list", "com.apple.mDNSResponder"], timeout=5)
+            # Note: launchctl list looks in the current domain; mDNSResponder runs
+            # in the system domain, so this may report "Could not find service"
+            # when the plugin is not running as root — that is normal.
+            self._mdns_run_command("mDNSResponder launchd status", ["/bin/launchctl", "list", "com.apple.mDNSResponder"], timeout=5, stderr_as_info=True)
 
             # 11e: launchd print (detailed: restart count, state, etc.) — macOS 10.10+
+            # Requires root privileges; expected to fail with "Bad request" or
+            # "Could not find service" when run from a non-root plugin process.
             self._mdns_run_command(
                 "mDNSResponder launchd detail (launchctl print)",
                 ["/bin/launchctl", "print", "system/com.apple.mDNSResponder"],
-                timeout=5
+                timeout=5,
+                stderr_as_info=True
             )
 
             # 11f: Recent error/fault logs from mDNSResponder (last 2 minutes)
@@ -4518,9 +4524,10 @@ class Plugin(indigo.PluginBase):
             self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running with a valid PID.")
             self.logger.info("   - launchd status should show PID > 0 and last exit status = 0.")
             self.logger.info("   - If mDNSResponder shows high CPU/memory or very short uptime, it may be crash-looping.")
-            self.logger.info("3. If mDNSResponder logs show errors or 'Could not find service' warnings:")
-            self.logger.info("   - Try restarting mDNSResponder in Terminal: sudo killall mDNSResponder")
-            self.logger.info("   - macOS will auto-restart it via launchd within seconds.")
+            self.logger.info("3. 'Could not find service' messages from launchctl are normal when the plugin is not running as root.")
+            self.logger.info("   - mDNSResponder is a system-domain daemon; launchctl needs root to inspect it.")
+            self.logger.info("   - If mDNSResponder error/fault logs (above) show problems, try restarting it:")
+            self.logger.info("   - In Terminal: sudo killall mDNSResponder  (macOS auto-restarts it within seconds)")
             self.logger.info("4. If per-bridge dns-sd lookups fail to resolve, the service is not registered in mDNSResponder.")
             self.logger.info("   - Restart the affected bridge or the entire plugin.")
             self.logger.info("5. If using a custom interface, ensure the IP address is correct and reachable.")
@@ -4535,7 +4542,7 @@ class Plugin(indigo.PluginBase):
         except Exception:
             self.logger.error("mDNS Troubleshooting encountered an unexpected error", exc_info=True)
 
-    def _mdns_run_command(self, description, command, timeout=5, grep_filter=None):
+    def _mdns_run_command(self, description, command, timeout=5, grep_filter=None, stderr_as_info=False):
         """Helper to run a subprocess command and log its output for mDNS troubleshooting.
 
         Args:
@@ -4543,6 +4550,9 @@ class Plugin(indigo.PluginBase):
             command: Command list for subprocess.Popen.
             timeout: Max seconds to wait before killing the process.
             grep_filter: If set, only output lines containing this substring (case-insensitive).
+            stderr_as_info: If True, log stderr at info level instead of warning.
+                Useful for commands like launchctl whose stderr output is
+                expected diagnostic information rather than a real problem.
         """
         try:
             self.logger.info(f"  --- {description} ---")
@@ -4567,8 +4577,9 @@ class Plugin(indigo.PluginBase):
             else:
                 self.logger.info(f"    (no output)")
             if stderr and stderr.strip():
+                stderr_log = self.logger.info if stderr_as_info else self.logger.warning
                 for line in stderr.strip().splitlines():
-                    self.logger.warning(f"    {line}")
+                    stderr_log(f"    {line}")
         except FileNotFoundError:
             self.logger.info(f"    Command not found: {command[0]} (may not be available on this system)")
         except Exception:
