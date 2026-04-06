@@ -326,7 +326,7 @@ class Plugin(indigo.PluginBase):
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
-        ip_version = self.pluginPrefs.get('mDNSipversion', "ALL")
+        ip_version = self.pluginPrefs.get('mDNSipversion', "V4Only")
         if ip_version == "ALL":
             self.select_ip_version = IPVersion.All
         elif ip_version == "V4Only":
@@ -334,16 +334,26 @@ class Plugin(indigo.PluginBase):
         elif ip_version == "V6Only":
             self.select_ip_version = IPVersion.V6Only
         else:
-            self.select_ip_version = IPVersion.All
-            self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
+            self.select_ip_version = IPVersion.V4Only
+            self.logger.warning("Select_IP: Advanced plugin Properties in error, using default V4Only, please check plugin Config")
         self.logger.info(f"mDNS IP version selected:      {self.select_ip_version}")
         self.logger.info(f"System IPv6 support:           {_HAS_IPV6}")
 
+        # The HAP server is fundamentally IPv4-only:
+        #   - get_local_address() uses socket.AF_INET
+        #   - audio proxy binds to 127.0.0.1 / 0.0.0.0
+        # Home Assistant avoids this by binding their HAP server to ["0.0.0.0", "::"]
+        # and using a shared AsyncZeroconf. Since this plugin's server is IPv4-only,
+        # IPVersion.V4Only is the correct default — advertising over IPv6 mDNS serves
+        # no purpose when the HAP server cannot accept IPv6 connections.
+        if self.select_ip_version != IPVersion.V4Only:
+            self.logger.warning(
+                f"mDNS ip_version is {self.select_ip_version} but the HAP server is IPv4-only "
+                f"(get_local_address uses AF_INET). IPv6 mDNS advertisements will not be "
+                f"reachable. Consider using IPVersion.V4Only unless you have a specific reason."
+            )
+
         # Derive a default listen address based on ip_version selection.
-        # Inspired by Home Assistant: _DEFAULT_BIND = ["0.0.0.0", "::"] if _HAS_IPV6 else ["0.0.0.0"]
-        # Since the HAP server (get_local_address, audio proxy) is IPv4-only,
-        # we bind explicitly to 0.0.0.0 for V4Only so the server accepts
-        # connections on all IPv4 interfaces rather than a single auto-detected IP.
         if self.select_ip_version == IPVersion.V4Only:
             self.default_listen_address = "0.0.0.0"
         elif self.select_ip_version == IPVersion.V6Only:
@@ -481,7 +491,7 @@ class Plugin(indigo.PluginBase):
             # ── Re-apply mDNS / network settings from config ──
             # These will take effect on the next bridge (re)start.
             prev_ip_version = self.select_ip_version
-            ip_version = valuesDict.get('mDNSipversion', "ALL")
+            ip_version = valuesDict.get('mDNSipversion', "V4Only")
             if ip_version == "ALL":
                 self.select_ip_version = IPVersion.All
             elif ip_version == "V4Only":
@@ -489,7 +499,7 @@ class Plugin(indigo.PluginBase):
             elif ip_version == "V6Only":
                 self.select_ip_version = IPVersion.V6Only
             else:
-                self.select_ip_version = IPVersion.All
+                self.select_ip_version = IPVersion.V4Only
 
             if self.select_ip_version == IPVersion.V4Only:
                 self.default_listen_address = "0.0.0.0"
@@ -4414,8 +4424,15 @@ class Plugin(indigo.PluginBase):
 
         if self.select_ip_version == IPVersion.V6Only and not _HAS_IPV6:
             self.logger.warning(
-                "  ⚠ IPVersion.V6Only selected but this system does not appear to have IPv6 support!"
-                "  Consider switching to IPVersion.V4Only or IPVersion.All in Plugin Config → Advanced."
+                "  ⚠ IPVersion.V6Only selected but this system does not appear to have IPv6 support! "
+                "Consider switching to IPVersion.V4Only in Plugin Config → Advanced."
+            )
+
+        if self.select_ip_version != IPVersion.V4Only:
+            self.logger.warning(
+                f"  ⚠ ip_version is {self.select_ip_version} but the HAP server is IPv4-only. "
+                "IPv6 mDNS sockets are created but serve no purpose. "
+                "IPVersion.V4Only is recommended."
             )
 
         if self.select_interfaces is not None:
@@ -4433,10 +4450,6 @@ class Plugin(indigo.PluginBase):
                 f"  → Zeroconf mode: IP VERSION ONLY — zeroconf will enumerate all "
                 f"adapters (InterfaceChoice.All) filtered by ip_version={self.select_ip_version}."
             )
-
-        if self.select_ip_version == IPVersion.V4Only:
-            self.logger.warning(
-                "Note: If using OS18 and AppleTV Hubs, IPVersion.All might be worth a trial if you experience connection issues.")
 
         # ── HAP Server / Advertised Address Settings ──
         self.logger.info("{0:=^130}".format(" HAP Server / Advertised Address: "))
