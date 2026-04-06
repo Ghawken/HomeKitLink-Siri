@@ -4308,7 +4308,12 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("  Failed to get IPv4 addresses", exc_info=True)
             try:
                 v6_addrs = get_all_addresses_v6()
-                v6_formatted = [addr[0][0] for addr in v6_addrs]
+                v6_formatted = []
+                for addr in v6_addrs:
+                    try:
+                        v6_formatted.append(addr[0][0])
+                    except (IndexError, TypeError):
+                        v6_formatted.append(str(addr))
                 self.logger.info(f"  IPv6 addresses ({len(v6_formatted)}): {v6_formatted}")
             except Exception:
                 self.logger.error("  Failed to get IPv6 addresses", exc_info=True)
