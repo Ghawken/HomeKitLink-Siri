@@ -155,9 +155,11 @@ This means can keep image updated on opening Home to whatever degree requested h
            tooltip="Enter IP Version to use" defaultValue="ALL" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>mDNS Options: IP Version</Label>
             <List>
-            <Option value="ALL">IPVersion.All</Option>
+            <Option value="V4Only">IPVersion.V4Only (recommended)</Option>
+                <Option value="ALL">IPVersion.All</Option>
             <Option value="V6Only">IPVersion.V6Only</Option>
-            <Option value="V4Only">IPVersion.V4Only</Option>
+
+
         </List>
     </Field>
     <Field id="mDNSinterfaces"

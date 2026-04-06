@@ -63,6 +63,7 @@ from HKConstants import (
     SERV_STATELESS_PROGRAMMABLE_SWITCH,
 )
 
+from HKDevicesCamera import resolve_video_strategy
 
 _LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 
@@ -70,56 +71,35 @@ DOORBELL_SINGLE_PRESS = 0
 DOORBELL_DOUBLE_PRESS = 1
 DOORBELL_LONG_PRESS = 2
 
-VIDEO_OUTPUT = (
+
+VIDEO_OUTPUT_COPY = (
     "-map {v_map} -an -sn -dn "
-    "-c:v {v_codec} "
-  #   "{v_profile}" 
- #  "-preset ultrafast "
-  #  "-tune zerolatency "
+    "-c:v copy "
+    "-payload_type 99 "
+    "-ssrc {v_ssrc} -f rtp "
+    "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
+    "srtp://{address}:{v_port}?rtcpport={v_port}&pkt_size={v_pkt_size}"
+)
+
+
+VIDEO_OUTPUT_TRANSCODE = (
+    "-map {v_map} -an -sn -dn "
+    "-c:v libx264 "
+    "{v_profile}"
     "-bf 0 "
+    "-preset ultrafast "
+    "-tune zerolatency "
     "-pix_fmt yuv420p "
-     "-color_range mpeg "
-    "-f rawvideo "
-  #  "-tune zerolatency -pix_fmt yuv420p "
+    "-color_range mpeg "
+    "-g 15 "
+    "-keyint_min 15 "
     "-r {fps} "
     "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
     "-payload_type 99 "
     "-ssrc {v_ssrc} -f rtp "
     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
-    "srtp://{address}:{v_port}?rtcpport={v_port}&"
-    "localrtcpport={v_port}&pkt_size={v_pkt_size}"
+    "srtp://{address}:{v_port}?rtcpport={v_port}&pkt_size={v_pkt_size}"
 )
-
-# VIDEO_OUTPUT2 = (
-#     "-map {v_map} "  #-an "
-#     "-vcodec {v_codec} "
-#   #  "-f rawvideo "
-#     "{v_profile}"
-#     "-pix_fmt yuv420p "
-#     "-r {fps} "
-#     "-f rawvideo "
-#     "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
-#     "-payload_type 99 "
-#     "-ssrc {v_ssrc} -f rtp "
-#     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
-#     "srtp://{address}:{v_port}?rtcpport={v_port}&"
-#     "localrtcpport={v_port}&pkt_size={v_pkt_size}"
-# )
-
-# AUDIO_OUTPUT2 = (
-#     "-map {a_map} "#-vn "
-#     "-strict -2 "
-#     "-acodec {a_encoder} "
-#     "-flags:a +global_header "
-#   #  "{a_application}"
-#     "-ac 1 -ar 24k " #-ar {a_sample_rate}k "
-#     "-b:a 8k "#-bufsize 48k " # k{a_max_bitrate}k "#-bufsize {a_bufsize}k "
-#     "-payload_type 110 "
-#     "-ssrc {a_ssrc} -f rtp "
-#     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {a_srtp_key} "
-#     "srtp://{address}:{a_port}?rtcpport={a_port}&"
-#     "localrtcpport={a_port}&pkt_size=188"#{a_pkt_size}"
-# )
 
 
 AUDIO_OUTPUT = (
@@ -134,6 +114,8 @@ AUDIO_OUTPUT = (
     "-ssrc {a_ssrc} -f rtp "
     "rtp://127.0.0.1:{a_proxy_port}?pkt_size={a_pkt_size}"
 )
+
+
 SLOW_RESOLUTIONS = [
     (320, 180, 15),
     (320, 240, 15),
@@ -179,10 +161,10 @@ CONFIG_DEFAULTS = {
 }
 
 
-class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
+class SecuritySpyCamera(HomeAccessory, PyhapCamera):
     """Generate a Camera accessory."""
-   #def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):#self, *args, **kwargs):
-    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid, config, *args, **kwargs):
+
+    def __init__(self, driver, plugin, indigodeviceid, display_name, aid, config, *args, **kwargs):
         """Initialize a Camera accessory object."""
 
         self.plugin = plugin
@@ -237,7 +219,8 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             "stream_count": config[CONF_STREAM_COUNT],
         }
 
-    #   def __init__(self, driver, plugin, indigodeviceid, display_name, aid):  # self, *args, **kwargs):
+        self.base_config = config
+
         super().__init__(
             options=options,
             driver=driver,
@@ -247,24 +230,21 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             aid=aid,
             config=config,
         )
-        ## Use BlueIris Camera State - remember this class in BlueIris Camera only reallly now...
-        ## Use the Motion state of Device as linked Motion Sensor for camera.
-        ## TODO Likely add checkbox to enable/disable linked motion otherwise notifications all the time annoying
 
         self.doorbellID = None
         self._char_motion_detected = None
-        self.linked_motion_sensor = indigodeviceid  ## indigodevice.Id for moment use indigodeviceid.. potential to change to another device later
+        self.linked_motion_sensor = indigodeviceid
+
         if config["useMotionSensor"]:
             _LOGGER.debug("useMotionSensor Enabled, setting up callbacks")
             serv_motion = self.add_preload_service("MotionSensor")
-            self.char_motion_detected = serv_motion.configure_char("MotionDetected", value=False) #), getter_callback=self.get_bulb )
-            #oops...self.char_motion_detected.setter_callback = self._set_chars
+            self.char_motion_detected = serv_motion.configure_char("MotionDetected", value=False)
 
-        if "DoorBell_ID" in config:  ## now always true
+        if "DoorBell_ID" in config:
             _LOGGER.debug("using DoorBell Setting up..")
             self._char_doorbell_detected = None
             self._char_doorbell_detected_switch = None
-            self.doorbellID = int(config["DoorBell_ID"] )  ## self
+            self.doorbellID = int(config["DoorBell_ID"])
             serv_doorbell = self.add_preload_service("Doorbell")
 
             self._char_doorbell_detected = serv_doorbell.configure_char(
@@ -285,26 +265,139 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             serv_speaker.configure_char("Mute", value=0)
 
     async def run(self):
-        #if self.plugin.debug6:
         _LOGGER.debug("Run called once for CAMERA MotionSensor, and/or Doorbell, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
-        #?#await super().run()
-    # _LOGGER.info("In Camera:\nOptions:\n{}\nConfig{}\n".format(options, config))
 
     async def start_stream(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
         try:
+            if self.plugin.debug7:
+                _LOGGER.debug(
+                    "[%s] Starting stream -SecuritySpy Cam- with the following parameters: %s",
+                    session_info["id"],
+                    stream_config,
+                )
+
+            self.base_config = stream_config
+            input_source = self.config.get(CONF_STREAM_SOURCE)
+            ffprobe_video = self.config.get("ffprobe_video")
+            ffprobe_audio = self.config.get("ffprobe_audio")
+
+            # --- Log ffprobe results if available ---
+            if ffprobe_video:
+                _LOGGER.debug(
+                    "[%s] ffprobe video: codec=%s %sx%s@%sfps pix_fmt=%s profile=%s copy_safe=%s gop=%s/%s",
+                    self.display_name,
+                    ffprobe_video.get("codec"),
+                    ffprobe_video.get("width"),
+                    ffprobe_video.get("height"),
+                    ffprobe_video.get("fps"),
+                    ffprobe_video.get("pix_fmt"),
+                    ffprobe_video.get("profile"),
+                    ffprobe_video.get("copy_safe"),
+                    ffprobe_video.get("gop_frames"),
+                    ffprobe_video.get("gop_seconds"),
+                )
+                if ffprobe_video.get("codec") == "unknown":
+                    _LOGGER.info(
+                        "\n[%s] ffprobe could not identify the video codec in this stream.\n"
+                        "This usually means the camera's RTSP sub-stream is not properly configured\n"
+                        "(e.g. H.265 sub-streams are not supported over RTSP).\n"
+                        "Check your SecuritySpy camera stream settings.\n",
+                        self.display_name,
+                    )
+            else:
+                _LOGGER.debug(
+                    "[%s] No ffprobe data available — run 'Check Camera Stream Compatibility' menu item",
+                    self.display_name,
+                )
+
+            if self.config[CONF_SUPPORT_AUDIO] and ffprobe_audio:
+                if ffprobe_audio.get("present") is False or (
+                    not ffprobe_audio.get("codec") and not ffprobe_audio.get("sample_rate")
+                ):
+                    _LOGGER.warning(
+                        "[%s] Audio ENABLED but ffprobe found NO audio stream in source — expect errors",
+                        self.display_name,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[%s] ffprobe audio: codec=%s rate=%s channels=%s",
+                        self.display_name,
+                        ffprobe_audio.get("codec"),
+                        ffprobe_audio.get("sample_rate"),
+                        ffprobe_audio.get("channels"),
+                    )
+
             _LOGGER.debug(
-                "[%s] Starting stream -SecuritySpy Cam- with the following parameters: %s",
-                session_info["id"],
-                stream_config
+                "[%s] HomeKit negotiated: width=%s height=%s v_max_bitrate=%s fps=%s",
+                self.display_name,
+                stream_config.get("width"),
+                stream_config.get("height"),
+                stream_config.get("v_max_bitrate"),
+                self.config[CONF_MAX_FPS],
             )
 
-            input_source = self.config.get(CONF_STREAM_SOURCE)
-            extra_commands = self.config.get("start_commands_extra", None)
-            _LOGGER.debug("Input Source\n{}".format(input_source))
+            # ============================================================
+            # Resolve copy vs transcode
+            # ============================================================
+            strategy = resolve_video_strategy(
+                ffprobe_video=ffprobe_video,
+                video_codec_cfg=self.config[CONF_VIDEO_CODEC],
+                stream_width=stream_config.get("width", 0),
+                stream_height=stream_config.get("height", 0),
+                max_width=self.config[CONF_MAX_WIDTH],
+                max_height=self.config[CONF_MAX_HEIGHT],
+            )
+
+            # Log warnings from strategy
+            for w in strategy["warnings"]:
+                _LOGGER.warning("[%s] %s", self.display_name, w)
+
+            # ============================================================
+            # Enforce minimum bitrate for transcode
+            # ============================================================
+            if not strategy["use_copy"]:
+                min_br = strategy.get("min_bitrate_kbps", 0)
+                actual_br = stream_config.get("v_max_bitrate", 0)
+                if min_br > 0 and actual_br < min_br:
+                    _LOGGER.info(
+                        "[%s] HomeKit requested %dk bitrate but minimum for %sx%s transcode is %dk — overriding",
+                        self.display_name, actual_br,
+                        strategy["target_resolution"][0],
+                        strategy["target_resolution"][1],
+                        min_br,
+                    )
+                    stream_config["v_max_bitrate"] = min_br
+
+            # Log the decision
+            if strategy["use_copy"]:
+                _LOGGER.info(
+                    "[%s] Video: COPY passthrough (%sx%s %s)",
+                    self.display_name,
+                    strategy["source_resolution"][0],
+                    strategy["source_resolution"][1],
+                    strategy["source_codec"],
+                )
+            else:
+                _LOGGER.info(
+                    "[%s] Video: TRANSCODE %s %sx%s → libx264 %sx%s — %s",
+                    self.display_name,
+                    strategy["source_codec"],
+                    strategy["source_resolution"][0],
+                    strategy["source_resolution"][1],
+                    strategy["target_resolution"][0],
+                    strategy["target_resolution"][1],
+                    ", ".join(strategy["reasons"]) if strategy["reasons"] else "user config",
+                )
+
+            # ============================================================
+            # Build ffmpeg arguments
+            # ============================================================
+            extra_commands = self.config.get("start_commands_extra", "")
+
             video_profile = ""
-            if self.config[CONF_VIDEO_CODEC] != "copy":
+            if not strategy["use_copy"]:
                 video_profile = (
                     "-profile:v "
                     + VIDEO_PROFILE_NAMES[
@@ -318,19 +411,18 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
 
             if self.config[CONF_AUDIO_CODEC] == "libopus":
                 audio_application = "-application lowdelay "
-                opus_frame_duration = stream_config.get('a_packet_time', 20)
+                opus_frame_duration = stream_config.get("a_packet_time", 20)
                 valid_opus_durations = [2.5, 5, 10, 20, 40, 60, 80, 100, 120]
                 if opus_frame_duration not in valid_opus_durations:
                     _LOGGER.debug(
                         "[%s] Requested frame duration %s not valid for Opus, using 20",
-                        self.display_name, opus_frame_duration,
+                        self.display_name,
+                        opus_frame_duration,
                     )
                     opus_frame_duration = 20
                 audio_frame_duration = f"-frame_duration {opus_frame_duration} "
 
-            # Start audio proxy to convert Opus RTP timestamps from 48kHz
-            # (FFmpeg's hardcoded Opus RTP clock rate per RFC 7587) to the
-            # sample rate negotiated by HomeKit (typically 16kHz).
+            # --- Audio proxy ---
             audio_proxy: AudioProxy | None = None
             if self.config[CONF_SUPPORT_AUDIO]:
                 target_clock = stream_config["a_sample_rate"] * 1000
@@ -371,8 +463,7 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                             pass
                     if not stderr_output and audio_proxy._process:
                         _LOGGER.error(
-                            "[%s] Audio proxy failed — local_port=%s, returncode=%s, "
-                            "pid=%s (no stderr captured)",
+                            "[%s] Audio proxy failed — local_port=%s, returncode=%s, pid=%s (no stderr captured)",
                             self.display_name,
                             audio_proxy.local_port,
                             audio_proxy._process.returncode,
@@ -394,17 +485,19 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                         audio_proxy.local_port,
                     )
 
-           # stream_config["v_max_bitrate"] = self.config["v_max_bitrate"]
+            # ============================================================
+            # Build output_vars and format templates
+            # ============================================================
             output_vars = stream_config.copy()
             output_vars.update(
                 {
                     "v_profile": video_profile,
-                #    "v_max_bitrate" : stream_config["v_max_bitrate"] *4,
-                    "v_bufsize": stream_config["v_max_bitrate"] * 8,
+                    "v_bufsize": stream_config["v_max_bitrate"] * 4,
                     "v_map": self.config[CONF_VIDEO_MAP],
                     "fps": self.config[CONF_MAX_FPS],
                     "v_pkt_size": self.config[CONF_VIDEO_PACKET_SIZE],
                     "v_codec": self.config[CONF_VIDEO_CODEC],
+                    "v_scale": strategy["v_scale"],
                     "a_bufsize": stream_config["a_max_bitrate"] * 4,
                     "a_map": self.config[CONF_AUDIO_MAP],
                     "a_pkt_size": self.config[CONF_AUDIO_PACKET_SIZE],
@@ -414,28 +507,33 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                     "a_proxy_port": audio_proxy.local_port if audio_proxy else 0,
                 }
             )
-            output = VIDEO_OUTPUT.format(**output_vars)
 
-
+            if strategy["use_copy"]:
+                output = VIDEO_OUTPUT_COPY.format(**output_vars)
+            else:
+                output = VIDEO_OUTPUT_TRANSCODE.format(**output_vars)
 
             if self.config[CONF_SUPPORT_AUDIO]:
                 output = output + " " + AUDIO_OUTPUT.format(**output_vars)
 
-            _LOGGER.debug(f"FFmpeg output_vars {output_vars}")
             _LOGGER.debug("FFmpeg output settings: %s", output)
 
-            _LOGGER.debug(
-               '[%s] Starting stream with the following parameters: %s',
-               session_info['id'],
-               stream_config
-            )
+            # ============================================================
+            # Build input source
+            # ============================================================
+            if strategy["input_extra"]:
+                # HEVC or other codecs needing larger probe
+                input_source = strategy["input_extra"] + "-rtsp_transport tcp -i " + input_source
+            else:
+                input_source = "-rtsp_transport tcp -i " + input_source
 
-            input_source =  input_source #+ "&kbps="+str(output_vars["v_max_bitrate"]) #' ##&h="+str(stream_config["height"])+"&fps="+str(output_vars["fps"])
+            _LOGGER.debug("INPUT SOURCE: %s", input_source)
 
-            input_source = "-rtsp_transport tcp -i " + input_source
-
+            # ============================================================
+            # Launch ffmpeg
+            # ============================================================
             stream = IndigoFFmpeg(f"{str(self.plugin.ffmpeg_command_line)}")
-            extra_cmd_toadd = "-hide_banner -nostats "+str(extra_commands)
+            extra_cmd_toadd = "-hide_banner -nostats " + str(extra_commands)
             opened = await stream.open(
                 cmd=[],
                 input_source=input_source,
@@ -455,24 +553,24 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                 session_info["id"],
                 stream.process.pid,
             )
-
+            self.plugin.ffmpeg_lastCommand = []
             try:
-                self.plugin.ffmpeg_lastCommand.insert(0,f"{str(self.plugin.ffmpeg_command_line)}" )
+                self.plugin.ffmpeg_lastCommand.insert(0, f"{str(self.plugin.ffmpeg_command_line)}")
                 self.plugin.ffmpeg_lastCommand.extend(input_source.split())
                 self.plugin.ffmpeg_lastCommand.extend(output.split())
                 self.plugin.ffmpeg_lastCommand.extend(extra_cmd_toadd.split())
             except:
-                _LOGGER.debug(f"Error creating ffmpeg_lastCommand {self.plugin.ffmpeg_command_line=} {input_source=} {output=} {extra_cmd_toadd=}")
-                pass
+                _LOGGER.debug(
+                    "Error creating ffmpeg_lastCommand %s %s %s %s",
+                    self.plugin.ffmpeg_command_line, input_source, output, extra_cmd_toadd,
+                )
 
             session_info["stream"] = stream
             session_info[FFMPEG_PID] = stream.process.pid
             session_info[AUDIO_PROXY] = audio_proxy
-
             stderr_reader = await stream.get_reader(source=FFMPEG_STDERR)
 
             async def watch_session():
-                _LOGGER.debug(f"Watch Session called")
                 await self._async_ffmpeg_watch(session_info["id"])
 
             session_info[FFMPEG_LOGGER] = asyncio.create_task(
@@ -483,12 +581,11 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                 watch_session,
                 FFMPEG_WATCH_INTERVAL,
             )
-            _LOGGER.debug(f"Starting Watcher for ffmpeg stream")
+
             session_info[FFMPEG_WATCHER].start()
-            _LOGGER.debug(f"Started Watcher for ffmpeg Stream.")
+            _LOGGER.debug("Started Watcher for ffmpeg Stream.")
 
             return await self._async_ffmpeg_watch(session_info["id"])
-
 
         except:
             _LOGGER.exception("Start Stream Exception")
@@ -497,7 +594,8 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             self, stderr_reader: asyncio.StreamReader
     ) -> None:
         """Log output from ffmpeg."""
-        _LOGGER.debug("%s: ffmpeg: started", self.display_name)
+        if self.plugin.debug7:
+            _LOGGER.debug("%s: ffmpeg: started", self.display_name)
         while True:
             line_bytes = await stderr_reader.readline()
             if line_bytes == b"":
@@ -507,17 +605,42 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             if 'Output file does not contain any stream' in line:
                 _LOGGER.info("'Output file does not contain stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
                 _LOGGER.info("Would suggest unpublish Camera, check gone in Home app, and then republish with Audio Disabled.")
+            elif any(err in line for err in (
+                "Connection refused",
+                "Connection timed out",
+                "401 Unauthorized",
+                "403 Forbidden",
+                "404 Not Found",
+                "Server returned",
+                "HTTP error",
+                "method DESCRIBE failed",
+                "AVERROR_EXIT",
+                "No route to host",
+                "Network is unreachable",
+            )):
+                _LOGGER.error(
+                    "[%s] ffmpeg stream error: %s",
+                    self.display_name, line,
+                )
             else:
                 # Log the line from stderr or handle it differently
-                _LOGGER.debug(f"{self.display_name}: ffmpeg: {line}")
-            #_LOGGER.debug("%s: ffmpeg: %s", self.display_name, line.rstrip())
+                if self.plugin.debug7:
+                    _LOGGER.debug(f"{self.display_name}: ffmpeg: {line}")
 
     async def _async_ffmpeg_watch(self, session_id: str) -> bool:
         """Check to make sure ffmpeg is still running and cleanup if not."""
-        _LOGGER.debug("_async_ffmpeg_watch called")
+        if self.plugin.debug7:
+            _LOGGER.debug("_async_ffmpeg_watch called")
+        if session_id not in self.sessions:
+            _LOGGER.debug("_async_ffmpeg_watch: session %s no longer exists, stopping watcher", session_id)
+            return False
         ffmpeg_pid = self.sessions[session_id][FFMPEG_PID]
-        _LOGGER.debug(f"{self.sessions[session_id]=}")
+        if ffmpeg_pid is None:
+            _LOGGER.debug("_async_ffmpeg_watch: session %s has no PID, stopping watcher", session_id)
+            return False
         if pid_is_alive(ffmpeg_pid):
+            if self.plugin.debug7:
+                _LOGGER.debug(f"_async_ffmpeg_watch, PID {ffmpeg_pid} appears alive.  Returning.")
             return True
 
         _LOGGER.warning("Streaming process ended unexpectedly - PID %d", ffmpeg_pid)
@@ -525,26 +648,30 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             await self.sessions[session_id][FFMPEG_WATCHER].stop()
             self.sessions[session_id].pop(FFMPEG_WATCHER)
         self._async_stop_ffmpeg_watch(session_id)
-        self.set_streaming_available(self.sessions[session_id]["stream_idx"])
+        if session_id in self.sessions and "stream_idx" in self.sessions[session_id]:
+            self.set_streaming_available(self.sessions[session_id]["stream_idx"])
         return False
 
     def _async_stop_ffmpeg_watch(self, session_id: str) -> None:
         """Cleanup a streaming session after stopping."""
         try:
-            _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
+            if self.plugin.debug7:
+                _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
             self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
         except:
-            _LOGGER.exception(f"Exception in async stop ffmpeg stream")
+            _LOGGER.debug(f"Exception in async stop ffmpeg stream", exc_info=True)
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
-        _LOGGER.debug('RECONFIG STREAM CALLED: Interesting may be options for managing later\nSession Info {}\n\nStream Config\n{}\n'.format(session_info,stream_config))
+        if self.plugin.debug7:
+            _LOGGER.debug('RECONFIG STREAM CALLED: Interesting may be options for managing later\nSession Info {}\n\nStream Config\n{}\n'.format(session_info, stream_config))
+        session_id = session_info["id"]
         return True
-
 
     async def stop_stream(self, session_info: dict[str, Any]) -> None:
         """Stop the stream for the given ``session_id``."""
-        _LOGGER.debug(f"*** stop_stream called")
+        if self.plugin.debug7:
+            _LOGGER.debug(f"*** stop_stream called")
         session_id = session_info["id"]
         if proxy := session_info.pop(AUDIO_PROXY, None):
             await proxy.async_stop()
@@ -552,7 +679,8 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
             _LOGGER.debug("No stream for session ID %s", session_id)
             return
         else:
-            _LOGGER.debug(f"Stream {stream=}")
+            if self.plugin.debug7:
+                _LOGGER.debug(f"Stream {stream=}")
         if FFMPEG_WATCHER in self.sessions[session_id]:
             await self.sessions[session_id][FFMPEG_WATCHER].stop()
             self.sessions[session_id].pop(FFMPEG_WATCHER)
@@ -571,6 +699,7 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
                 _LOGGER.debug(
                     "[%s] Failed to %s stream", session_id, shutdown_method
                 )
+
     async def stop(self):
         """Stop any streams when the accessory is stopped."""
         for session_info in self.sessions.values():
@@ -578,67 +707,42 @@ class SecuritySpyCamera(HomeAccessory,  PyhapCamera):
         await super().stop()
 
     def get_snapshot(self, image_size):  # pylint: disable=unused-argument, no-self-use
-    #async def async_get_snapshot(self, image_size):
         try:
-
+            debug_function = False
+            if self.plugin.debug7:
+                debug_function = True
             if "SS_name" in self.config:
                 camname = self.config["SS_name"]
-                #_LOGGER.info("Get_Snapshot Config: called for this camera Name {}".format(camname ))
                 if "image-width" in image_size:
                     width = image_size["image-width"]
                 else:
                     width = 1380
-                self.plugin.camera_snapShot_Requested_que.put((camname,width))  # que a tuple..
-                #_LOGGER.info("Image Size:{}".format(image_size))
-                path = self.plugin.cameraimagePath+ "/"+camname+'.jpg'
+                self.plugin.camera_snapShot_Requested_que.put((camname, width))
+                path = self.plugin.cameraimagePath + "/" + camname + '.jpg'
             else:
                 ## or default saved to plugin packages
                 path = self.plugin.pluginPath + "/cameras/snapshot.jpg"
-            #_LOGGER.info("Path{}".format(path))
 
-            # async with aiofiles.open(path, mode='rb') as f:
-            #     contents = await f.read()
-            # return contents
+            if debug_function:
+                _LOGGER.debug(f"Entering file read for: {path}")
 
-            # bit of holiday and see issue needs a timer here
-            # block at the IO part
-            with open(path, 'rb') as fp:
-                 return fp.read()
+            try:
+                _LOGGER.debug("Before open()")
+                with open(path, 'rb') as fp:
+                    if debug_function:
+                        _LOGGER.debug("After open(), before read()")
+                    data = fp.read()
+                    if debug_function:
+                        _LOGGER.debug("After read()")
+                        _LOGGER.debug(f"Data type: {type(data)}")
+                        _LOGGER.debug(f"Data length: {len(data)}")
+                        _LOGGER.debug(f"First 32 bytes: {data[:32]!r}")
+                        _LOGGER.debug(f"get_snapshot returning bytes len={len(data)} header={data[:8]!r}")
+                    return data
+            except Exception as e:
+                _LOGGER.debug(f"Exception during file read: {e}")
+                raise
 
         except:
-            _LOGGER.exception("{}")
-
-    # the below craps out CPU usage enormously upto 50%
-    #  Disabling resolves on my current testing.
-    #  I would guess is the none async nature and probably hangs cycles
-    # other implementations use a async def async_get_snapshot oddly - not in main class unless modified..
-    # okay - pyhap/hap_handler.py - defines 2 options async_get_snapshot or get_snapshot so both okay..
-    # should try former with error handling and see if major exceptions causing CPU usage 1st off.
-    # def get_snapshot(self, image_size):  # pylint: disable=unused-argument, no-self-use
-    #     """Return a jpeg of a snapshot from the camera.
-    #     Overwrite to implement getting snapshots from your camera.
-    #     :param image_size: ``dict`` describing the requested image size. Contains the
-    #         keys "image-width" and "image-height"
-    #     """
-    #     try:
-    #
-    #         if "BI_name" in self.config:
-    #             camname = self.config["BI_name"]
-    #             #_LOGGER.info("Get_Snapshot Config: called for this camera Name {}".format(camname ))
-    #             if "image-width" in image_size:
-    #                 width = image_size["image-width"]
-    #             else:
-    #                 width = 1380
-    #             self.plugin.camera_snapShot_Requested_que.put((camname,width))  # que a tuple..
-    #             #_LOGGER.info("Image Size:{}".format(image_size))
-    #             path = self.plugin.pluginPath+ '/cameras/'+camname+'.jpg'
-    #         else:
-    #             path = self.plugin.pluginPath + "/cameras/snapshot.jpg"
-    #         #_LOGGER.info("Path{}".format(path))
-    #
-    #
-    #         with open(path, 'rb') as fp:
-    #             return fp.read()
-    #
-    #     except:
-    #         _LOGGER.error("{}")
+            _LOGGER.debug("Error in get snapshot:", exc_info=True)
+            raise

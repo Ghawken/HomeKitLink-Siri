@@ -1399,7 +1399,8 @@ class Camera(HomeAccessory,  PyhapCamera):
                 _LOGGER.debug(f"Entering file read for: {path}")
 
             try:
-                _LOGGER.debug("Before open()")
+                if debug_function:
+                    _LOGGER.debug("Before open()")
                 with open(path, 'rb') as fp:
                     if debug_function:
                         _LOGGER.debug("After open(), before read()")

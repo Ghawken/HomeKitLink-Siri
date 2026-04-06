@@ -32,6 +32,8 @@ from queue import Queue, Empty
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
+import socket
+
 try:
     import requests
 except:
@@ -79,6 +81,7 @@ import HKDevicesCameraSecuritySpy
 import HKThermostat
 import HKutils
 
+_HAS_IPV6 = hasattr(socket, "AF_INET6")
 MAX_NAME_LENGTH = 64
 MAX_SERIAL_LENGTH = 64
 MAX_MODEL_LENGTH = 64
@@ -322,7 +325,7 @@ class Plugin(indigo.PluginBase):
         self.startingPortNumber = int(self.pluginPrefs.get('basePortnumber', 51826))
         self.logClientConnected = self.pluginPrefs.get("logClientConnected", True)
 
-        ip_version = self.pluginPrefs.get('mDNSipversion', "ALL")
+        ip_version = self.pluginPrefs.get('mDNSipversion', "V4Only")
         if ip_version == "ALL":
             self.select_ip_version = IPVersion.All
         elif ip_version == "V4Only":
@@ -330,19 +333,43 @@ class Plugin(indigo.PluginBase):
         elif ip_version == "V6Only":
             self.select_ip_version = IPVersion.V6Only
         else:
-            self.select_ip_version = IPVersion.All
+            self.select_ip_version = IPVersion.V4Only
             self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
-
+        self.logger.debug(f"mDNS IP version selected:      {self.select_ip_version}")
         interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
+        self.logger.debug(f"System IPv6 support:           {_HAS_IPV6}")
+
+        # The HAP server is fundamentally IPv4-only:
+        #   - get_local_address() uses socket.AF_INET
+        #   - audio proxy binds to 127.0.0.1 / 0.0.0.0
+        # Home Assistant avoids this by binding their HAP server to ["0.0.0.0", "::"]
+        # and using a shared AsyncZeroconf. Since this plugin's server is IPv4-only,
+        # IPVersion.V4Only is the correct default — advertising over IPv6 mDNS serves
+        # no purpose when the HAP server cannot accept IPv6 connections.
+        if self.select_ip_version != IPVersion.V4Only:
+            self.logger.info(
+                f"mDNS ip_version is {self.select_ip_version} but the HAP server is IPv4-only "
+                f"(get_local_address uses AF_INET). IPv6 mDNS advertisements will not be "
+                f"reachable. Consider using IPVersion.V4Only unless you have a specific reason."
+            )
+
+
+        if self.select_ip_version == IPVersion.V4Only:
+            self.default_listen_address = "0.0.0.0"
+        elif self.select_ip_version == IPVersion.V6Only:
+            self.default_listen_address = "::"
+        else:
+            # IPVersion.All – let the driver auto-detect (current behaviour)
+            self.default_listen_address = None
         if interfaces == "":
-            self.select_interfaces = InterfaceChoice.All
+            self.select_interfaces = None
         elif "," in interfaces:
             self.select_interfaces = interfaces.split(",")
             self.logger.debug(f"mDNS Interface List to use: {self.select_interfaces}")
         elif "." in interfaces:
             self.select_interfaces = [interfaces]
         else:
-            self.select_interfaces = InterfaceChoice.All
+            self.select_interfaces = None
             self.logger.warning("Select_Interface: Advanced plugin Properties in error, using default, please check plugin Config")
 
         #self.apple_2p2 = self.pluginPrefs.get('mDNSapple_p2p', False)
@@ -1324,9 +1351,24 @@ class Plugin(indigo.PluginBase):
            # self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces, apple_p2p=self.apple_2p2)
            # self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
            # self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
-            self.logger.debug(f"\nmDNS: Starting Driver listen_address={self.HAPServeripaddress=} && advertised_address={self.HAPAdvertised_ipaddress=}")  ## 2nd []
-            self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local" , interface_choice=self.select_ip_version,  address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
-
+            # Use explicit listen_address if user set HAPServeripaddress, otherwise
+            # derive from ip_version selection (like HA's _DEFAULT_BIND pattern).
+            effective_listen_address = self.HAPServeripaddress if self.HAPServeripaddress else self.default_listen_address
+            self.logger.debug(
+                f"\nmDNS: Starting Driver"
+                f"\n  interface_choice(ip_version) = {self.select_ip_version}"
+                f"\n  listen_address               = {effective_listen_address}"
+                f"\n  address (HAP server)          = {self.HAPServeripaddress}"
+                f"\n  advertised_address            = {self.HAPAdvertised_ipaddress}"
+                f"\n  zeroconf_interfaces           = {self.select_interfaces}"
+            )
+            #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local" , interface_choice=self.select_ip_version, zeroconf_interfaces=self.select_interfaces, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
+            self.driver_multiple.append(
+                HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport),
+                           persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local",
+                           interface_choice=self.select_ip_version, zeroconf_interfaces=self.select_interfaces,
+                           listen_address=effective_listen_address, address=self.HAPServeripaddress,
+                           advertised_address=self.HAPAdvertised_ipaddress))
             #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local", async_zeroconf_instance=self.async_zeroconf_instance, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
            #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID), iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location))
 
@@ -4325,9 +4367,24 @@ class Plugin(indigo.PluginBase):
         self.logger.info("{0:=^130}".format(" Advanced Settings: "))
         self.logger.info(f"Selected IP version: {self.select_ip_version}")
         self.logger.info(f"Select interfaces: {self.select_interfaces}")
+        self.logger.info(f"  default_listen_address:         {self.default_listen_address}")
+        if self.select_ip_version == IPVersion.V6Only and not _HAS_IPV6:
+            self.logger.info(
+                "  ⚠ IPVersion.V6Only selected but this system does not appear to have IPv6 support! "
+                "Consider switching to IPVersion.V4Only in Plugin Config → Advanced."
+            )
         if self.select_ip_version == IPVersion.V4Only:
-            self.logger.warning(
-                "Note: If using OS18 and AppleTV Hubs, IPVersion.All might be worth a trial if you experience connection issues.")
+            self.logger.info(
+                f"  ⚠ ip_version is {self.select_ip_version} Good.  The HAP server is IPv4-only. "
+                "Selecting anything else means that IPv6 mDNS sockets are created but serve no purpose. "
+                "IPVersion.V4Only is strongly recommended."
+            )
+        if self.select_ip_version != IPVersion.V4Only:
+            self.logger.info(
+                f"  ⚠ ip_version is {self.select_ip_version} but the HAP server is IPv4-only. "
+                "IPv6 mDNS sockets are created but serve no purpose. "
+                "IPVersion.V4Only is recommended."
+            )
 
         self.logger.info(f"HKLS Advertised Ip address: {self.HAPAdvertised_ipaddress}")
         self.logger.info(f"HKLS Server Ipaddress: {self.HAPServeripaddress}")
