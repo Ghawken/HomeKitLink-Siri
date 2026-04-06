@@ -4323,33 +4323,61 @@ class Plugin(indigo.PluginBase):
         self.logger.info(u"{0:=^190}".format(""))
         # ── Advanced Settings ──
         self.logger.info("{0:=^130}".format(" Advanced Settings: "))
-        self.logger.info(f"Selected IP version: {self.select_ip_version}")
-        self.logger.info(f"Select interfaces: {self.select_interfaces}")
+
+        # ── mDNS / Zeroconf Settings ──
+        self.logger.info("{0:=^130}".format(" mDNS / Zeroconf Configuration: "))
+        self.logger.info(f"  ip_version (interface_choice):  {self.select_ip_version}")
+        self.logger.info(f"  zeroconf_interfaces:            {self.select_interfaces}")
+
+        if self.select_interfaces is not None:
+            self.logger.info(
+                "  → Zeroconf mode: EXPLICIT INTERFACES — zeroconf will bind to the "
+                "specified interface(s) and auto-detect ip_version from the addresses."
+            )
+            if self.select_ip_version is not None:
+                self.logger.info(
+                    f"  → Note: ip_version ({self.select_ip_version}) will NOT be passed "
+                    "to zeroconf because explicit interfaces take precedence."
+                )
+        else:
+            self.logger.info(
+                f"  → Zeroconf mode: IP VERSION ONLY — zeroconf will enumerate all "
+                f"adapters (InterfaceChoice.All) filtered by ip_version={self.select_ip_version}."
+            )
+
         if self.select_ip_version == IPVersion.V4Only:
             self.logger.warning(
                 "Note: If using OS18 and AppleTV Hubs, IPVersion.All might be worth a trial if you experience connection issues.")
 
-        self.logger.info(f"HKLS Advertised Ip address: {self.HAPAdvertised_ipaddress}")
-        self.logger.info(f"HKLS Server Ipaddress: {self.HAPServeripaddress}")
+        # ── HAP Server / Advertised Address Settings ──
+        self.logger.info("{0:=^130}".format(" HAP Server / Advertised Address: "))
+        self.logger.info(f"  HAP Server IP (listen address):    {self.HAPServeripaddress}")
+        self.logger.info(f"  HAP Advertised IP (mDNS A-record): {self.HAPAdvertised_ipaddress}")
 
         if self.HAPAdvertised_ipaddress is None and self.HAPServeripaddress is None:
             self.logger.info(
-                "HKLS Advertised Ipaddress and HKLS Server Ipaddress are None, which is acceptable. The server will decide the best option.")
+                "  → Both are None (default). The server will auto-detect the best address.")
         else:
-            self.logger.warning("[HKLS Advertised Ipaddress and/or HKLS Server Ipaddress are set. Default is None.]")
+            self.logger.warning("[HAP Advertised IP and/or HAP Server IP are set. Default is None.]")
 
         if self.HAPAdvertised_ipaddress is not None or self.HAPServeripaddress is not None:
             self.logger.info(
-                f"Using Advanced settings: HAP Server IP {self.HAPServeripaddress} "
-                f"(if NONE will be calculated) with advertised interfaces of: {self.HAPAdvertised_ipaddress}"
+                f"  Using Advanced settings: HAP Server IP {self.HAPServeripaddress} "
+                f"(if None will be calculated) with advertised address: {self.HAPAdvertised_ipaddress}"
             )
             if self.HAPServeripaddress is not None and self.HAPAdvertised_ipaddress is not None:
                 if self.HAPServeripaddress not in self.HAPAdvertised_ipaddress:
                     self.logger.warning(
                         f"It would seem that your IP address running HomeKit ({self.HAPServeripaddress}) "
                         "is not in the advertised IP addresses. This will likely cause issues, "
-                        f"I would suggest you add {self.HAPServeripaddress} to the list of advertised interfaces in advanced config."
+                        f"I would suggest you add {self.HAPServeripaddress} to the list of advertised addresses in advanced config."
                     )
+
+        self.logger.info("{0:=^130}".format(" Parameter summary passed to HomeDriver: "))
+        self.logger.info(f"  interface_choice  → zeroconf ip_version:  {self.select_ip_version}")
+        self.logger.info(f"  zeroconf_interfaces → zeroconf interfaces: {self.select_interfaces}")
+        self.logger.info(f"  address           → HAP server address:    {self.HAPServeripaddress}")
+        self.logger.info(f"  advertised_address → HAP mDNS A-record:   {self.HAPAdvertised_ipaddress}")
 
         self.Menu_show_runningids()
 
