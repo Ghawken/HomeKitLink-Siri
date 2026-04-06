@@ -4429,32 +4429,104 @@ class Plugin(indigo.PluginBase):
             except Exception:
                 self.logger.error("  Failed to browse for _hap._tcp services", exc_info=True)
 
-            ## ── Step 10: Subprocess terminal diagnostic commands ──
+            ## ── Step 10: Terminal Diagnostic Commands ──
             self.logger.info(u"{0:=^130}".format(" Terminal Diagnostic Commands "))
             self.logger.info("  (Note: dns-sd is a continuous browse command; timeout is expected)")
             self._mdns_run_command("dns-sd -B _hap._tcp local.", ["/usr/bin/dns-sd", "-B", "_hap._tcp", "local."], timeout=6)
             self._mdns_run_command("scutil --dns (DNS Configuration)", ["/usr/sbin/scutil", "--dns"], timeout=5)
             self._mdns_run_command("ifconfig (Network Interfaces)", ["/sbin/ifconfig"], timeout=5)
-            ## mDNSResponder diagnostics
-            self._mdns_run_command("Check mDNSResponder process", ["/usr/bin/pgrep", "-l", "mDNSResponder"], timeout=5)
-            self._mdns_run_command("mDNSResponder launchd status", ["/bin/launchctl", "list", "com.apple.mDNSResponder"], timeout=5)
-            self._mdns_run_command("mDNSResponder recent logs (last 2m, faults/errors only)",
-                                  ["/usr/bin/log", "show", "--predicate", 'process == "mDNSResponder" AND (messageType == error OR messageType == fault)',
-                                   "--last", "2m", "--style", "compact"],
-                                  timeout=10)
             self._mdns_run_command("networksetup -listallhardwareports", ["/usr/sbin/networksetup", "-listallhardwareports"], timeout=5)
             self._mdns_run_command("Check firewall status (socketfilterfw)", ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"], timeout=5)
             self._mdns_run_command("lsof mDNS port 5353", ["/usr/sbin/lsof", "-i", "UDP:5353", "-P", "-n"], timeout=5)
 
-            ## ── Step 11: Summary and recommendations ──
+            ## ── Step 11: mDNSResponder Deep Diagnostics ──
+            self.logger.info(u"{0:=^130}".format(" mDNSResponder Diagnostics "))
+
+            # 11a: Is mDNSResponder running?
+            self._mdns_run_command("Check mDNSResponder process", ["/usr/bin/pgrep", "-l", "mDNSResponder"], timeout=5)
+
+            # 11b: Detailed process info (PID, CPU, memory, elapsed time)
+            self._mdns_run_command(
+                "mDNSResponder process details (ps)",
+                ["/bin/ps", "-eo", "pid,ppid,%cpu,%mem,etime,command"],
+                timeout=5,
+                grep_filter="mDNSResponder"
+            )
+
+            # 11c: Also check mDNSResponderHelper (assists with port registration)
+            self._mdns_run_command(
+                "mDNSResponderHelper process",
+                ["/usr/bin/pgrep", "-l", "mDNSResponderHelper"],
+                timeout=5
+            )
+
+            # 11d: launchd status (PID, last exit status)
+            self._mdns_run_command("mDNSResponder launchd status", ["/bin/launchctl", "list", "com.apple.mDNSResponder"], timeout=5)
+
+            # 11e: launchd print (detailed: restart count, state, etc.) — macOS 10.10+
+            self._mdns_run_command(
+                "mDNSResponder launchd detail (launchctl print)",
+                ["/bin/launchctl", "print", "system/com.apple.mDNSResponder"],
+                timeout=5
+            )
+
+            # 11f: Recent error/fault logs from mDNSResponder (last 2 minutes)
+            self._mdns_run_command(
+                "mDNSResponder recent logs (last 2m, errors/faults)",
+                ["/usr/bin/log", "show", "--predicate",
+                 'process == "mDNSResponder" AND (messageType == error OR messageType == fault)',
+                 "--last", "2m", "--style", "compact"],
+                timeout=10
+            )
+
+            # 11g: Recent info-level logs (last 30s) — shows registrations, port binds, etc.
+            self._mdns_run_command(
+                "mDNSResponder recent logs (last 30s, all levels incl. info)",
+                ["/usr/bin/log", "show", "--predicate", 'process == "mDNSResponder"',
+                 "--last", "30s", "--style", "compact", "--info"],
+                timeout=10
+            )
+
+            # 11h: Per-bridge service resolution via dns-sd
+            self.logger.info("  --- Per-bridge dns-sd service lookup ---")
+            for idx, driver in enumerate(self.driver_multiple):
+                try:
+                    svc_info = driver.mdns_service_info
+                    if svc_info and svc_info.name:
+                        svc_name = svc_info.name
+                        self.logger.info(f"  Bridge[{idx}] service name: {svc_name}")
+                        self._mdns_run_command(
+                            f"dns-sd -L (resolve bridge[{idx}])",
+                            ["/usr/bin/dns-sd", "-L", svc_name, "_hap._tcp", "local."],
+                            timeout=4
+                        )
+                    else:
+                        self.logger.info(f"  Bridge[{idx}]: no mdns_service_info available (bridge may not be started)")
+                except Exception:
+                    self.logger.info(f"  Bridge[{idx}]: unable to read mdns_service_info")
+
+            # 11i: Multicast route — verify 224.0.0.251 (mDNS multicast) is routable
+            self._mdns_run_command(
+                "Multicast route for 224.0.0.251 (mDNS)",
+                ["/sbin/route", "-n", "get", "224.0.0.251"],
+                timeout=5
+            )
+
+            ## ── Step 12: Summary and recommendations ──
             self.logger.info(u"{0:=^130}".format(" Recommendations "))
             self.logger.info("1. IPVersion.V4Only is strongly recommended since the HAP server is IPv4-only.")
-            self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running and launchd shows a valid PID (see above).")
-            self.logger.info("3. If mDNSResponder logs show errors, try restarting it in Terminal: sudo killall mDNSResponder")
-            self.logger.info("4. If using a custom interface, ensure the IP address is correct and reachable.")
-            self.logger.info("5. If the firewall is enabled, ensure HomeKit/Indigo are allowed through the firewall.")
-            self.logger.info("6. Verify your bridges appear in the Zeroconf browse with ** THIS PLUGIN ** tag and show [paired].")
-            self.logger.info("7. Copy and paste the above log output when reporting mDNS issues for faster troubleshooting.")
+            self.logger.info("2. If bridges are not appearing in Home app, check that mDNSResponder is running with a valid PID.")
+            self.logger.info("   - launchd status should show PID > 0 and last exit status = 0.")
+            self.logger.info("   - If mDNSResponder shows high CPU/memory or very short uptime, it may be crash-looping.")
+            self.logger.info("3. If mDNSResponder logs show errors or 'Could not find service' warnings:")
+            self.logger.info("   - Try restarting mDNSResponder in Terminal: sudo killall mDNSResponder")
+            self.logger.info("   - macOS will auto-restart it via launchd within seconds.")
+            self.logger.info("4. If per-bridge dns-sd lookups fail to resolve, the service is not registered in mDNSResponder.")
+            self.logger.info("   - Restart the affected bridge or the entire plugin.")
+            self.logger.info("5. If using a custom interface, ensure the IP address is correct and reachable.")
+            self.logger.info("6. If the firewall is enabled, ensure HomeKit/Indigo are allowed through the firewall.")
+            self.logger.info("7. Verify your bridges appear in the Zeroconf browse with ** THIS PLUGIN ** tag and show [paired].")
+            self.logger.info("8. Copy and paste the above log output when reporting mDNS issues for faster troubleshooting.")
 
             self.logger.info(u"{0:=^190}".format(""))
             self.logger.info(u"{0:=^190}".format(" mDNS Troubleshooting Complete "))
@@ -4463,8 +4535,15 @@ class Plugin(indigo.PluginBase):
         except Exception:
             self.logger.error("mDNS Troubleshooting encountered an unexpected error", exc_info=True)
 
-    def _mdns_run_command(self, description, command, timeout=5):
-        """Helper to run a subprocess command and log its output for mDNS troubleshooting."""
+    def _mdns_run_command(self, description, command, timeout=5, grep_filter=None):
+        """Helper to run a subprocess command and log its output for mDNS troubleshooting.
+
+        Args:
+            description: Human-readable description logged as a section header.
+            command: Command list for subprocess.Popen.
+            timeout: Max seconds to wait before killing the process.
+            grep_filter: If set, only output lines containing this substring (case-insensitive).
+        """
         try:
             self.logger.info(f"  --- {description} ---")
             p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
@@ -4475,8 +4554,15 @@ class Plugin(indigo.PluginBase):
                 stdout, stderr = p.communicate()
                 self.logger.info(f"  (command timed out after {timeout}s, partial output below)")
             if stdout and stdout.strip():
-                for line in stdout.strip().splitlines():
-                    self.logger.info(f"    {line}")
+                lines = stdout.strip().splitlines()
+                if grep_filter:
+                    filter_lower = grep_filter.lower()
+                    lines = [l for l in lines if filter_lower in l.lower()]
+                if lines:
+                    for line in lines:
+                        self.logger.info(f"    {line}")
+                else:
+                    self.logger.info(f"    (no matching output{' for filter: ' + grep_filter if grep_filter else ''})")
             else:
                 self.logger.info(f"    (no output)")
             if stderr and stderr.strip():
