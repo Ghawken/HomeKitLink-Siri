@@ -25,6 +25,11 @@
         <Name>ℹ️ Support Information For Forum Posting️</Name>
         <CallbackMethod>logging_issues</CallbackMethod>
     </MenuItem>
+        <MenuItem id="mdnsTroubleshoot">
+        <Name>ℹ️ Support mDNS Troubleshooting</Name>
+        <CallbackMethod>Menu_mDNS_troubleshoot</CallbackMethod>
+    </MenuItem>
+
     <MenuItem id="sep2"/>
     <MenuItem id="sep3"/>
     <MenuItem id="deleteIsolatedDevices">
