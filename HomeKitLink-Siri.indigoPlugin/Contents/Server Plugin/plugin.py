@@ -336,7 +336,10 @@ class Plugin(indigo.PluginBase):
             self.select_ip_version = IPVersion.V4Only
             self.logger.warning("Select_IP: Advanced plugin Properties in error, using default, please check plugin Config")
         self.logger.debug(f"mDNS IP version selected:      {self.select_ip_version}")
-        interfaces = self.pluginPrefs.get('mDNSinterfaces', "")
+
+        interfaces = self.pluginPrefs.get("mDNSinterfaces", "")
+
+        self.logger.debug(f"mDNS Interfaces to use:         {interfaces}")
         self.logger.debug(f"System IPv6 support:           {_HAS_IPV6}")
 
         # The HAP server is fundamentally IPv4-only:
@@ -371,7 +374,7 @@ class Plugin(indigo.PluginBase):
         else:
             self.select_interfaces = None
             self.logger.warning("Select_Interface: Advanced plugin Properties in error, using default, please check plugin Config")
-
+        self.logger.debug(f"mDNS Interface List to use: {self.select_interfaces}")
         #self.apple_2p2 = self.pluginPrefs.get('mDNSapple_p2p', False)
         self.apple_2p2 = False
         if self.apple_2p2:

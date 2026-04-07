@@ -164,7 +164,7 @@ This means can keep image updated on opening Home to whatever degree requested h
     </Field>
     <Field id="mDNSinterfaces"
            type="textfield"
-           tooltip="Enter IP address to use" defaultValue="" hidden="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+           tooltip="Enter IP (mDNS) address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>mDNS Options: Interfaces:</Label>
     </Field>
         <Field id="spacede11" type="label" fontSize="small" hidden="true" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
