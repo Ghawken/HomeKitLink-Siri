@@ -4465,10 +4465,11 @@ class Plugin(indigo.PluginBase):
             # system domain) and the plugin never runs as root.
 
             # 11d: Recent error/fault logs from mDNSResponder (last 2 minutes)
+            # Exclude NSEC errors — they are common and usually harmless (DNSSEC negative cache entries).
             self._mdns_run_command(
-                "mDNSResponder recent logs (last 2m, errors/faults)",
+                "mDNSResponder recent logs (last 2m, errors/faults, excl. NSEC)",
                 ["/usr/bin/log", "show", "--predicate",
-                 'process == "mDNSResponder" AND (messageType == error OR messageType == fault)',
+                 'process == "mDNSResponder" AND (messageType == error OR messageType == fault) AND NOT composedMessage CONTAINS "NSEC"',
                  "--last", "2m", "--style", "compact"],
                 timeout=10
             )
