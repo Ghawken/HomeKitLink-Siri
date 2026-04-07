@@ -5262,10 +5262,69 @@ class Plugin(indigo.PluginBase):
             self.logger.info("  If this is not enabled, HomeKit bridges will NOT be discoverable.")
 
             local_network_ok = False
-            # Test 1: mDNS multicast send/receive — the definitive LNA test.
-            # If LNA is blocked, attempts to join the mDNS multicast group or
-            # send/receive on 224.0.0.251:5353 will fail silently or raise an error.
-            self.logger.info("  --- Test: mDNS Multicast Connectivity ---")
+
+            # First, determine the local non-loopback IP to use for testing.
+            # Prefer the plugin's configured HAPServeripaddress, otherwise auto-detect.
+            self.logger.info("  --- Detecting local network interface ---")
+            test_ip = None
+            if self.HAPServeripaddress and self.HAPServeripaddress not in ("127.0.0.1", "0.0.0.0", ""):
+                test_ip = self.HAPServeripaddress
+                self.logger.info(f"  Using plugin configured server IP: {test_ip}")
+            else:
+                # Auto-detect by routing to an external address (UDP connect does not send data)
+                try:
+                    detect_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    detect_sock.settimeout(2)
+                    try:
+                        detect_sock.connect(("8.8.8.8", 80))
+                        detected_ip = detect_sock.getsockname()[0]
+                        if detected_ip and detected_ip != "127.0.0.1":
+                            test_ip = detected_ip
+                            self.logger.info(f"  Auto-detected local IP: {test_ip}")
+                        else:
+                            self.logger.warning(f"  ⚠️ Auto-detected IP is loopback ({detected_ip}). No real network interface found.")
+                    except OSError as detect_err:
+                        self.logger.warning(f"  ⚠️ Could not auto-detect local IP: {detect_err}")
+                    finally:
+                        detect_sock.close()
+                except Exception:
+                    self.logger.warning("  ⚠️ Failed to create detection socket.", exc_info=True)
+
+            # Test 1: Multicast send test — the DEFINITIVE Local Network Access test.
+            # This replicates the exact failure mode seen when LNA is blocked:
+            #   socket → IP_MULTICAST_IF (bind to real interface) → sendto(mDNS group)
+            # If LNA is blocked, sendto() will fail. Binding to a specific non-loopback
+            # interface prevents the test from passing via loopback.
+            self.logger.info("  --- Test: mDNS Multicast Send (definitive LNA test) ---")
+            if test_ip:
+                try:
+                    MDNS_GROUP = "224.0.0.251"
+                    MDNS_PORT = 5353
+                    mc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    mc_sock.settimeout(3)
+                    try:
+                        # Bind multicast output to the specific non-loopback interface
+                        mc_sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(test_ip))
+                        mc_sock.sendto(b"HKLS-LNA-test", (MDNS_GROUP, MDNS_PORT))
+                        self.logger.info(f"  ✅ Successfully sent multicast packet to {MDNS_GROUP}:{MDNS_PORT} via {test_ip}")
+                        self.logger.info("     Local Network Access is ENABLED.")
+                        local_network_ok = True
+                    except OSError as send_err:
+                        self.logger.warning(f"  ❌ Multicast send FAILED via {test_ip}: {send_err}")
+                        self.logger.warning("     This is a strong indicator that Apple Local Network Access is BLOCKED.")
+                        self.logger.warning("     Enable it in: System Settings > Privacy & Security > Local Network")
+                    finally:
+                        mc_sock.close()
+                except Exception:
+                    self.logger.warning("  ⚠️ Multicast send test encountered an error.", exc_info=True)
+            else:
+                self.logger.warning("  ⚠️ No non-loopback IP available — cannot perform multicast send test.")
+                self.logger.warning("     This likely means there is no active network connection.")
+
+            # Test 2: mDNS multicast group join (supplementary check).
+            # Note: When port 5353 is already in use (EADDRINUSE), the bind fails before
+            # we can test the multicast join, so EADDRINUSE is inconclusive for LNA status.
+            self.logger.info("  --- Test: mDNS Multicast Group Join ---")
             try:
                 MDNS_GROUP = "224.0.0.251"
                 MDNS_PORT = 5353
@@ -5282,24 +5341,18 @@ class Plugin(indigo.PluginBase):
                     mreq = struct.pack("4sL", socket.inet_aton(MDNS_GROUP), socket.INADDR_ANY)
                     sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
                     self.logger.info(f"  ✅ Successfully joined mDNS multicast group {MDNS_GROUP}:{MDNS_PORT}")
-                    self.logger.info("     Local Network Access appears to be ENABLED.")
-                    local_network_ok = True
                 except OSError as bind_err:
-                    # Port in use is expected (mDNSResponder owns it) — not a failure.
                     if bind_err.errno in (48, 98):  # EADDRINUSE on macOS(48) / Linux(98)
                         self.logger.info(f"  ℹ️ Port {MDNS_PORT} already in use (expected — mDNSResponder is running).")
-                        self.logger.info("     This is normal and does NOT indicate a Local Network Access problem.")
-                        local_network_ok = True
+                        self.logger.info("     EADDRINUSE is normal but inconclusive for LNA — see multicast send test above.")
                     else:
                         self.logger.warning(f"  ⚠️ Failed to bind mDNS multicast socket: {bind_err}")
-                        self.logger.warning("     This may indicate Local Network Access is BLOCKED for this plugin.")
                 finally:
                     sock.close()
             except Exception:
-                self.logger.warning("  ⚠️ mDNS multicast test failed.", exc_info=True)
-                self.logger.warning("     Local Network Access may be disabled or network configuration may be broken.")
+                self.logger.warning("  ⚠️ mDNS multicast group join test failed.", exc_info=True)
 
-            # Test 2: Outbound UDP connectivity — can we send a UDP packet to the local network?
+            # Test 3: Outbound UDP connectivity — check if we reach a real interface or just loopback.
             self.logger.info("  --- Test: Outbound UDP Connectivity ---")
             try:
                 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -5308,20 +5361,21 @@ class Plugin(indigo.PluginBase):
                     udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     udp_sock.connect(("10.255.255.255", 80))
                     local_ip = udp_sock.getsockname()[0]
-                    self.logger.info(f"  ✅ Outbound UDP connectivity OK. Local IP: {local_ip}")
-                    local_network_ok = True
+                    if local_ip == "127.0.0.1":
+                        self.logger.warning(f"  ⚠️ Outbound UDP routed to loopback ({local_ip}) — no real network interface active.")
+                    else:
+                        self.logger.info(f"  ✅ Outbound UDP connectivity OK. Local IP: {local_ip}")
                 except OSError as udp_err:
                     self.logger.warning(f"  ⚠️ Outbound UDP connectivity failed: {udp_err}")
-                    self.logger.warning("     This may indicate Local Network Access is blocked or no active network interface.")
+                    self.logger.warning("     This may indicate no active network interface or Local Network Access is blocked.")
                 finally:
                     udp_sock.close()
             except Exception:
                 self.logger.warning("  ⚠️ Unable to create UDP socket for connectivity test.", exc_info=True)
 
-            # Test 3: TCP connectivity to local gateway (simple reachability check)
+            # Test 4: Local gateway reachability (supplementary check)
             self.logger.info("  --- Test: Local Gateway Reachability ---")
             try:
-                # Determine default gateway by connecting UDP and checking route
                 gw_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 gw_sock.settimeout(2)
                 try:
@@ -5329,25 +5383,27 @@ class Plugin(indigo.PluginBase):
                     local_ip = gw_sock.getsockname()[0]
                 finally:
                     gw_sock.close()
-                # Derive likely gateway (e.g., x.x.x.1)
-                parts = local_ip.split(".")
-                if len(parts) == 4:
-                    gateway_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.1"
-                    self.logger.info(f"  Derived likely gateway: {gateway_ip}")
-                    gw_test = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    gw_test.settimeout(2)
-                    try:
-                        result = gw_test.connect_ex((gateway_ip, 80))
-                        if result == 0:
-                            self.logger.info(f"  ✅ Gateway {gateway_ip}:80 is reachable.")
-                        else:
-                            self.logger.info(f"  ℹ️ Gateway {gateway_ip}:80 returned error code {result} (port may be closed, but host may still be reachable).")
-                    except OSError as gw_err:
-                        self.logger.info(f"  ℹ️ Gateway {gateway_ip} connectivity test: {gw_err}")
-                    finally:
-                        gw_test.close()
+                if local_ip == "127.0.0.1":
+                    self.logger.warning("  ⚠️ Route detection returned loopback — skipping gateway check.")
                 else:
-                    self.logger.info(f"  ℹ️ Could not derive gateway from local IP: {local_ip}")
+                    parts = local_ip.split(".")
+                    if len(parts) == 4:
+                        gateway_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.1"
+                        self.logger.info(f"  Derived likely gateway: {gateway_ip}")
+                        gw_test = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        gw_test.settimeout(2)
+                        try:
+                            result = gw_test.connect_ex((gateway_ip, 80))
+                            if result == 0:
+                                self.logger.info(f"  ✅ Gateway {gateway_ip}:80 is reachable.")
+                            else:
+                                self.logger.info(f"  ℹ️ Gateway {gateway_ip}:80 returned error code {result} (port may be closed, but host may still be reachable).")
+                        except OSError as gw_err:
+                            self.logger.info(f"  ℹ️ Gateway {gateway_ip} connectivity test: {gw_err}")
+                        finally:
+                            gw_test.close()
+                    else:
+                        self.logger.info(f"  ℹ️ Could not derive gateway from local IP: {local_ip}")
             except Exception:
                 self.logger.warning("  ⚠️ Local gateway reachability test failed.", exc_info=True)
 
@@ -5415,11 +5471,11 @@ class Plugin(indigo.PluginBase):
             ## ── Step 7: Summary and recommendations ──
             self.logger.info(u"{0:=^130}".format(" Recommendations "))
             if local_network_ok:
-                self.logger.info("  ✅ Local Network Access appears to be working.")
+                self.logger.info("  ✅ Local Network Access appears to be working (multicast send test passed).")
             else:
                 self.logger.warning("  ⚠️ Local Network Access may be BLOCKED.")
-                self.logger.warning("     Multiple network tests failed, which is a strong indicator that")
-                self.logger.warning("     Apple's Local Network Access permission has not been granted.")
+                self.logger.warning("     The multicast send test (the definitive LNA check) did NOT pass.")
+                self.logger.warning("     This is the most common cause of HomeKit bridges not being discoverable.")
 
             self.logger.info("")
             self.logger.info("  To check/enable Local Network Access on macOS Sequoia (15.x+):")
