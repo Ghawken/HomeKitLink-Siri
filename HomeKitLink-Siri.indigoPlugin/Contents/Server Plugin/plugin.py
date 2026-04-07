@@ -5404,9 +5404,9 @@ class Plugin(indigo.PluginBase):
 
             ## ── Step 6: DNS resolution check ──
             self.logger.info(u"{0:=^130}".format(" DNS Resolution Check "))
-            for hostname in ["local.", "apple.com"]:
+            for hostname in ["apple.com", "github.com"]:
                 try:
-                    addrs = socket.getaddrinfo(hostname.rstrip("."), None)
+                    addrs = socket.getaddrinfo(hostname, None)
                     ips = list(set(a[4][0] for a in addrs))
                     self.logger.info(f"  {hostname} resolves to: {ips}")
                 except socket.gaierror as e:
