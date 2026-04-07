@@ -368,7 +368,7 @@ class Plugin(indigo.PluginBase):
         elif "," in interfaces:
             self.select_interfaces = interfaces.split(",")
             self.logger.debug(f"mDNS Interface List to use: {self.select_interfaces}")
-        elif "." in interfaces:
+        elif "." in interfaces or ":" in interfaces:
             self.select_interfaces = [interfaces]
         else:
             self.select_interfaces = None
@@ -401,6 +401,13 @@ class Plugin(indigo.PluginBase):
             self.HAPServeripaddress = None
         else:
             self.HAPServeripaddress = HAPServeripaddress
+
+        # Auto-derive zeroconf interfaces from HAPServeripaddress when not
+        # explicitly set.  This ensures mDNS only advertises on the interface
+        # the HAP server is actually listening on.
+        if self.select_interfaces is None and self.HAPServeripaddress:
+            self.select_interfaces = [self.HAPServeripaddress]
+            self.logger.debug(f"Auto-derived zeroconf interfaces from HAP server address: {self.select_interfaces}")
 
         if self.HAPAdvertised_ipaddress !=None or self.HAPServeripaddress !=None:
             self.logger.info(f"Using Advanced settings: HAP Server IP {self.HAPServeripaddress} (if NONE will be calculated) with advertised interfaces of: {self.HAPAdvertised_ipaddress}")
@@ -513,7 +520,7 @@ class Plugin(indigo.PluginBase):
                 self.select_interfaces = None
             elif "," in interfaces:
                 self.select_interfaces = interfaces.split(",")
-            elif "." in interfaces:
+            elif "." in interfaces or ":" in interfaces:
                 self.select_interfaces = [interfaces]
             else:
                 self.select_interfaces = None
@@ -533,6 +540,11 @@ class Plugin(indigo.PluginBase):
                 self.HAPServeripaddress = None
             else:
                 self.HAPServeripaddress = HAPServeripaddress
+
+            # Auto-derive zeroconf interfaces from HAPServeripaddress when not
+            # explicitly set.
+            if self.select_interfaces is None and self.HAPServeripaddress:
+                self.select_interfaces = [self.HAPServeripaddress]
 
             if prev_ip_version != self.select_ip_version:
                 self.logger.info(
