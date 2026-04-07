@@ -22,11 +22,15 @@
     <MenuItem id="sep12"/>
     <MenuItem id="sep13"/>
     <MenuItem id="loggingissues">
-        <Name>ℹ️ Support Information For Forum Posting️</Name>
+        <Name>ℹ️ Troubleshoot 1 Support Information For Forum Posting️</Name>
         <CallbackMethod>logging_issues</CallbackMethod>
     </MenuItem>
+        <MenuItem id="networkTroubleshoot">
+        <Name>ℹ️ Troubleshoot 2 Network Trouble Shooting</Name>
+        <CallbackMethod>Menu_network_troubleshoot</CallbackMethod>
+    </MenuItem>
         <MenuItem id="mdnsTroubleshoot">
-        <Name>ℹ️ Support mDNS Troubleshooting</Name>
+        <Name>ℹ️ Troubleshoot 3 Support mDNS Troubleshooting</Name>
         <CallbackMethod>Menu_mDNS_troubleshoot</CallbackMethod>
     </MenuItem>
 

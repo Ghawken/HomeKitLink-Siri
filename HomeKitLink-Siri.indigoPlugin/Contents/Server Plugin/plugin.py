@@ -754,7 +754,7 @@ class Plugin(indigo.PluginBase):
 
             if int(self.count) > int(self.runningAccessoryCount):
                 self.logger.info('Given this difference, please review devices by Menu Item, Show Device Publications & Identity Devices Running for more information.')
-
+                self.logger.info("See Troubleshooting Menu items 1,2 and 3 from Plugin Menu for further aid")
 
             self.sleep(10)
 
@@ -5272,3 +5272,270 @@ class Plugin(indigo.PluginBase):
             self.logger.info(f"    Command not found: {command[0]} (may not be available on this system)")
         except Exception:
             self.logger.error(f"    Failed to run: {description}", exc_info=True)
+
+    def Menu_network_troubleshoot(self, *args, **kwargs):
+        """Standalone Network Troubleshooting function callable from the plugin menu.
+        Checks Apple Local Network Access permission, general network reachability,
+        and logs diagnostic results."""
+        try:
+            import socket
+            import struct
+
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" Network Trouble Shooting "))
+            self.logger.info(u"{0:=^190}".format(""))
+
+            ## ── Step 1: System information ──
+            self.logger.info(u"{0:=^130}".format(" System Information "))
+            self.logger.info(f"  macOS version:   {platform.mac_ver()[0] or platform.platform()}")
+            self.logger.info(f"  Python version:  {sys.version}")
+            self.logger.info(f"  Architecture:    {platform.machine()}")
+
+            ## ── Step 2: Apple Local Network Access Check ──
+            ## Starting with macOS Sequoia 15.x, Apple requires explicit Local Network Access
+            ## permission for each application/plugin. If this is not enabled in
+            ## System Settings > Privacy & Security > Local Network, then mDNS advertisement
+            ## will silently fail, preventing HomeKit discovery.
+            self.logger.info(u"{0:=^130}".format(" Apple Local Network Access Check "))
+            self.logger.info("  macOS Sequoia (15.x+) requires Local Network Access for plugins to use mDNS.")
+            self.logger.info("  If this is not enabled, HomeKit bridges will NOT be discoverable.")
+
+            local_network_ok = False
+
+            # First, determine the local non-loopback IP to use for testing.
+            # Prefer the plugin's configured HAPServeripaddress, otherwise auto-detect.
+            self.logger.info("  --- Detecting local network interface ---")
+            test_ip = None
+            if self.HAPServeripaddress and self.HAPServeripaddress not in ("127.0.0.1", "0.0.0.0", ""):
+                test_ip = self.HAPServeripaddress
+                self.logger.info(f"  Using plugin configured server IP: {test_ip}")
+            else:
+                # Auto-detect by routing to an external address (UDP connect does not send data)
+                try:
+                    detect_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    detect_sock.settimeout(2)
+                    try:
+                        detect_sock.connect(("8.8.8.8", 80))
+                        detected_ip = detect_sock.getsockname()[0]
+                        if detected_ip and detected_ip != "127.0.0.1":
+                            test_ip = detected_ip
+                            self.logger.info(f"  Auto-detected local IP: {test_ip}")
+                        else:
+                            self.logger.warning(f"  ⚠️ Auto-detected IP is loopback ({detected_ip}). No real network interface found.")
+                    except OSError as detect_err:
+                        self.logger.warning(f"  ⚠️ Could not auto-detect local IP: {detect_err}")
+                    finally:
+                        detect_sock.close()
+                except Exception:
+                    self.logger.warning("  ⚠️ Failed to create detection socket.", exc_info=True)
+
+            # Test 1: Multicast send test — the DEFINITIVE Local Network Access test.
+            # This replicates the exact failure mode seen when LNA is blocked:
+            #   socket → IP_MULTICAST_IF (bind to real interface) → sendto(mDNS group)
+            # If LNA is blocked, sendto() will fail. Binding to a specific non-loopback
+            # interface prevents the test from passing via loopback.
+            self.logger.info("  --- Test: mDNS Multicast Send (definitive LNA test) ---")
+            if test_ip:
+                try:
+                    MDNS_GROUP = "224.0.0.251"
+                    MDNS_PORT = 5353
+                    mc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    mc_sock.settimeout(3)
+                    try:
+                        # Bind multicast output to the specific non-loopback interface
+                        mc_sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(test_ip))
+                        mc_sock.sendto(b"HKLS-LNA-test", (MDNS_GROUP, MDNS_PORT))
+                        self.logger.info(f"  ✅ Successfully sent multicast packet to {MDNS_GROUP}:{MDNS_PORT} via {test_ip}")
+                        self.logger.info("     Local Network Access is ENABLED.")
+                        local_network_ok = True
+                    except OSError as send_err:
+                        self.logger.warning(f"  ❌ Multicast send FAILED via {test_ip}: {send_err}")
+                        self.logger.warning("     This is a strong indicator that Apple Local Network Access is BLOCKED.")
+                        self.logger.warning("     Enable it in: System Settings > Privacy & Security > Local Network")
+                    finally:
+                        mc_sock.close()
+                except Exception:
+                    self.logger.warning("  ⚠️ Multicast send test encountered an error.", exc_info=True)
+            else:
+                self.logger.warning("  ⚠️ No non-loopback IP available — cannot perform multicast send test.")
+                self.logger.warning("     This likely means there is no active network connection.")
+
+            # Test 2: mDNS multicast group join (supplementary check).
+            # Note: When port 5353 is already in use (EADDRINUSE), the bind fails before
+            # we can test the multicast join, so EADDRINUSE is inconclusive for LNA status.
+            self.logger.info("  --- Test: mDNS Multicast Group Join ---")
+            try:
+                MDNS_GROUP = "224.0.0.251"
+                MDNS_PORT = 5353
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                try:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                except AttributeError:
+                    pass
+                sock.settimeout(3)
+                try:
+                    sock.bind(("", MDNS_PORT))
+                    # Join the mDNS multicast group
+                    mreq = struct.pack("4sL", socket.inet_aton(MDNS_GROUP), socket.INADDR_ANY)
+                    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+                    self.logger.info(f"  ✅ Successfully joined mDNS multicast group {MDNS_GROUP}:{MDNS_PORT}")
+                except OSError as bind_err:
+                    if bind_err.errno in (48, 98):  # EADDRINUSE on macOS(48) / Linux(98)
+                        self.logger.info(f"  ℹ️ Port {MDNS_PORT} already in use (expected — mDNSResponder is running).")
+                        self.logger.info("     EADDRINUSE is normal but inconclusive for LNA — see multicast send test above.")
+                    else:
+                        self.logger.warning(f"  ⚠️ Failed to bind mDNS multicast socket: {bind_err}")
+                finally:
+                    sock.close()
+            except Exception:
+                self.logger.warning("  ⚠️ mDNS multicast group join test failed.", exc_info=True)
+
+            # Test 3: Outbound UDP connectivity — check if we reach a real interface or just loopback.
+            self.logger.info("  --- Test: Outbound UDP Connectivity ---")
+            try:
+                udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                udp_sock.settimeout(2)
+                try:
+                    udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    udp_sock.connect(("10.255.255.255", 80))
+                    local_ip = udp_sock.getsockname()[0]
+                    if local_ip == "127.0.0.1":
+                        self.logger.warning(f"  ⚠️ Outbound UDP routed to loopback ({local_ip}) — no real network interface active.")
+                    else:
+                        self.logger.info(f"  ✅ Outbound UDP connectivity OK. Local IP: {local_ip}")
+                except OSError as udp_err:
+                    self.logger.warning(f"  ⚠️ Outbound UDP connectivity failed: {udp_err}")
+                    self.logger.warning("     This may indicate no active network interface or Local Network Access is blocked.")
+                finally:
+                    udp_sock.close()
+            except Exception:
+                self.logger.warning("  ⚠️ Unable to create UDP socket for connectivity test.", exc_info=True)
+
+            # Test 4: Local gateway reachability (supplementary check)
+            self.logger.info("  --- Test: Local Gateway Reachability ---")
+            try:
+                gw_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                gw_sock.settimeout(2)
+                try:
+                    gw_sock.connect(("8.8.8.8", 80))
+                    local_ip = gw_sock.getsockname()[0]
+                finally:
+                    gw_sock.close()
+                if local_ip == "127.0.0.1":
+                    self.logger.warning("  ⚠️ Route detection returned loopback — skipping gateway check.")
+                else:
+                    parts = local_ip.split(".")
+                    if len(parts) == 4:
+                        gateway_ip = f"{parts[0]}.{parts[1]}.{parts[2]}.1"
+                        self.logger.info(f"  Derived likely gateway: {gateway_ip}")
+                        gw_test = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        gw_test.settimeout(2)
+                        try:
+                            result = gw_test.connect_ex((gateway_ip, 80))
+                            if result == 0:
+                                self.logger.info(f"  ✅ Gateway {gateway_ip}:80 is reachable.")
+                            else:
+                                self.logger.info(f"  ℹ️ Gateway {gateway_ip}:80 returned error code {result} (port may be closed, but host may still be reachable).")
+                        except OSError as gw_err:
+                            self.logger.info(f"  ℹ️ Gateway {gateway_ip} connectivity test: {gw_err}")
+                        finally:
+                            gw_test.close()
+                    else:
+                        self.logger.info(f"  ℹ️ Could not derive gateway from local IP: {local_ip}")
+            except Exception:
+                self.logger.warning("  ⚠️ Local gateway reachability test failed.", exc_info=True)
+
+            ## ── Step 3: Check macOS firewall status ──
+            self.logger.info(u"{0:=^130}".format(" Firewall Status "))
+            self._mdns_run_command(
+                "Check firewall status (socketfilterfw)",
+                ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"],
+                timeout=5
+            )
+            self._mdns_run_command(
+                "Check firewall stealth mode",
+                ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getstealthmode"],
+                timeout=5
+            )
+            self._mdns_run_command(
+                "Check firewall block-all setting",
+                ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getblockall"],
+                timeout=5
+            )
+
+            ## ── Step 4: Check Indigo-specific network configuration ──
+            self.logger.info(u"{0:=^130}".format(" Plugin Network Configuration "))
+            self.logger.info(f"  HKLS Advertised IP address: {self.HAPAdvertised_ipaddress}")
+            self.logger.info(f"  HKLS Server IP address:     {self.HAPServeripaddress}")
+            self.logger.info(f"  Selected IP version:        {self.select_ip_version}")
+            if isinstance(self.select_interfaces, list):
+                self.logger.info(f"  Select interfaces:          {self.select_interfaces}")
+            else:
+                self.logger.info(f"  Select interfaces:          {self.select_interfaces if self.select_interfaces != InterfaceChoice.All else 'All (default)'}")
+            self.logger.info(f"  Starting port number:       {self.startingPortNumber}")
+            self.logger.info(f"  Active drivers:             {len(self.driver_multiple)}")
+            self.logger.info(f"  Active bridges:             {len(self.bridge_multiple)}")
+
+            ## ── Step 5: Port availability check for bridge ports ──
+            self.logger.info(u"{0:=^130}".format(" Bridge Port Checks "))
+            for idx, driver in enumerate(self.driver_multiple):
+                try:
+                    port = driver.state.port
+                    addr = driver.state.address
+                    self.logger.info(f"  Bridge[{idx}]: port={port}, address={addr}")
+                    test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    test_sock.settimeout(2)
+                    try:
+                        result = test_sock.connect_ex((addr or "127.0.0.1", port))
+                        if result == 0:
+                            self.logger.info(f"    ✅ Port {port} is accepting connections.")
+                        else:
+                            self.logger.warning(f"    ⚠️ Port {port} is not accepting connections (connect_ex returned {result}).")
+                    finally:
+                        test_sock.close()
+                except Exception:
+                    self.logger.info(f"  Bridge[{idx}]: unable to check port (driver state unavailable)")
+
+            ## ── Step 6: DNS resolution check ──
+            self.logger.info(u"{0:=^130}".format(" DNS Resolution Check "))
+            for hostname in ["apple.com", "github.com"]:
+                try:
+                    addrs = socket.getaddrinfo(hostname, None)
+                    ips = list(set(a[4][0] for a in addrs))
+                    self.logger.info(f"  {hostname} resolves to: {ips}")
+                except socket.gaierror as e:
+                    self.logger.info(f"  {hostname} resolution failed: {e}")
+
+            ## ── Step 7: Summary and recommendations ──
+            self.logger.info(u"{0:=^130}".format(" Recommendations "))
+            if local_network_ok:
+                self.logger.info("  ✅ Local Network Access appears to be working (multicast send test passed).")
+            else:
+                self.logger.warning("  ⚠️ Local Network Access may be BLOCKED.")
+                self.logger.warning("     The multicast send test (the definitive LNA check) did NOT pass.")
+                self.logger.warning("     This is the most common cause of HomeKit bridges not being discoverable.")
+
+            self.logger.info("")
+            self.logger.info("  To check/enable Local Network Access on macOS Sequoia (15.x+):")
+            self.logger.info("    1. Open System Settings > Privacy & Security > Local Network")
+            self.logger.info("    2. Find 'IndigoPluginHost3' (and the Indigo Server application) in the list")
+            self.logger.info("    3. Ensure the toggle is ENABLED")
+            self.logger.info("    4. If it is not listed, try restarting the plugin — macOS should prompt for permission")
+            self.logger.info("")
+            self.logger.info("  If Local Network Access is blocked, mDNS service advertisement will silently fail")
+            self.logger.info("  and HomeKit bridges will not be discoverable in the Home app.")
+            self.logger.info("")
+            self.logger.info("  Additional tips:")
+            self.logger.info("    - If the firewall is enabled, ensure IndigoServer/IndigoPluginHost3 is allowed.")
+            self.logger.info("    - If Stealth Mode is on, incoming mDNS responses may be blocked.")
+            self.logger.info("    - Verify bridge ports are accessible (see port checks above).")
+            self.logger.info("    - Copy and paste the above output when reporting network issues.")
+
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" Network Trouble Shooting Complete "))
+            self.logger.info(u"{0:=^190}".format(""))
+
+        except Exception:
+            self.logger.error("Network Troubleshooting encountered an unexpected error", exc_info=True)
+
