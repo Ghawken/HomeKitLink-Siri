@@ -29,6 +29,10 @@
         <Name>ℹ️ Support mDNS Troubleshooting</Name>
         <CallbackMethod>Menu_mDNS_troubleshoot</CallbackMethod>
     </MenuItem>
+    <MenuItem id="networkTroubleshoot">
+        <Name>ℹ️ Network Trouble Shooting</Name>
+        <CallbackMethod>Menu_network_troubleshoot</CallbackMethod>
+    </MenuItem>
 
     <MenuItem id="sep2"/>
     <MenuItem id="sep3"/>
