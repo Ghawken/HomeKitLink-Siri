@@ -1,0 +1,57 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches:
+      - main
+      - add_controls
+    paths:
+      - 'wiki/**'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout wiki repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync wiki files
+        run: |
+          # Copy all markdown files from wiki/ to the wiki repo
+          cp -r wiki/. wiki-repo/
+
+          # Show what changed
+          cd wiki-repo
+          git status
+
+      - name: Commit and push wiki changes
+        run: |
+          cd wiki-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Only commit if there are changes
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No wiki changes to commit"
+          else
+            git add -A
+            git commit -m "Sync wiki from main repo [skip ci]
+
+            Auto-synced from wiki/ directory in ${{ github.repository }}
+            Triggered by commit: ${{ github.sha }}"
+            git push
+            echo "Wiki updated successfully"
+          fi
