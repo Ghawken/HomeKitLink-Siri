@@ -1,0 +1,214 @@
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/banner.png?raw=true[/img]
+
+[b][u]HomeKitLink Siri (HKLS)[/u][/b]
+
+HomeKitLink Siri is an Indigo plugin that creates native HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri control. No Homebridge. No external server. Everything runs inside Indigo.
+
+[b]Current Version:[/b] 0.8.05   |   [b]Requires:[/b] Indigo 2022.1+ (Python 3)
+[b]GitHub:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri]https://github.com/Ghawken/HomeKitLink-Siri[/url]
+[b]Full Documentation / Wiki:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/wiki]https://github.com/Ghawken/HomeKitLink-Siri/wiki[/url]
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]What It Does[/u][/size]
+
+Create one or more [b]HomeKitLink Bridge[/b] devices inside Indigo. Each bridge acts as a HomeKit accessory bridge — pair it once with a QR code in the iOS Home app, and every Indigo device you publish to it appears automatically in HomeKit and is controllable via Siri.
+
+[b]Key Features:[/b]
+- Unlimited bridges (up to 95 Indigo devices each)
+- Lights — colour, colour temperature, dimmer, switch — auto-detected subtype
+- Fans — simple and speed-controlled (Fan V2)
+- Switches, Outlets, Action Groups
+- All sensor types — temperature, humidity, motion, occupancy, contact, luminance, smoke, CO, leak
+- Blinds and Windows — with position and inversion options
+- Thermostats, Locks, Garage Doors, Valves
+- Security Systems — Paradox, DSC, VSS, AD2USB
+- Cameras — Blue Iris and SecuritySpy with live video, Opus audio, motion detection, doorbell
+- Full Siri control once paired
+- All configuration stored in the Indigo database — migrates with Indigo
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Quick Start[/u][/size]
+
+[b]1.[/b] Install from the Plugin Store or download from [url=https://github.com/Ghawken/HomeKitLink-Siri/releases]GitHub Releases[/url]
+[b]2.[/b] In Indigo: Devices → New Device → Plugin → HomeKitLink Siri → HomeKitLink Bridge
+[b]3.[/b] Select a device, check Publish, choose HomeKit type, click Save Device. Repeat for more devices.
+[b]4.[/b] Click Save in the dialog to start the bridge.
+[b]5.[/b] Open the bridge config → Show QR Code
+[b]6.[/b] iOS Home app → + → Add Accessory → scan QR code
+[b]7.[/b] Done. Siri can now control your devices.
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/DeviceConfig1.png?raw=true[/img]
+
+[b]Limits:[/b] Each Indigo device can be published to one bridge only. 95 devices max per bridge — create more bridges as needed (unlimited).
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Plugin Menu Items[/u][/size]
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/MenuItems_new.png?raw=true[/img]
+
+[size=125][b][u]⚠️ Before Posting — Run These Three Items First ⚠️[/u][/b][/size]
+
+[b]These diagnostic tools solve the vast majority of issues. Please run all three and include the Indigo log output in any forum post. Without this output, diagnosing your issue is much harder.[/b]
+
+[b]Plugins → HomeKitLink Siri →[/b]
+
+[b]ℹ️ Troubleshoot 1 — Support Information For Forum Posting[/b]
+Generates a complete summary of your HKLS installation: plugin version, Python version, all configured bridges, published device list, mDNS/network configuration, active drivers, port assignments, and any known error conditions. [b]Include this in every support post.[/b]
+
+[b]ℹ️ Troubleshoot 2 — Network Trouble Shooting[/b]
+Comprehensive network diagnostic. Checks: Apple Local Network Access (macOS Sequoia 15.x+ requirement), mDNS multicast send and group join, outbound UDP, gateway reachability, firewall status (stealth mode, block-all), plugin network config, bridge port accessibility, and DNS resolution. Uses a definitive multicast send test that catches the exact LNA failure mode.
+
+[b]ℹ️ Troubleshoot 3 — Support mDNS Troubleshooting[/b]
+Focused mDNS/Bonjour diagnostic. Checks: interface binding, firewall as it relates to mDNS, Zeroconf/AsyncZeroconf state, Bonjour/mDNSResponder status, and mDNS advertisement records for all active bridges.
+
+[b]macOS Sequoia (15.x+) users:[/b] Run Troubleshoot 2 first — it will tell you definitively if Local Network Access is blocked. If it is: System Settings → Privacy & Security → Local Network → enable IndigoPluginHost3.
+
+[b]Other menu items:[/b]
+- [b]Show Device Publications[/b] — lists all published devices in the Indigo log with status (running / disabled / orphaned)
+- [b]Identify Devices Running / Not Running[/b] — shows which bridges are active
+- [b]Restart HomeKit[/b] — stops and restarts all bridges
+- [b]Unlink Orphaned Devices[/b] — cleans up devices whose bridge was deleted
+- [b]Delete Residual States Files[/b] — removes leftover HomeKit state files
+- [b]Rerun FFmpeg Call for Logging[/b] — replays last camera stream command, logs full FFmpeg output
+- [b]Check or Update Camera Streams for Compatibility[/b] — runs ffprobe against all cameras, logs compatibility analysis (run after changing Blue Iris stream settings)
+- [b]Debug Log Menu Options[/b] — internal debug: bridges, drivers, threads, accessories, device list
+- [b]Move Accessories to Another Bridge[/b] — recovery tool if a bridge was accidentally deleted
+- [b]Reset Accessory / Bridge[/b] — deletes security keys for a bridge (use before re-pairing a broken bridge)
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Device Configuration[/u][/size]
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/DeviceConfig3.png?raw=true[/img]
+
+The device list in the bridge config shows your published devices. Greyed-out devices are published to [i]another[/i] bridge — edit that bridge to manage them.
+
+[b]Show All Options[/b] — unlocks every HomeKit device type for any Indigo device. Use with care: an incompatible selection can cause the bridge to fail.
+
+[b]Sensor device state selection:[/b] When publishing a sensor, choose which Indigo device state to use. For temperature/humidity, the state must be a [b]plain number[/b] (22.1, not "22.1°C"). The config shows the current value to help you choose.
+
+[b]Changing a device's HomeKit type[/b] (e.g. Switch → Blind) requires a specific sequence:
+[b]1.[/b] Uncheck Publish → Save Device
+[b]2.[/b] Save the dialog (bridge restarts)
+[b]3.[/b] Confirm old device has disappeared in Home app
+[b]4.[/b] Re-add with the new type
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/DeviceConfig4.png?raw=true[/img]
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Camera Setup[/u][/size]
+
+Supported: [b]Blue Iris[/b] (via the Blue Iris Indigo plugin) and [b]SecuritySpy[/b] (via FlyingDiver's SecuritySpy plugin).
+
+Features: live RTSP streaming, Opus audio, doorbell integration, motion detection (BI cameras register as HomeKit motion sensors).
+
+[b]Blue Iris — recommended Stream 2 settings for zero-transcoding passthrough:[/b]
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/BlueIris-Streaming2-Settings.png?raw=true[/img]
+- Codec: H.264 (Constrained Baseline)
+- Pixel format: yuv420p
+- GOP: keep low (≤ 2 seconds between keyframes)
+
+After changing any Blue Iris stream settings, run [b]Check or Update Camera Streams for Compatibility[/b] from the plugin menu.
+
+[b]Doorbell:[/b] Any on/off Indigo device can be the doorbell trigger. When it turns on, HomeKit fires a notification with the live camera feed.
+
+[b]Opus audio:[/b] Existing cameras must be removed from Home and re-added after upgrading to 0.7.10+ — this lets the Home app renegotiate the audio stream and results in significantly better quality.
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Advanced Options[/u][/size]
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/AdvancedOptions.png?raw=true[/img]
+
+[b]mDNS IP Version[/b] — default is IPVersion.V4Only (recommended). The HAP server is IPv4-only so IPv6 mDNS serves no purpose for most setups.
+
+[b]mDNS Interfaces[/b] — comma-separated list of IP addresses for mDNS binding. Leave empty to auto-derive from the HAP server IP. Use when your Mac has multiple network interfaces and bridges advertise on the wrong one.
+
+[b]HAP Server IP Address[/b] — force a specific local IP for the HomeKit TCP server. Use with multiple NICs or VPN connections.
+
+[b]Debug levels[/b] (in Plugin Config): 11 granular debug options including per-device tracing. Debug 10 (mDNS) goes to file only to avoid flooding the Indigo log.
+
+[b]Reset Accessory / Bridge[/b] — deletes security keys and pairing info for a bridge. Use when a bridge shows "needs to be reset" in the Home app.
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/ResetAccessory.png?raw=true[/img]
+
+Delete the bridge from Home app first, then reset, then restart plugin, then re-add with QR code.
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]What's New — Version 0.8.05[/u][/size]
+
+[u][size=125]Major: Camera Audio — Opus SRTP Proxy[/size][/u]
+
+- New homekit_audio_proxy — a subprocess RTP/SRTP audio proxy that solves the FFmpeg/HomeKit clock-rate mismatch for Opus audio.
+- FFmpeg uses 48 kHz timestamps (RFC 7587) but HomeKit expects the negotiated rate (e.g. 16 kHz). The proxy receives plain RTP from FFmpeg, converts timestamps, encrypts with SRTP, and forwards to the HomeKit client.
+- Blue Iris cameras default to libopus audio.
+- SecuritySpy cameras gain the same libopus audio proxy support.
+
+[b]Breaking:[/b] Cameras must be removed from Home and re-added so the Home app can reassess the audio stream. Results in near-perfect audio quality — well worth it.
+
+[u][size=125]Major: Camera Stream Intelligence[/size][/u]
+
+- New resolve_video_strategy() — uses ffprobe to decide whether to copy or transcode each camera's video stream.
+- New Menu Item: [b]"Check or Update Camera Streams for Compatibility"[/b] — run after changing Blue Iris stream settings.
+- Auto-runs at startup. Automatic transcoding when incompatible streams are detected (non-H.264, wrong pixel format, borderline GOP).
+- Updated homekitlink_ffmpeg library to include ffprobe binaries.
+
+[code]====================================================================================================
+   HomeKitLink Siri                Camera Stream Compatibility Check
+====================================================================================================
+   HomeKitLink Siri   [Deck Camera]   Video: codec=h264  profile=Constrained Baseline  pix_fmt=yuv420p  2688x1520 @ 15.0 fps
+   HomeKitLink Siri   [Deck Camera]   GOP: 15 frames (1.1s between keyframes)
+   HomeKitLink Siri   [Deck Camera]   ✓ H.264 + yuv420p — safe for copy/passthrough.
+   HomeKitLink Siri   [Deck Camera]   Config: video_codec=copy — passthrough active. Good.
+   HomeKitLink Siri   [Deck Camera]   Audio: codec=aac  rate=64000  channels=1
+   HomeKitLink Siri   [Deck Camera]   Config encoder: libopus — will transcode from aac.[/code]
+
+[u][size=125]Major: mDNS/Zeroconf Refactor[/size][/u]
+
+- Default IP version changed to V4Only (was All) — the HAP server is IPv4-only; IPv6 mDNS was serving no purpose.
+- New zeroconf_interfaces parameter separates "which interfaces zeroconf listens on" from ip_version.
+- Fixed advertised_address conflation bug — was incorrectly passed as interfaces to AsyncZeroconf.
+- mDNS Interfaces field now visible in Plugin Config (was previously hidden).
+- Auto-derive mDNS interfaces from server IP when HAPServerIPAddress is set.
+
+[u][size=125]Major: Diagnostic & Troubleshooting Tools[/size][/u]
+
+- New Menu Item: [b]"ℹ️ Troubleshoot 2 — Network Trouble Shooting"[/b] — definitive LNA test, multicast, firewall, bridge ports, DNS.
+- New Menu Item: [b]"ℹ️ Troubleshoot 3 — Support mDNS Troubleshooting"[/b] — mDNS/Bonjour diagnostic.
+- "Support Information" (Troubleshoot 1) enhanced — now includes mDNS/network configuration details.
+
+[code]HomeKitLink Siri   ✅ Successfully sent multicast packet to 224.0.0.251:5353 via 192.168.1.6
+HomeKitLink Siri      Local Network Access is ENABLED.
+HomeKitLink Siri   ✅ Port 51840 is accepting connections.
+HomeKitLink Siri   ✅ Port 51841 is accepting connections.[/code]
+
+[u][size=125]Python 3.13 Compatibility[/size][/u]
+
+- Removed async_timeout dependency — replaced with Python 3.11+ built-in asyncio.timeout.
+- Updated libraries: cryptography 41→46, orjson 3.8→3.11, h11 0.14→0.16, zeroconf 0.131→0.148.
+- Removed slugify and aiofiles dependencies.
+- Added cffi, pycparser, ifaddr as explicit dependencies.
+- Fixed pip install success detection for Python-version-prefixed filenames.
+
+[u][size=125]Bug Fixes[/size][/u]
+
+- Fixed image snapshot timeout issue.
+- Fixed interfaces not being selectable in plugin config.
+- Fixed multi-NIC discovery — binding to all IPv4 interfaces fixes issues with 2+ active network connections.
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Support & Links[/u][/size]
+
+[b]Forum:[/b] [url=https://forums.indigodomo.com/viewforum.php?f=366]HomeKitLink Siri — Indigo Forums[/url]
+[b]GitHub:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri]https://github.com/Ghawken/HomeKitLink-Siri[/url]
+[b]Releases:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/releases]https://github.com/Ghawken/HomeKitLink-Siri/releases[/url]
+[b]Wiki / Full Docs:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/wiki]https://github.com/Ghawken/HomeKitLink-Siri/wiki[/url]
+[b]Issues / Bug Reports:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/issues]https://github.com/Ghawken/HomeKitLink-Siri/issues[/url]
+
+[b]When posting a support request — always run and include output from:[/b]
+[b]Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 1, 2 & 3[/b]
