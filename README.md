@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.05** &nbsp;|&nbsp; Requires Indigo 2022.1+ (Python 3)
+> **Version 0.8.05** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
