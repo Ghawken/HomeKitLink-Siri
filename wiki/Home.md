@@ -43,11 +43,12 @@ HKLS lets you publish any Indigo device into Apple's Home ecosystem. You create 
 
 ## ⚠️ Before You Post in the Forum
 
-**Always run the three Troubleshoot menu items before posting a support request:**
+**Always run the Troubleshoot menu items before posting a support request:**
 
 > **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 1 – Support Information For Forum Posting**  
-> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 – Network Trouble Shooting**  
-> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 3 – Support mDNS Troubleshooting**
+> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 – Network Troubleshooting**  
+> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 3 – Support mDNS Troubleshooting**  
+> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 4 – HomeKit Pairing & Security Keys** (pairing / won't add)
 
 Copy the output from the Indigo log and include it in your forum post. These tools diagnose the vast majority of connectivity and discovery issues and give forum helpers everything they need.
 

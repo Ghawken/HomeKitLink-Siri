@@ -88,7 +88,7 @@ With the bridge paired, all published devices are available to Siri immediately:
 ## Troubleshooting Quick Start
 
 **Bridge not visible in Home app?**
-→ Run **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 – Network Trouble Shooting**  
+→ Run **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 – Network Troubleshooting**  
 See [Troubleshooting](Troubleshooting) for the full guide.
 
 → [Setup & Configuration](Setup-and-Configuration) for detailed options

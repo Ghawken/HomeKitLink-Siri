@@ -4,7 +4,7 @@
 
 HomeKitLink Siri is an Indigo plugin that creates native HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri control. No Homebridge. No external server. Everything runs inside Indigo.
 
-[b]Current Version:[/b] 0.8.07   |   [b]Requires:[/b] Indigo 2025.1+ (Python 3)
+[b]Current Version:[/b] 0.8.08   |   [b]Requires:[/b] Indigo 2025.1+ (Python 3)
 [b]GitHub:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri]https://github.com/Ghawken/HomeKitLink-Siri[/url]
 [b]Full Documentation / Wiki:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/wiki]https://github.com/Ghawken/HomeKitLink-Siri/wiki[/url]
 
@@ -49,20 +49,23 @@ Create one or more [b]HomeKitLink Bridge[/b] devices inside Indigo. Each bridge 
 
 [img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/MenuItems_new.png?raw=true[/img]
 
-[size=125][b][u]⚠️ Before Posting — Run These Three Items First ⚠️[/u][/b][/size]
+[size=125][b][u]⚠️ Before Posting — Run These Troubleshoot Items First ⚠️[/u][/b][/size]
 
-[b]These diagnostic tools solve the vast majority of issues. Please run all three and include the Indigo log output in any forum post. Without this output, diagnosing your issue is much harder.[/b]
+[b]These diagnostic tools solve the vast majority of issues. Please run them and include the Indigo log output in any forum post. Without this output, diagnosing your issue is much harder.[/b]
 
 [b]Plugins → HomeKitLink Siri →[/b]
 
 [b]ℹ️ Troubleshoot 1 — Support Information For Forum Posting[/b]
 Generates a complete summary of your HKLS installation: plugin version, Python version, all configured bridges, published device list, mDNS/network configuration, active drivers, port assignments, and any known error conditions. [b]Include this in every support post.[/b]
 
-[b]ℹ️ Troubleshoot 2 — Network Trouble Shooting[/b]
+[b]ℹ️ Troubleshoot 2 — Network Troubleshooting[/b]
 Comprehensive network diagnostic. Checks: Apple Local Network Access (macOS Sequoia 15.x+ requirement), mDNS multicast send and group join, outbound UDP, gateway reachability, firewall status (stealth mode, block-all), plugin network config, bridge port accessibility, and DNS resolution. Uses a definitive multicast send test that catches the exact LNA failure mode.
 
 [b]ℹ️ Troubleshoot 3 — Support mDNS Troubleshooting[/b]
 Focused mDNS/Bonjour diagnostic. Checks: interface binding, firewall as it relates to mDNS, Zeroconf/AsyncZeroconf state, Bonjour/mDNSResponder status, and mDNS advertisement records for all active bridges.
+
+[b]ℹ️ Troubleshoot 4 — HomeKit Pairing & Security Keys[/b]
+Checks every bridge's HomeKit pairing and security keys: saved vs running keys, the Home users (Apple Accounts) paired with each bridge, which devices / Home hubs are connected, and any failed connection attempts. Ends with a clear ✅ / ⚠️ / ❌ verdict, a 🛠️ fix for each problem and a guide to common HomeKit issues. [b]Run this when a bridge won't add, shows "No Response", or you see pairing / security key errors.[/b]
 
 [b]macOS Sequoia (15.x+) users:[/b] Run Troubleshoot 2 first — it will tell you definitively if Local Network Access is blocked. If it is: System Settings → Privacy & Security → Local Network → enable IndigoPluginHost3.
 
@@ -139,7 +142,36 @@ Delete the bridge from Home app first, then reset, then restart plugin, then re-
 
 [img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
 
-[size=150][u]What's New — Version 0.8.05[/u][/size]
+[size=150][u]What's New — Version 0.8.08[/u][/size]
+
+[u][size=125]New: Troubleshoot 4 — HomeKit Pairing & Security Keys[/size][/u]
+
+- New menu item [b]ℹ️ Troubleshoot 4 HomeKit Pairing & Security Keys[/b] — checks every bridge's saved and running security keys, the Home users paired with it (👑 owner / 👤 shared), connected devices and Home hubs, and failed connection attempts.
+- Clear ✅ / ⚠️ / ❌ verdict per bridge, a 🛠️ fix for each problem, and a 📖 guide explaining common HomeKit issues ("No Response", "Accessory already added", setup code incorrect, and more).
+- Detects corrupt or copied state files, pairings not being saved, Home users missing from some bridges, and devices connecting with a pairing the bridge no longer has.
+- The pairing log message no longer blames the client's OS version — it now explains the bridge and Home app are out of sync and points to Troubleshoot 4.
+
+[u][size=125]New: Show QR Code Page[/size][/u]
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/HomeKit.png?raw=true[/img]
+
+- Redesigned pairing page: QR code, large setup code, pairing status ([b]Ready to add[/b] / [b]Already paired with a Home[/b] / [b]Bridge not running[/b]) and step-by-step instructions. Works offline.
+
+[u][size=125]Bug Fixes (0.8.06)[/size][/u]
+
+- Removed a stray [i]scipy[/i] import that could stop the plugin loading.
+- Battery level / low battery now update in HomeKit; 0% batteries get a battery service; motion sensors honour the low battery threshold. CO sensors with batteries publish correctly.
+- Thermostats: setpoint changes only update the matching Heat/Cool target; Program modes supported; Auto thresholds apply when mode and thresholds change together.
+- Security System: correct state at startup (no longer shows Armed when unknown); Paradox arm/disarm from HomeKit now works.
+- Cameras: streams no longer stall on unusual ffmpeg output; ffmpeg and audio proxy cleaned up when a stream fails or won't close; GOP / transcode analysis fixed; SecuritySpy refresh timing fixed.
+- Bridges: Move Accessories and bridge shutdown match bridge IDs reliably.
+- Fixed crashes in the Hue setter, Door / Window / Blind accessories, valves and the support menu. Toggle Debug now remembers its level.
+- Removed the hidden legacy "unQuarantine files" option (any saved system password is cleared).
+- Many typo and wording fixes in menus, dialogs and logs.
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Previous — Version 0.8.05[/u][/size]
 
 [u][size=125]Major: Camera Audio — Opus SRTP Proxy[/size][/u]
 

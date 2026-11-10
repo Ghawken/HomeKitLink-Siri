@@ -4976,14 +4976,17 @@ class Plugin(indigo.PluginBase):
     ########################################
     def Menu_pairing_troubleshoot(self, *args, **kwargs):
         """Troubleshoot 4: report HomeKit pairing / security key state for every bridge.
-        Compares the running driver with the saved busy_home_<id>.state file, lists the Home
-        controllers paired with each bridge, live connections and recent pair-verify failures.
+        Gathers each bridge's saved busy_home_<id>.state file and running driver first, then reports:
+        summary, Home users (controllers) across all bridges, connected devices / hubs, per-bridge
+        detail (expanded only when something is wrong), result, and a guide to common issues.
         Never logs private keys - public keys and controller ids are shortened."""
         try:
             import json
             import datetime
             from cryptography.hazmat.primitives import serialization
             from cryptography.hazmat.primitives.asymmetric import ed25519
+
+            log = self.logger
 
             def short(value, length=8):
                 text = str(value)
@@ -4992,182 +4995,329 @@ class Plugin(indigo.PluginBase):
             def raw_public(public_key):
                 return public_key.public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)
 
-            def fmt_time(when):
-                return when.strftime("%Y-%m-%d %H:%M:%S") if when else "never (since plugin start)"
+            def when(value):
+                if not value:
+                    return "never"
+                if value.date() == datetime.date.today():
+                    return value.strftime("%H:%M:%S")
+                return value.strftime("%Y-%m-%d %H:%M")
 
-            def is_admin(props):
+            def ip_of(address):
+                return address[0] if isinstance(address, tuple) else str(address)
+
+            def is_admin_props(props):
                 try:
                     return bool(int(props.get("permissions", 0)) & 0x01)
                 except (TypeError, ValueError, AttributeError):
                     return False
 
-            self.logger.info(u"{0:=^190}".format(""))
-            self.logger.info(u"{0:=^190}".format(" HomeKit Pairing & Security Keys Troubleshooting "))
-            self.logger.info(u"{0:=^190}".format(""))
-            self.logger.info(f"  Plugin version:   {self.pluginVersion}")
-            self.logger.info(f"  macOS version:    {platform.mac_ver()[0] or platform.platform()}")
-            self.logger.info(f"  State directory:  {self.pluginprefDirectory}")
-            if os.access(self.pluginprefDirectory, os.W_OK):
-                self.logger.info("  ✓ State directory is writable (pairings can be saved).")
-            else:
-                self.logger.error("  ✗ State directory is NOT writable.  New pairings and keys cannot be saved and will be lost on restart.")
-            self.logger.info("  Note: the pincode / QR setup code is regenerated each time the plugin starts.  When adding a bridge use the code currently shown on the bridge device.")
+            def heading(title):
+                log.info("")
+                log.info(f"{title}")
+                log.info("─" * 110)
 
+            fix_reset = "🛠️  Fix: remove the bridge in the Home app → plugin menu 'Reset Accessory / Bridge' → re-add with Show QR Code."
+
+            ## ─────────────────────────── Gather ───────────────────────────
             drivers_by_id = {str(driver.indigodeviceid): driver for driver in list(self.driver_multiple) if driver is not None}
-            bridge_ids_seen = set()
-            mac_owners = {}  ## mac: [bridge ids] - from state files, to detect copied state files
-            any_problem = False
-
+            bridges = []
             for device in indigo.devices.iter("self"):
                 if device.deviceTypeId != "homeKitBridgeDevice":
                     continue
                 uniqueID = str(device.pluginProps.get("bridgeUniqueID", ""))
-                bridge_ids_seen.add(uniqueID)
-                problems = []
+                bridge = {"name": device.name, "indigo_id": device.id, "uid": uniqueID, "enabled": device.enabled,
+                          "status": device.states.get("Status", ""), "errors": [], "warnings": [],
+                          "file": None, "file_keys_ok": False, "driver": None}
 
-                self.logger.info(u"{0:=^130}".format(f" Bridge: {device.name} "))
-                self.logger.info(f"  Indigo ID: {device.id}   Bridge ID: {uniqueID}   Enabled: {device.enabled}   Status: {device.states.get('Status', '')}")
-
-                ## ── Saved state file ──
+                ## Saved state file
                 state_file = os.path.join(self.pluginprefDirectory, f"busy_home_{uniqueID}.state")
-                file_state = None
-                file_keys_ok = False
+                bridge["state_file"] = state_file
                 if not os.path.exists(state_file):
-                    self.logger.warning(f"  State file: missing ({state_file})")
                     if device.enabled:
-                        problems.append("State file is missing.  If this bridge was already in the Home app, its keys have been lost and Home will not be able to connect.")
+                        bridge["errors"].append(("Saved state file is missing.  If this bridge was already in the Home app its keys are gone and Home cannot connect.", fix_reset))
                 else:
                     stat = os.stat(state_file)
-                    self.logger.info(f"  State file: {os.path.basename(state_file)}   size {stat.st_size} bytes   last saved {fmt_time(datetime.datetime.fromtimestamp(stat.st_mtime))}")
+                    bridge["file_saved"] = datetime.datetime.fromtimestamp(stat.st_mtime)
                     try:
                         with open(state_file, "r", encoding="utf8") as file_handle:
-                            file_state = json.load(file_handle)
+                            saved = json.load(file_handle)
                     except Exception as error:
-                        problems.append(f"State file cannot be read ({error}).  It is corrupt: remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
-                if file_state is not None:
-                    file_mac = file_state.get("mac", "")
-                    mac_owners.setdefault(file_mac, []).append(uniqueID)
-                    file_clients = file_state.get("paired_clients", {}) or {}
-                    if "client_properties" in file_state:
-                        file_props = file_state.get("client_properties") or {}
-                        file_admins = sum(1 for client in file_clients if is_admin(file_props.get(client, {})))
-                    else:
-                        file_admins = len(file_clients)  ## older state files: pyhap treats every pairing as admin
-                    self.logger.info(f"  Saved:   MAC {file_mac}   config version {file_state.get('config_version')}   paired controllers {len(file_clients)} ({file_admins} admin)")
-                    try:
-                        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(file_state["private_key"]))
-                        derived_public = raw_public(private_key.public_key()).hex()
-                        if derived_public == file_state.get("public_key"):
-                            file_keys_ok = True
-                            self.logger.info(f"  ✓ Saved key pair is consistent (bridge public key {short(derived_public, 16)})")
+                        saved = None
+                        bridge["errors"].append((f"Saved state file cannot be read ({error}) - it is corrupt.", fix_reset))
+                    if saved is not None:
+                        clients = saved.get("paired_clients", {}) or {}
+                        if "client_properties" in saved:
+                            props = saved.get("client_properties") or {}
+                            admins = {client for client in clients if is_admin_props(props.get(client, {}))}
                         else:
-                            problems.append("Saved private and public keys do not match.  The state file is corrupt: remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
-                    except Exception as error:
-                        problems.append(f"Saved bridge keys are invalid ({error}).  The state file is corrupt: remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
-                    for client, key in file_clients.items():
+                            admins = set(clients)  ## older state files: pyhap treats every pairing as admin
+                        bridge["file"] = {"mac": saved.get("mac", ""), "config_version": saved.get("config_version"),
+                                          "clients": set(clients), "admins": admins, "public_key": saved.get("public_key")}
                         try:
-                            if len(bytes.fromhex(key)) != 32:
-                                problems.append(f"Saved key for controller {short(client)} has the wrong length.")
-                        except (TypeError, ValueError):
-                            problems.append(f"Saved key for controller {short(client)} is not valid hex.")
-                    if file_clients and not file_admins:
-                        problems.append("Saved pairings have no admin controller.  Home cannot manage this bridge.")
+                            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(saved["private_key"]))
+                            if raw_public(private_key.public_key()).hex() == saved.get("public_key"):
+                                bridge["file_keys_ok"] = True
+                            else:
+                                bridge["errors"].append(("Saved private and public keys do not match - the state file is corrupt.", fix_reset))
+                        except Exception as error:
+                            bridge["errors"].append((f"Saved bridge keys are invalid ({error}) - the state file is corrupt.", fix_reset))
+                        for client, key in clients.items():
+                            try:
+                                if len(bytes.fromhex(key)) != 32:
+                                    bridge["errors"].append((f"Saved key for Home user {short(client)} has the wrong length.", fix_reset))
+                            except (TypeError, ValueError):
+                                bridge["errors"].append((f"Saved key for Home user {short(client)} is not valid.", fix_reset))
+                        if clients and not admins:
+                            bridge["errors"].append(("Saved pairings have no owner/admin - Home cannot manage this bridge.", fix_reset))
 
-                ## ── Running driver ──
+                ## Running driver
                 driver = drivers_by_id.get(uniqueID)
-                if driver is None:
-                    self.logger.info("  Running: no driver running for this bridge (bridge disabled or failed to start).")
-                else:
+                if driver is not None:
                     state = driver.state
-                    paired_clients = dict(state.paired_clients)
-                    admins = sum(1 for client in paired_clients if state.is_admin(client))
-                    running_public = raw_public(state.public_key).hex()
-                    self.logger.info(f"  Running: MAC {state.mac}   port {state.port}   address {state.address}   config version {state.config_version}")
-                    if state.paired:
-                        self.logger.info(f"  Running: PAIRED with {len(paired_clients)} controller(s) ({admins} admin).  Advertising sf=0 (not available to add).")
-                    else:
-                        self.logger.warning("  Running: NOT PAIRED.  Advertising sf=1 (available to add with the pincode / QR code).")
-                        problems.append("Bridge is not paired.  If it still appears in the Home app, Home's copy is stale: remove the bridge from the Home app, then add it again with the current pincode / QR code.")
-                    if paired_clients and not admins:
-                        problems.append("Running pairings have no admin controller.  Home cannot manage this bridge.")
-
-                    if file_state is not None:
-                        out_of_sync = []
-                        if file_state.get("mac") != state.mac:
-                            out_of_sync.append("MAC")
-                        if file_keys_ok and file_state.get("public_key") != running_public:
-                            out_of_sync.append("bridge keys")
-                        if set(file_state.get("paired_clients", {}) or {}) != {str(client) for client in paired_clients}:
-                            out_of_sync.append("paired controllers")
-                        if out_of_sync:
-                            problems.append(f"Running bridge and saved state file differ ({', '.join(out_of_sync)}).  Changes are not being saved, so they will be lost when the plugin restarts.")
-                        else:
-                            self.logger.info("  ✓ Running bridge matches the saved state file.")
-
-                    ## Paired controllers
-                    connections = list(driver.http_server.connections.values())
-                    connected_uuids = {getattr(proto.handler, "client_uuid", None) for proto in connections if proto.handler and proto.handler.is_encrypted}
-                    successes = dict(getattr(driver, "verify_successes", {}))
-                    if paired_clients:
-                        self.logger.info(u"{0:-^130}".format(" Paired Home Controllers "))
-                        for client, key in paired_clients.items():
-                            last = successes.get(client)
-                            self.logger.info(
-                                f"    Controller {short(client)}   admin: {'yes' if state.is_admin(client) else 'no '}   key {short(key.hex(), 16)}   "
-                                f"connected now: {'yes' if client in connected_uuids else 'no '}   last verified: {fmt_time(last[0]) if last else fmt_time(None)}{'  from ' + str(last[1][0]) if last else ''}"
-                            )
-
-                    ## Live connections
-                    self.logger.info(u"{0:-^130}".format(f" Live Connections ({len(connections)}) "))
-                    for proto in connections:
+                    clients = {str(client): client for client in dict(state.paired_clients)}
+                    run = {"mac": state.mac, "port": state.port, "address": state.address, "config_version": state.config_version,
+                           "paired": state.paired, "clients": set(clients),
+                           "admins": {name for name, client in clients.items() if state.is_admin(client)},
+                           "public_key": raw_public(state.public_key).hex(),
+                           "successes": {str(client): value for client, value in dict(getattr(driver, "verify_successes", {})).items()},
+                           "failures": list(getattr(driver, "verify_failures", [])), "connections": []}
+                    for proto in list(driver.http_server.connections.values()):
                         handler = proto.handler
                         peer = proto.peername[0] if proto.peername else "?"
                         if handler and handler.is_encrypted:
-                            known = handler.client_uuid in paired_clients
-                            self.logger.info(f"    {peer}   verified as controller {short(handler.client_uuid)}{'' if known else '   (no longer paired!)'}")
+                            run["connections"].append((peer, str(handler.client_uuid), str(handler.client_uuid) in clients))
                         else:
-                            self.logger.info(f"    {peer}   connected, not verified (pairing/verify in progress or failed)")
+                            run["connections"].append((peer, None, False))
+                    bridge["driver"] = run
 
-                    ## Recent failures
-                    failures = list(getattr(driver, "verify_failures", []))
-                    if failures:
-                        self.logger.info(u"{0:-^130}".format(f" Pair-Verify Failures since plugin start ({len(failures)}, newest last) "))
-                        for when, address, client, reason in failures[-15:]:
-                            peer = address[0] if isinstance(address, tuple) else address
-                            self.logger.warning(f"    {fmt_time(when)}   {peer}   controller {short(client)}   {reason}")
-                        bad_ips = sorted({(address[0] if isinstance(address, tuple) else str(address)) for _, address, _, reason in failures if reason.startswith("not paired")})
-                        if bad_ips:
-                            problems.append(
-                                f"Home controller(s) at {', '.join(bad_ips)} are using a pairing this bridge does not have.  Usually the bridge was reset, or its state file "
-                                "was deleted or restored, while it was still in the Home app; or one Home hub / device holds a stale pairing.  If other controllers "
-                                "verify fine, restart that Home hub / device.  If none verify, remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again."
-                            )
-                        if any(reason.startswith("bad signature") for _, _, _, reason in failures):
-                            problems.append("A controller's key no longer matches the one saved for it.  Remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
-                    else:
-                        self.logger.info("  ✓ No pair-verify failures since plugin start.")
+                    if not run["paired"]:
+                        bridge["warnings"].append(("Bridge is NOT paired - it is waiting to be added.",
+                                                   "🛠️  Fix: if it should already be in Home, Home's copy is stale - remove it in the Home app, then re-add with Show QR Code.  If it is new, add it now with Show QR Code."))
+                    elif not run["admins"]:
+                        bridge["errors"].append(("Running pairings have no owner/admin - Home cannot manage this bridge.", fix_reset))
+                    if bridge["file"] is not None:
+                        differs = []
+                        if bridge["file"]["mac"] != run["mac"]:
+                            differs.append("MAC")
+                        if bridge["file_keys_ok"] and bridge["file"]["public_key"] != run["public_key"]:
+                            differs.append("bridge keys")
+                        if bridge["file"]["clients"] != run["clients"]:
+                            differs.append("Home users")
+                        if differs:
+                            bridge["errors"].append((f"Running bridge and saved state file differ ({', '.join(differs)}) - changes are not being saved and will be lost on restart.",
+                                                     "🛠️  Fix: check the state folder is writable and the disk is not full, then restart the plugin."))
+                    not_paired_ips = sorted({ip_of(address) for _, address, _, reason in run["failures"] if reason.startswith("not paired")})
+                    if not_paired_ips:
+                        bridge["errors"].append((f"Device(s) at {', '.join(not_paired_ips)} tried to connect with a pairing this bridge does not have.",
+                                                 "🛠️  Fix: if other devices connect fine, restart the device / Home hub at that IP.  If nothing connects, remove the bridge in the Home app → 'Reset Accessory / Bridge' → re-add with Show QR Code."))
+                    if any(reason.startswith("bad signature") for _, _, _, reason in run["failures"]):
+                        bridge["errors"].append(("A Home user's key no longer matches the one saved for it.", fix_reset))
+                elif device.enabled:
+                    bridge["errors"].append(("Bridge is enabled but not running.", "🛠️  Fix: check the Indigo log for start-up errors, then disable / enable the bridge device or restart the plugin."))
+                bridges.append(bridge)
 
-                ## Assessment
-                if problems:
-                    any_problem = True
-                    for problem in problems:
-                        self.logger.warning(f"  ✗ {problem}")
-                else:
-                    self.logger.info("  ✓ No pairing or key problems found for this bridge.")
+            running = [bridge for bridge in bridges if bridge["driver"] is not None]
+            paired = [bridge for bridge in running if bridge["driver"]["paired"]]  ## an unpaired (new) bridge has no Home users yet
 
-            ## ── Across all bridges ──
-            self.logger.info(u"{0:=^130}".format(" All Bridges "))
+            ## Duplicate MACs (state file copied between bridges)
+            mac_owners = {}
+            for bridge in bridges:
+                if bridge["file"]:
+                    mac_owners.setdefault(bridge["file"]["mac"], []).append(bridge)
             for mac, owners in mac_owners.items():
                 if len(owners) > 1:
-                    any_problem = True
-                    self.logger.warning(f"  ✗ Bridges {', '.join(owners)} share MAC {mac}.  A state file has been copied between bridges; Home cannot tell them apart.  Reset all but one of them.")
+                    for owner in owners:
+                        others = ", ".join(other["name"] for other in owners if other is not owner)
+                        owner["errors"].append((f"Shares MAC {mac} with {others} - a state file was copied between bridges, so Home cannot tell them apart.",
+                                                "🛠️  Fix: use 'Reset Accessory / Bridge' on all but one of them, then re-add those in the Home app."))
+
+            ## Home users across all running bridges
+            users = {}
+            for bridge in running:
+                run = bridge["driver"]
+                for client in run["clients"]:
+                    user = users.setdefault(client, {"admin": False, "bridges": set(), "last": None, "ips": set()})
+                    user["admin"] |= client in run["admins"]
+                    user["bridges"].add(bridge["name"])
+                    if client in run["successes"]:
+                        last_time, address = run["successes"][client]
+                        user["ips"].add(ip_of(address))
+                        if user["last"] is None or last_time > user["last"]:
+                            user["last"] = last_time
+                for peer, client, known in run["connections"]:
+                    if client and known:
+                        users.setdefault(client, {"admin": False, "bridges": set(), "last": None, "ips": set()})["ips"].add(peer)
+
+            ## Connected devices across all running bridges
+            peers = {}
+            for bridge in running:
+                for peer, client, known in bridge["driver"]["connections"]:
+                    entry = peers.setdefault(peer, {"clients": set(), "bridges": set(), "unverified": 0})
+                    entry["bridges"].add(bridge["name"])
+                    if client:
+                        entry["clients"].add(client)
+                    else:
+                        entry["unverified"] += 1
+
+            ## ─────────────────────────── Report ───────────────────────────
+            log.info(u"{0:=^110}".format(""))
+            log.info(u"{0:^110}".format("🔐  HomeKit Pairing & Security Keys  —  Troubleshoot 4  🔐"))
+            log.info(u"{0:=^110}".format(""))
+
+            heading("🖥️  System")
+            log.info(f"   HomeKitLink Siri {self.pluginVersion}   ·   macOS {platform.mac_ver()[0] or platform.platform()}")
+            log.info(f"   💾 State folder: {self.pluginprefDirectory}")
+            if os.access(self.pluginprefDirectory, os.W_OK):
+                log.info("   ✅ State folder is writable - pairings and keys can be saved.")
+            else:
+                log.error("   ❌ State folder is NOT writable - new pairings and keys cannot be saved and will be lost on restart.")
+            log.info("   ℹ️  The setup code / QR code changes every time the plugin starts.  Always use the one on Show QR Code.")
+
+            heading(f"📋 Bridge Summary  ({len(bridges)} bridge{'s' if len(bridges) != 1 else ''}, {len(running)} running)")
+            name_width = min(max((len(bridge["name"]) for bridge in bridges), default=10), 45)
+            for bridge in bridges:
+                run = bridge["driver"]
+                if bridge["errors"]:
+                    icon = "❌"
+                    detail = f"{len(bridge['errors'])} problem{'s' if len(bridge['errors']) != 1 else ''} - see details below"
+                elif not bridge["enabled"]:
+                    icon, detail = "⏸️ ", "disabled"
+                elif bridge["warnings"]:
+                    icon, detail = "⚠️ ", "needs attention - see details below"
+                else:
+                    icon = "✅"
+                    connected = {peer for peer, client, known in run["connections"] if client and known}
+                    detail = (f"paired · {len(run['clients'])} Home user{'s' if len(run['clients']) != 1 else ''} ({len(run['admins'])} owner) · "
+                              f"{len(connected)} device{'s' if len(connected) != 1 else ''} connected · 0 failed connections")
+                log.info(f"   {icon} {bridge['name'][:name_width]:<{name_width}}   {detail}")
+
+            heading("👥 Home Users paired with your bridges")
+            log.info("   Each entry is a person (Apple Account) in your Home, not a device.  Their devices and Home hubs all use the same identity.")
+            if not users:
+                log.info("   (no running bridge is paired)")
+            for client, user in sorted(users.items(), key=lambda item: (not item[1]["admin"], item[0])):
+                role = "👑 Owner/admin" if user["admin"] else "👤 Shared user"
+                coverage = f"on {len(user['bridges'])}/{len(paired)} paired bridges"
+                if user["last"]:
+                    seen = f"✅ last connected {when(user['last'])} from {', '.join(sorted(user['ips']))}"
+                elif user["ips"]:
+                    seen = f"✅ connected now from {', '.join(sorted(user['ips']))}"
+                elif user["admin"]:
+                    seen = "⏳ not connected since plugin start"
+                else:
+                    seen = "⏳ not connected since plugin start  (normal - shared users usually connect through the Home hub)"
+                log.info(f"   {role}   {short(client)}   {coverage}   {seen}")
+                if len(user["bridges"]) < len(paired):
+                    missing = sorted(bridge["name"] for bridge in paired if bridge["name"] not in user["bridges"])
+                    log.warning(f"      ⚠️  Missing from: {', '.join(missing)}.  That bridge may have been offline when this person was added or removed in the Home app.")
+                    log.warning("      🛠️  In the Home app: Home Settings → remove and re-invite this person, or remove / re-add the bridge(s) listed.")
+
+            heading("📡 Connected Devices / Home Hubs")
+            if not peers:
+                log.warning("   ⚠️  Nothing is connected to any bridge right now.")
+                log.warning("      Without a connected Home hub (Apple TV / HomePod), remote access and automations will not work and accessories may show 'No Response'.")
+                log.warning("      🛠️  Check the Home hub is on and on the same network, then run Troubleshoot 2 and 3.")
+            for peer, entry in sorted(peers.items(), key=lambda item: -len(item[1]["bridges"])):
+                identities = ", ".join(("👑 " if users.get(client, {}).get("admin") else "👤 ") + short(client) for client in sorted(entry["clients"])) or "not verified yet"
+                note = ""
+                if running and len(entry["bridges"]) == len(running) and entry["clients"]:
+                    note = "  ← connected to every bridge: probably your Home hub (Apple TV / HomePod)"
+                log.info(f"   🔗 {peer:<15}   as {identities}   connected to {len(entry['bridges'])}/{len(running)} bridges{note}")
+                if entry["unverified"]:
+                    log.info(f"      ⏳ {entry['unverified']} connection(s) still pairing / verifying, or rejected.")
+
+            heading("🔍 Bridge Details")
+            for bridge in bridges:
+                run = bridge["driver"]
+                saved = bridge["file"]
+                if not bridge["enabled"] and not bridge["errors"]:
+                    log.info(f"   ⏸️  {bridge['name']}  ·  ID {bridge['uid']}  ·  disabled")
+                    continue
+                if not bridge["errors"] and not bridge["warnings"]:
+                    log.info(f"   ✅ {bridge['name']}  ·  ID {bridge['uid']}  ·  MAC {run['mac']}  ·  port {run['port']}  ·  config v{run['config_version']}"
+                             f"  ·  🔑 keys ✅  ·  💾 saved {when(bridge.get('file_saved'))}, in sync ✅")
+                    continue
+                icon = "❌" if bridge["errors"] else "⚠️ "
+                log.warning(f"   {icon} {bridge['name']}  ·  Indigo ID {bridge['indigo_id']}  ·  Bridge ID {bridge['uid']}  ·  Status {bridge['status']}")
+                if saved:
+                    log.info(f"      💾 Saved:   MAC {saved['mac']} · config v{saved['config_version']} · {len(saved['clients'])} Home users ({len(saved['admins'])} owner)"
+                             f" · keys {'✅' if bridge['file_keys_ok'] else '❌'} · saved {when(bridge.get('file_saved'))}")
+                else:
+                    log.info(f"      💾 Saved:   no readable state file ({os.path.basename(bridge['state_file'])})")
+                if run:
+                    log.info(f"      ⚙️  Running: MAC {run['mac']} · {run['address']}:{run['port']} · config v{run['config_version']} · "
+                             f"{'paired' if run['paired'] else 'NOT paired (advertising as available to add)'} · {len(run['clients'])} Home users ({len(run['admins'])} owner)")
+                    for client in sorted(run["clients"]):
+                        role = "👑" if client in run["admins"] else "👤"
+                        live = "🔗 connected" if any(c == client for _, c, _ in run["connections"]) else "not connected"
+                        last = run["successes"].get(client)
+                        log.info(f"         {role} {short(client)}   {live}   last verified {when(last[0]) if last else 'never'}{' from ' + ip_of(last[1]) if last else ''}")
+                    for peer, client, known in run["connections"]:
+                        if client and not known:
+                            log.warning(f"         🔗 {peer} connected as {short(client)}, who is no longer paired with this bridge")
+                    if run["failures"]:
+                        log.warning(f"      🚫 Failed connection attempts since plugin start: {len(run['failures'])} (latest {min(len(run['failures']), 10)} shown)")
+                        for failed_at, address, client, reason in run["failures"][-10:]:
+                            log.warning(f"         {when(failed_at)}   {ip_of(address):<15}   as {short(client)}   {reason}")
+                else:
+                    log.info("      ⚙️  Running: not running")
+                for problem, fix in bridge["errors"]:
+                    log.error(f"      ❌ {problem}")
+                    log.info(f"         {fix}")
+                for problem, fix in bridge["warnings"]:
+                    log.warning(f"      ⚠️  {problem}")
+                    log.info(f"         {fix}")
+
+            leftovers = []
+            known_ids = {bridge["uid"] for bridge in bridges}
             for file in sorted(glob(os.path.join(self.pluginprefDirectory, "busy_home_*.state"))):
-                file_id = os.path.basename(file)[len("busy_home_"):-len(".state")]
-                if file_id not in bridge_ids_seen:
-                    self.logger.info(f"  Leftover state file with no bridge device: {os.path.basename(file)}  (can be removed with 'Delete residual States Files')")
-            if not any_problem:
-                self.logger.info("  ✓ No pairing or security key problems found.  If Home still shows 'No Response', run Troubleshoot 2 and 3 (network / mDNS).")
-            self.logger.info(u"{0:=^190}".format(" HomeKit Pairing & Security Keys Troubleshooting Complete "))
+                if os.path.basename(file)[len("busy_home_"):-len(".state")] not in known_ids:
+                    leftovers.append(os.path.basename(file))
+            if leftovers:
+                log.info(f"   🗂️  Leftover state files with no bridge device: {', '.join(leftovers)}  (remove with 'Delete residual States Files')")
+
+            heading("🩺 Result")
+            error_count = sum(len(bridge["errors"]) for bridge in bridges)
+            warning_count = sum(len(bridge["warnings"]) for bridge in bridges)
+            if error_count:
+                log.error(f"   ❌ {error_count} problem{'s' if error_count != 1 else ''} found - see the 🛠️ fixes under 🔍 Bridge Details above.")
+            if warning_count:
+                log.warning(f"   ⚠️  {warning_count} item{'s need' if warning_count != 1 else ' needs'} attention - see 🔍 Bridge Details above.")
+            if not error_count and not warning_count:
+                log.info("   ✅ All bridges are paired, their keys are valid and saved, and no failed connections were seen.")
+                log.info("   ℹ️  Pairing and security keys are not the problem.  If Home shows 'No Response', run Troubleshoot 2 (network) and 3 (mDNS).")
+
+            heading("📖 Common HomeKit Issues Explained")
+            guide = [
+                ("'No Response' on accessories",
+                 "Almost always network / discovery (mDNS) or the Home hub, not keys.  If this report is all ✅, run Troubleshoot 2 and 3 and check the Home hub is online."),
+                ("'Accessory already added' / bridge will not add",
+                 "The bridge is already paired with a Home (only one Home at a time).  Remove it in the Home app first, or use 'Reset Accessory / Bridge'."),
+                ("'Setup code incorrect' / QR code will not scan",
+                 "The code changes on every plugin restart.  Re-open Show QR Code and use the current one.  The bridge must show 'Ready to add'."),
+                ("Failed connections: 'not paired with this bridge'",
+                 "A device is using a pairing the bridge no longer has - usually the bridge was reset or its state file deleted / restored while still in Home.  Restart that device; if nothing connects, remove and re-add the bridge."),
+                ("Failed connections: 'bad signature'",
+                 "A Home user's key changed (e.g. Apple Account reset).  Remove and re-add the bridge."),
+                ("Shared users show '⏳ not connected'",
+                 "Normal.  People you invite usually reach accessories through the Home hub, which uses the owner's identity."),
+                ("Same 👑 owner connected from several IPs",
+                 "Normal.  The Home hub(s) and the owner's own iPhone / iPad / Mac all use the owner's identity."),
+                ("A Home user missing from some bridges",
+                 "That bridge was offline when the person was added / removed in Home.  Re-invite the person, or remove and re-add the bridge."),
+                ("Bridges sharing a MAC",
+                 "A state file was copied between bridges (e.g. a restored backup).  Reset all but one."),
+                ("Pairings lost after every restart",
+                 "The state folder is not writable or the disk is full - the ✅ writable check above must pass."),
+                ("High 'config v' number",
+                 "Normal.  It increases each time published devices change so Home reloads them."),
+            ]
+            for title, text in guide:
+                log.info(f"   💡 {title}")
+                log.info(f"      {text}")
+
+            log.info("")
+            log.info(u"{0:=^110}".format(" Troubleshoot 4 complete "))
         except Exception:
             self.logger.exception("Error in Pairing / Security Keys troubleshooting")
 

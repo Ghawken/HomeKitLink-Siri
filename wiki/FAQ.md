@@ -95,10 +95,11 @@ It runs `ffprobe` against all configured camera RTSP streams and tells you wheth
 
 ### My bridge isn't appearing in the Home app. What do I do?
 
-Run all three Troubleshoot menu items first:
+Run the Troubleshoot menu items first:
 1. **Troubleshoot 1** — Support Information
-2. **Troubleshoot 2** — Network Trouble Shooting
+2. **Troubleshoot 2** — Network Troubleshooting
 3. **Troubleshoot 3** — mDNS Troubleshooting
+4. **Troubleshoot 4** — HomeKit Pairing & Security Keys (if the bridge won't add or shows pairing errors)
 
 See [Troubleshooting](Troubleshooting) for the step-by-step guide.
 
@@ -128,7 +129,7 @@ Yes — HKLS 0.7.40+ binds to all IPv4 interfaces by default. If you need to spe
 
 ### What should I include in a forum post?
 
-Always include the output from all three Troubleshoot menu items. Without this, diagnosing issues is much harder. See [Troubleshooting — Posting on the Forum](Troubleshooting#posting-on-the-forum).
+Always include the output from the Troubleshoot menu items. Without this, diagnosing issues is much harder. See [Troubleshooting — Posting on the Forum](Troubleshooting#posting-on-the-forum).
 
 ### What's different from the old HomeKit-Bridge plugin?
 

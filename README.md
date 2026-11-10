@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.07** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.08** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -121,7 +121,12 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.07 — Latest
+### 0.8.08 — Latest
+- **Troubleshoot 4 redesigned** for readability: ✅ ⚠️ ❌ status icons, one-line bridge summary, Home users listed once (👑 owner / 👤 shared), connected devices with Home hub detection, detail expanded only for bridges with problems, 🛠️ fix for every problem, and a 📖 guide to common HomeKit issues
+- Shared users that haven't connected are now explained as normal (they reach bridges through the Home hub)
+- Detects Home users missing from some bridges
+
+### 0.8.07
 - **New menu item: Troubleshoot 4 HomeKit Pairing & Security Keys.** Per bridge: saved vs running keys and pairings, paired Home controllers (admin, last verified, connected), live connections, recent pair-verify failures, copied/corrupt state files, with a plain-English fix
 - **Clearer log message** when a Home controller connects with a pairing the bridge doesn't recognise (no longer blames the client's OS version)
 - **Redesigned Show QR Code page:** banner, QR code, large setup code, pairing status (ready / already paired / not running) and step-by-step instructions; works offline

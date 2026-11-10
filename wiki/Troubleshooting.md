@@ -4,7 +4,7 @@
 
 ---
 
-## ⭐ Step One — Always Run These Three First
+## ⭐ Step One — Always Run These First
 
 > **These diagnostic tools solve the vast majority of HomeKitLink Siri issues.**  
 > **Run them before anything else, and before posting on the forum.**
@@ -17,9 +17,9 @@ Captures your complete HKLS configuration, bridge status, device publication lis
 
 ---
 
-### 2️⃣ Troubleshoot 2 — Network Trouble Shooting
+### 2️⃣ Troubleshoot 2 — Network Troubleshooting
 
-**Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 Network Trouble Shooting**
+**Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 Network Troubleshooting**
 
 Performs a comprehensive network diagnostic — Local Network Access, multicast, firewall, bridge ports, DNS. The output tells you exactly what is and isn't working.
 
@@ -30,6 +30,14 @@ Performs a comprehensive network diagnostic — Local Network Access, multicast,
 **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 3 Support mDNS Troubleshooting**
 
 Checks mDNS/Bonjour health — whether bridges are advertising correctly, interface binding, Bonjour service status. Essential for "bridge not visible" problems.
+
+---
+
+### 4️⃣ Troubleshoot 4 — HomeKit Pairing & Security Keys
+
+**Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 4 HomeKit Pairing & Security Keys**
+
+Checks pairing and security keys for every bridge — saved vs running keys, paired Home users, connected Home hubs and failed connection attempts — with a 🛠️ fix for each problem. Essential for "won't add", "Accessory already added", "Needs to be reset" and pairing-error problems.
 
 ---
 
@@ -73,7 +81,7 @@ macOS Sequoia (15.x+) requires **Local Network Access** permission for mDNS to w
 
 ### 4. Reset Bridge Encryption
 
-HomeKit encryption state can sometimes get corrupted. If the bridge previously worked but stopped being discoverable:
+HomeKit encryption state can sometimes get corrupted. Run **Troubleshoot 4** first — it shows whether the keys are the problem.  If the bridge previously worked but stopped being discoverable:
 
 1. Remove the bridge from the Home app
 2. Run **Plugins → HomeKitLink Siri → Reset Accessory / Bridge**
@@ -128,7 +136,7 @@ See [Setup & Configuration — Changing a Device's HomeKit Type](Setup-and-Confi
 
 ## Bridge Causes "Needs to be Reset" in Home App
 
-**Cause:** The bridge was added to the Home app and then something changed the bridge's security keys without re-pairing.
+**Cause:** The bridge was added to the Home app and then something changed the bridge's security keys without re-pairing.  **Troubleshoot 4** confirms this — look for ❌ on the bridge and failed connections "not paired with this bridge".
 
 **Fix:**
 1. Delete the bridge from the **Home app** first
@@ -183,7 +191,7 @@ This clears the bridge reference so the devices can be re-published to a new bri
 
 The [HomeKitLink Siri forum](https://forums.indigodomo.com/viewforum.php?f=366) is the best place for support. To get the fastest help:
 
-1. ✅ Run all three Troubleshoot menu items
+1. ✅ Run the Troubleshoot menu items (1–3, plus 4 for pairing problems)
 2. ✅ Copy the **complete** Indigo log output from each tool
 3. ✅ Describe what you expected vs. what happened
 4. ✅ Include your Indigo version, macOS version, and plugin version

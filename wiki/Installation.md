@@ -64,7 +64,7 @@ macOS Sequoia introduced a mandatory **Local Network Access** permission for app
 3. Also enable **Indigo** (the server application) if listed
 4. If neither appears, restart the plugin — macOS should prompt automatically
 
-> **Run Troubleshoot 2 (Network Trouble Shooting)** from the plugin menu to verify Local Network Access is working. It performs a definitive multicast send test that confirms LNA is enabled.
+> **Run Troubleshoot 2 (Network Troubleshooting)** from the plugin menu to verify Local Network Access is working. It performs a definitive multicast send test that confirms LNA is enabled.
 
 ---
 
