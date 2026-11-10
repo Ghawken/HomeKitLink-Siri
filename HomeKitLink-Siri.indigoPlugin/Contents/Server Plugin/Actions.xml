@@ -7,12 +7,12 @@
 			<Field id="deviceIdlabel" type="label" fontColor="blue" fontSize="large" >
 				<Label>Select the device type:</Label>
 			</Field>
-			<Field id="type_device" type="menu" defaultValue="device" >
+			<Field id="type_device" type="menu" defaultValue="camera_motion_true" >
 				<Label>Select Type to List:</Label>
         	 <List>
 				    <Option value="camera_motion_true">Camera Motion True</Option>
-				    <Option value="camera_motion_false">Camera Motion False </Option>
-				 	<Option value="camera_doorbell">Camera DoorBell Pressed</Option>
+				    <Option value="camera_motion_false">Camera Motion False</Option>
+				 	<Option value="camera_doorbell">Camera Doorbell Pressed</Option>
                 </List>
 				  <CallbackMethod>action_menuChanged</CallbackMethod>
 			</Field>

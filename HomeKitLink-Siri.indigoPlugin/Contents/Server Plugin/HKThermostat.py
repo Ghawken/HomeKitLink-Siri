@@ -229,7 +229,7 @@ class Thermostat(HomeAccessory):
 
     def set_temperature(self, temperature, type):
         if self.plugin.debug6:
-            logger.debug("set_tempcalled by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
+            logger.debug("set_temp called by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
         if type == "current":
             self.char_current_temp.set_value(self._temperature_to_homekit(temperature))
         elif type == "target":
@@ -240,7 +240,7 @@ class Thermostat(HomeAccessory):
             self.char_heating_thresh_temp.set_value(self._temperature_to_homekit(temperature))
         elif type in ("setpointCool", "setpointHeat"):
             hc_hvac_mode = self.char_target_heat_cool.value
-            if hc_hvac_mode == 1 or hc_hvac_mode == 2:  ## HEAT  or ## Cool
+            if (hc_hvac_mode == 1 and type == "setpointHeat") or (hc_hvac_mode == 2 and type == "setpointCool"):  ## HEAT  or ## Cool
                 self.char_target_temp.set_value(self._temperature_to_homekit(temperature))
             elif hc_hvac_mode == 3: ## AUTO
                 if type =="setpointCool":
@@ -336,7 +336,7 @@ class Thermostat(HomeAccessory):
         try:
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_currentState")
             if self.plugin.debug6:
-                logger.debug("Current State State:{}".format(value))
+                logger.debug("Current State:{}".format(value))
             return value
         except:
             logger.exception("get currentState exception")
@@ -357,7 +357,7 @@ class Thermostat(HomeAccessory):
                 logger.debug("Run called once, add callback to plugin")
             self.plugin.Plugin_addCallbacktoDeviceList(self)
         except:
-            logger.exception("Run exception caugth")
+            logger.exception("Run exception caught")
 
     def _get_chars(self, char_values):
         """This will be called every time the value of one of the
@@ -557,7 +557,7 @@ class ThermostatZone(HomeAccessory):
         return HKutils.temperature_to_homekit(temp, self._unit)
 
     def set_temperature(self, temperature, type):
-        #logger.debug("set_tempcalled by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
+        #logger.debug("set_temp called by Indigo, temperature {} and type {} and units {}".format(temperature,type,self._unit))
         if type == "current":
             self.char_current_temp.set_value(self._temperature_to_homekit(temperature))
         # if type == "setpointCool":
@@ -609,7 +609,7 @@ class ThermostatZone(HomeAccessory):
         try:
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_currentState")
             if self.plugin.debug6:
-                logger.debug("Current State State:{}".format(value))
+                logger.debug("Current State:{}".format(value))
             return value
         except:
             logger.exception("get currentState exception")
@@ -630,7 +630,7 @@ class ThermostatZone(HomeAccessory):
                 logger.debug("Run called once, add callback to plugin")
             self.plugin.Plugin_addCallbacktoDeviceList(self)
         except:
-            logger.exception("Run exception caugth")
+            logger.exception("Run exception caught")
 
     def _get_chars(self, char_values):
         """This will be called every time the value of one of the

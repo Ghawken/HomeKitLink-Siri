@@ -146,7 +146,7 @@ class TemperatureSensor(HomeAccessory):
             logger.debug("{} Unit Selected".format(TEMP_FAHRENHEIT))
             self._unit = TEMP_FAHRENHEIT
         else:
-            logger.debug("{} unit Selected".format(TEMP_CELSIUS))
+            logger.debug("{} Unit Selected".format(TEMP_CELSIUS))
             self._unit = TEMP_CELSIUS
 
         # add battery service to each Sensor - prelim below
@@ -156,7 +156,7 @@ class TemperatureSensor(HomeAccessory):
                 batteryLevel = HKutils.convert_to_float(indigodevice.states["batteryLevel"])
         serv_temp = self.add_preload_service('TemperatureSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -228,7 +228,7 @@ class LightSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('LightSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -282,7 +282,7 @@ class CarbonDioxideSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('CarbonDioxideSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -295,7 +295,7 @@ class CarbonDioxideSensor(HomeAccessory):
 
     async def run(self):
         if self.plugin.debug6:
-            logger.debug("Carbon Dixoide Sensor Run called once, add callback to plugin")
+            logger.debug("Carbon Dioxide Sensor Run called once, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
 
     def set_temp(self, value):  ## no point as doesnt set
@@ -335,11 +335,11 @@ class CarbonMonoxideSensor(HomeAccessory):
         batterySupported = indigodevice.ownerProps.get("SupportsBatteryLevel", False)
         if batterySupported:
             if "batteryLevel" in indigodevice.states:
-                batteryLevel = HKutils.convert_to_float(states["batteryLevel"])
+                batteryLevel = HKutils.convert_to_float(indigodevice.states["batteryLevel"])
 
         serv_temp = self.add_preload_service('CarbonMonoxideSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -398,7 +398,7 @@ class LeakSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('LeakSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -451,7 +451,7 @@ class GenericSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('TemperatureSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -508,7 +508,7 @@ class HumiditySensor(HomeAccessory):
         # for both temperature device and humidity device and should be fine.
         # will need to test values..
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -558,7 +558,7 @@ class SmokeSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('SmokeSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -621,7 +621,7 @@ class OccupancySensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('OccupancySensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -684,7 +684,7 @@ class ContactSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('ContactSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
@@ -1057,7 +1057,7 @@ class Valve(HomeAccessory):
                 pass
 
         except:
-            self.logger.exception("set_valve_state")
+            logger.exception("set_valve_state")
 
     def set_valve(self, char_values):
         try:
@@ -1146,7 +1146,7 @@ class Irrigation(HomeAccessory):
                 pass
 
         except:
-            self.logger.exception("set_valve_state")
+            logger.exception("set_valve_state")
 
     def set_valve(self, char_values):
         try:
@@ -1234,7 +1234,7 @@ class Showerhead(HomeAccessory):
                 pass
 
         except:
-            self.logger.exception("set_valve_state")
+            logger.exception("set_valve_state")
 
     def set_valve(self, char_values):
         try:
@@ -1326,7 +1326,7 @@ class Faucet(HomeAccessory):
                 pass
 
         except:
-            self.logger.exception("set_valve_state")
+            logger.exception("set_valve_state")
 
     def set_valve(self, char_values):
         try:
@@ -1503,7 +1503,7 @@ class HueLightBulb(HomeAccessory):
         self.plugin.Plugin_setter_callback(self, "ColorTemperature", value)
 
     def set_atc(self, value):
-        logger.info("Write to ActiveTransactionCount: %s", value)
+        logger.info("Write to ActiveTransitionCount: %s", value)
 
     def set_tc(self, value):
         logger.info("Write to TransitionControl: %s", value)
@@ -1601,7 +1601,7 @@ class DimmerBulb(HomeAccessory):
     ##
     async def run(self):
         if self.plugin.debug6:
-            logger.debug("DimmerBulb Accessory stareted: Run called once, add callback to plugin")
+            logger.debug("DimmerBulb Accessory started: Run called once, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
 
     def set_bulb(self, value):
@@ -1824,7 +1824,10 @@ class DoorDoor(HomeAccessory):
             return False
 
         ## use tuple here
-        brightness, onOffStatevalue = self.plugin.Plugin_getter_callback(self, "windowCovering")
+        result = self.plugin.Plugin_getter_callback(self, "windowCovering")
+        if not isinstance(result, tuple):  ## getter returns None if no usable state or on exception
+            return None
+        brightness, onOffStatevalue = result
 
         if brightness is not None:
             if self._inverse == False:
@@ -2039,7 +2042,10 @@ class WindowCovering(HomeAccessory):
             return False
 
         ## use tuple here
-        brightness,onOffStatevalue = self.plugin.Plugin_getter_callback(self, "windowCovering")
+        result = self.plugin.Plugin_getter_callback(self, "windowCovering")
+        if not isinstance(result, tuple):  ## getter returns None if no usable state or on exception
+            return None
+        brightness, onOffStatevalue = result
 
         if brightness is not None:
             if self._inverse == False:
@@ -2178,7 +2184,10 @@ class Window(HomeAccessory):
             return False
 
         ## use tuple here
-        brightness,onOffStatevalue = self.plugin.Plugin_getter_callback(self, "windowAlone")
+        result = self.plugin.Plugin_getter_callback(self, "windowAlone")
+        if not isinstance(result, tuple):  ## getter returns None if no usable state or on exception
+            return None
+        brightness, onOffStatevalue = result
 
         if brightness is not None:
             if self._inverse == False:
@@ -2284,13 +2293,14 @@ class MotionSensor(HomeAccessory):
 
         serv_temp = self.add_preload_service('MotionSensor')
 
-        if batteryLevel:
+        if batteryLevel is not None:
             serv_battery = self.add_preload_service("BatteryService")
             self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
             self._char_charging = serv_battery.configure_char(
                 "ChargingState", value=2            )
+            is_low_battery = 1 if batteryLevel < self.plugin.low_battery_threshold else 0
             self._char_low_battery = serv_battery.configure_char(
-                "StatusLowBattery", value=0            )
+                "StatusLowBattery", value=is_low_battery            )
 
         self.char_on = serv_temp.configure_char( 'MotionDetected', getter_callback=self.get_motion) # set to false at startupgetter_callback=self.get_bulb)
         serv_temp.setter_callback = self._set_chars

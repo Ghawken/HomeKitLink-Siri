@@ -22,11 +22,11 @@
     <MenuItem id="sep12"/>
     <MenuItem id="sep13"/>
     <MenuItem id="loggingissues">
-        <Name>ℹ️ Troubleshoot 1 Support Information For Forum Posting️</Name>
+        <Name>ℹ️ Troubleshoot 1 Support Information For Forum Posting</Name>
         <CallbackMethod>logging_issues</CallbackMethod>
     </MenuItem>
         <MenuItem id="networkTroubleshoot">
-        <Name>ℹ️ Troubleshoot 2 Network Trouble Shooting</Name>
+        <Name>ℹ️ Troubleshoot 2 Network Troubleshooting</Name>
         <CallbackMethod>Menu_network_troubleshoot</CallbackMethod>
     </MenuItem>
         <MenuItem id="mdnsTroubleshoot">
@@ -108,7 +108,7 @@
                 <CallbackMethod>menu_actionMoveAccessories</CallbackMethod>
             </Field>
 			<Field id="moveLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
-				<Label>This will, all going well, will move accessories from one bridge to another.  It enables recovery of accessories (without needing to remove etc) if bridge deleted.
+				<Label>All going well, this will move accessories from one bridge to another.  It enables recovery of accessories (without needing to remove etc) if bridge deleted.
 It would be important to unpair the old bridge in homekit app.
 				</Label>
 			</Field>
@@ -133,16 +133,16 @@ It would be important to unpair the old bridge in homekit app.
             </Field>
 			<Field id="moveLabel2" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
 				<Label>
-                    This will, all going well, will reset the Bridge.  Use this when delete bridge from HomeKit App and then wish to re-add.
+                    All going well, this will reset the Bridge.  Use this when you have deleted the bridge from the Home app and then wish to re-add.
 
-                    It will reset the security keys of the bridge.  If not deleted from homeKit app first will cause ... issues ....
+                    It will reset the security keys of the bridge.  If not deleted from the Home app first will cause ... issues ....
 				</Label>
 			</Field>
             <Field id="moveWarningLabel2" type="label" fontColor="orange" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
 				<Label>
                     ** You should have deleted this bridge from Home app first, or it was never successfully added **.
-                    This deletes all security information for this bridge, without repairing (with QR code) nothing will function.
-                    NB: This is not without some risk bridge.  Use with caution.</Label>
+                    This deletes all security information for this bridge, without re-pairing (with QR code) nothing will function.
+                    NB: This is not without some risk to the bridge.  Use with caution.</Label>
 
 			</Field>
 

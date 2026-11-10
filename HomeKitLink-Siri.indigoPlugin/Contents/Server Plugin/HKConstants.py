@@ -1,7 +1,7 @@
 import indigo
 from pyhap import camera,util
 
-## Plugion Details
+## Plugin Details
 SUPPORTED_INDIGO_CLASSES = {
     indigo.DimmerDevice: indigo.kDimmerDeviceSubType,
     indigo.SensorDevice: indigo.kSensorDeviceSubType,
@@ -265,7 +265,7 @@ CHAR_SERVICE_LABEL_NAMESPACE = "ServiceLabelNamespace"
 CHAR_SLEEP_DISCOVER_MODE = "SleepDiscoveryMode"
 CHAR_SMOKE_DETECTED = "SmokeDetected"
 CHAR_STATUS_LOW_BATTERY = "StatusLowBattery"
-CHAR_STREAMING_STRATUS = "StreamingStatus"
+CHAR_STREAMING_STATUS = "StreamingStatus"
 CHAR_SWING_MODE = "SwingMode"
 CHAR_TARGET_DOOR_STATE = "TargetDoorState"
 CHAR_TARGET_HEATING_COOLING = "TargetHeatingCoolingState"

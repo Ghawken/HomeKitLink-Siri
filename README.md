@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.05** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.06** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -118,7 +118,20 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.05 — Latest
+### 0.8.06 — Latest
+- **Startup:** Removed stray `scipy` import that could stop the plugin loading on systems without scipy
+- **Sensors:** Battery level / low battery now update live; CO sensors with batteries now publish correctly
+- **Thermostats:** Setpoint changes no longer overwrite the wrong target in Heat/Cool mode; Program modes supported; Auto thresholds apply when mode and thresholds change together
+- **Security System:** Correct initial state at startup (no longer shows Armed when state is unknown); Paradox arm/disarm from HomeKit now sends valid commands
+- **Cameras:** ffmpeg log decoding can no longer stall streams; GOP timing detection and transcode warnings fixed; SecuritySpy passive refresh timing fixed; streams no longer stopped twice on shutdown; ffmpeg and audio proxy cleaned up if a stream fails to start or won't close
+- **Bridges:** Move Accessories and bridge shutdown now match bridge IDs reliably
+- **Batteries:** Sensors reporting 0% now get a battery service; motion sensors honour the low battery threshold
+- **Logging:** Toggle Debug menu item now persists the chosen level
+- **Removed:** Legacy hidden "unQuarantine files" option (and any saved system password is cleared from prefs)
+- **Lights / Coverings / Valves:** Fixed crashes in Hue setter, Door/Window/Blind getters and valve error handling
+- Numerous typo and wording fixes across menus, config dialogs and logs
+
+### 0.8.05
 - **Camera Audio:** Opus SRTP proxy — near-perfect HomeKit audio for BlueIris & SecuritySpy cameras
 - **Camera Intelligence:** `ffprobe`-based stream analysis — auto passthrough or transcode per camera
 - **mDNS Refactor:** IPv4-only default, fixed interface/address conflation, auto-derive interface from server IP

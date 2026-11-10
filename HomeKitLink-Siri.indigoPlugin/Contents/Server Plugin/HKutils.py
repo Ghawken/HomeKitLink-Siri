@@ -139,7 +139,7 @@ def celsius_to_fahrenheit(celsius: float, interval: bool = False) -> float:
     return celsius * 1.8 + 32.0
 
 def celsius_to_kelvin(celsius: float, interval: bool = False) -> float:
-    """Convert a temperature in Celsius to Fahrenheit."""
+    """Convert a temperature in Celsius to Kelvin."""
     if interval:
         return celsius
     return celsius + 273.15
@@ -173,7 +173,7 @@ def color_temperature_mired_to_kelvin(mired_temperature: float) -> int:
     return math.floor(1000000 / mired_temperature)
 
 def color_temperature_kelvin_to_mired(kelvin_temperature: float) -> int:
-    """Convert absolute mired shift to degrees kelvin."""
+    """Convert degrees kelvin to mired."""
     return math.floor(1000000 /  kelvin_temperature)
 
 def pid_is_alive(pid: int) -> bool:
@@ -350,4 +350,4 @@ def _find_next_available_port(start_port: int, exclude_ports: set) -> int:
             if port == MAX_PORT:
                 raise
             continue
-    raise RuntimeError("nreachable")
+    raise RuntimeError("Unreachable")

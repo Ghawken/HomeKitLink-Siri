@@ -3,6 +3,7 @@ import asyncio
 from datetime import timedelta
 import logging
 import os
+import signal
 import sys
 from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 from homekit_audio_proxy import AudioProxy
@@ -270,6 +271,8 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
 
     async def start_stream(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
+        audio_proxy = None
+        stream = None
         try:
             if self.plugin.debug7:
                 _LOGGER.debug(
@@ -449,6 +452,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                         "[%s] AudioProxy raised an exception during start",
                         self.display_name,
                     )
+                    if audio_proxy:
+                        try:
+                            await audio_proxy.async_stop()
+                        except Exception:
+                            _LOGGER.debug("AudioProxy stop after failed start also failed", exc_info=True)
                     audio_proxy = None
 
                 if audio_proxy and not audio_proxy.local_port:
@@ -589,6 +597,17 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
 
         except:
             _LOGGER.exception("Start Stream Exception")
+            try:
+                if session_info.get("stream"):
+                    await self.stop_stream(session_info)  ## also stops audio proxy and watcher
+                else:
+                    if audio_proxy:
+                        await audio_proxy.async_stop()
+                    if stream is not None and stream.is_running:
+                        await stream.close()
+            except Exception:
+                _LOGGER.debug("Cleanup after failed stream start also failed", exc_info=True)
+            return False
 
     async def _async_log_stderr_stream(
             self, stderr_reader: asyncio.StreamReader
@@ -601,10 +620,10 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             if line_bytes == b"":
                 return
             # Decode bytes to string using UTF-8 encoding
-            line = line_bytes.decode('utf-8').rstrip()
+            line = line_bytes.decode('utf-8', errors='replace').rstrip()
             if 'Output file does not contain any stream' in line:
-                _LOGGER.info("'Output file does not contain stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
-                _LOGGER.info("Would suggest unpublish Camera, check gone in Home app, and then republish with Audio Disabled.")
+                _LOGGER.info("'Output file does not contain any stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
+                _LOGGER.info("Suggest unpublishing the camera, checking it is gone in the Home app, then republishing with Audio disabled.")
             elif any(err in line for err in (
                 "Connection refused",
                 "Connection timed out",
@@ -690,21 +709,15 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             _LOGGER.info("[%s] Stream already stopped", session_id)
             return
 
-        for shutdown_method in ("close", "kill"):
-            _LOGGER.info("[%s] %s video stream", session_id, shutdown_method)
+        ffmpeg_pid = stream.process.pid
+        _LOGGER.info("[%s] close video stream", session_id)
+        await stream.close()  ## kills ffmpeg itself on timeout/broken pipe, then clears its process handle
+        if pid_is_alive(ffmpeg_pid):
+            _LOGGER.info("[%s] kill video stream", session_id)
             try:
-                await getattr(stream, shutdown_method)()
-                return
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.debug(
-                    "[%s] Failed to %s stream", session_id, shutdown_method
-                )
-
-    async def stop(self):
-        """Stop any streams when the accessory is stopped."""
-        for session_info in self.sessions.values():
-            asyncio.create_task(self.stop_stream(session_info))
-        await super().stop()
+                os.kill(ffmpeg_pid, signal.SIGKILL)
+            except OSError:
+                _LOGGER.debug("[%s] Failed to kill stream", session_id, exc_info=True)
 
     def get_snapshot(self, image_size):  # pylint: disable=unused-argument, no-self-use
         try:

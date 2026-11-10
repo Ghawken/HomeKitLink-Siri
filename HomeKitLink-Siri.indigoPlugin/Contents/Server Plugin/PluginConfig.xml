@@ -1,8 +1,7 @@
 <?xml version="1.0"?>
 <PluginConfig>
+    <Field id="sep7c" type="separator"/>
     <Field id="infoLabel0" type="label" fontSize='large' fontColor="blue">
-        <Field id="sep7c" type="separator"/>
-
         <Label>HomeKitLink Plugin</Label>
     </Field>
     <Field id="space0" type="label" fontColor="blue">
@@ -18,54 +17,54 @@
     <Field id="space11" type="label" fontSize="small">
         <Label>Turn on debugging only when needed. Be careful when posting the output to the forums or other public places as it could expose sensitive information.</Label>
     </Field>
-    <Field id="debug1" type="checkbox" tooltip="Enabling will result in verbose logging of IP150 connection.">
+    <Field id="debug1" type="checkbox" tooltip="Enabling will result in verbose logging of HomeKit callbacks.">
         <Label/>
         <Description>1. Debug Plugin HomeKit Callbacks</Description>
     </Field>
 
-    <Field id="debug2" type="checkbox" tooltip="Enabling will result in .">
+    <Field id="debug2" type="checkbox" tooltip="Enabling will result in verbose logging of device update reporting.">
         <Label/>
         <Description>2. Debug Device Updating Reporting</Description>
     </Field>
 
-    <Field id="debug3" type="checkbox" tooltip="Enabling will result .">
+    <Field id="debug3" type="checkbox" tooltip="Enabling will result in verbose logging of the HomeKit library.">
         <Label/>
         <Description>3. Debug HomeKit Library (Verbose!) </Description>
     </Field>
 
-    <Field id="debug4" type="checkbox" tooltip="Enabling will result .">
+    <Field id="debug4" type="checkbox" tooltip="Enabling will result in verbose logging of the plugin getter callback.">
         <Label/>
         <Description>4. Debug Plugin Getter Callback</Description>
     </Field>
 
-    <Field id="debug5" type="checkbox" tooltip="Enabling will .">
+    <Field id="debug5" type="checkbox" tooltip="Enabling will result in verbose logging of the plugin setter callback.">
         <Label/>
         <Description>5. Debug Plugin Setter Callback</Description>
     </Field>
 
-    <Field id="debug6" type="checkbox" tooltip="Enabling will .">
+    <Field id="debug6" type="checkbox" tooltip="Enabling will result in verbose logging of HomeKit devices.">
         <Label/>
-        <Description>6. Debug Home Kit Devices</Description>
+        <Description>6. Debug HomeKit Devices</Description>
     </Field>
 
-    <Field id="debug7" type="checkbox" tooltip="Enabling will .">
+    <Field id="debug7" type="checkbox" tooltip="Enabling will result in verbose logging of HomeKit cameras.">
         <Label/>
-        <Description>7. Debug Home Kit Camera</Description>
+        <Description>7. Debug HomeKit Camera</Description>
     </Field>
 
-    <Field id="debug8" type="checkbox" tooltip="Enabling will .">
+    <Field id="debug8" type="checkbox" tooltip="Enabling will result in verbose logging of Indigo device selection.">
         <Label/>
         <Description>8. Debug Indigo Device Selection</Description>
     </Field>
-    <Field id="debug9" type="checkbox" tooltip="Enabling will .">
+    <Field id="debug9" type="checkbox" tooltip="Enabling will result in verbose logging of IID allocation.">
         <Label/>
         <Description>9. Debug IID Manager IID Allocation</Description>
     </Field>
-        <Field id="debug10" type="checkbox" tooltip="Enabling will .">
+        <Field id="debug10" type="checkbox" tooltip="Enabling will result in verbose logging of mDNS (to file only).">
         <Label/>
         <Description>10. Debug mDNS (Verbose!) File Only.   </Description>
     </Field>
-    <Field id="debug11" type="checkbox" tooltip="Enabling will .">
+    <Field id="debug11" type="checkbox" tooltip="Enabling will result in verbose logging of actions.">
         <Label/>
         <Description>11. Debug Actions.   </Description>
     </Field>
@@ -111,7 +110,7 @@
         <Label>Camera Max Refresh Rate (secs):</Label>
     </Field>
             <Field id="label_max_refresh" type="label" fontSize="small"  alwaysUseInDialogHeightCalc="true">
-        <Label>This is maxiumum image refresh time when requested by Home App in seconds.
+        <Label>This is the maximum image refresh time when requested by Home App in seconds.
 We can't speed up requests, but we can slow them down if needed. Defaults to 30 seconds.
         </Label>
     </Field>
@@ -130,7 +129,7 @@ We can't speed up requests, but we can slow them down if needed. Defaults to 30 
     </Field>
                     <Field id="label_passive" type="label" fontSize="small" alwaysUseInDialogHeightCalc="true">
         <Label>These entries refer to updating Images when no request occurs.
-This means can keep image updated on opening Home to whatever degree requested here.
+This means the image can be kept updated on opening Home to whatever degree requested here.
         </Label>
     </Field>
     <Field id="separater24ab" type="separator" alwaysUseInDialogHeightCalc="true"/>
@@ -140,7 +139,7 @@ This means can keep image updated on opening Home to whatever degree requested h
     </Field>
         <Field id="reload"
            type="label"
-           tooltip="Enter system Password" fontSize='large' alignText="right" fontColor="blue" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
+           fontSize='large' alignText="right" fontColor="blue" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label> Reload Plugin from main menu if you have updated these advanced options</Label>
     </Field>
             <Field id="separateraasea24" type="separator" visibleBindingId="advanced" visibleBindingValue="true"/>
@@ -168,8 +167,8 @@ This means can keep image updated on opening Home to whatever degree requested h
         <Label>mDNS Options: Interfaces:</Label>
     </Field>
         <Field id="spacede11" type="label" fontSize="small" hidden="true" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>eg. 192.168.1.9, 192.168.1.32</Label>
-            Comma Seperated IP address permitted, or single IP address (which should be main OSX interface)
+        <Label>eg. 192.168.1.9, 192.168.1.32
+Comma separated IP addresses permitted, or a single IP address (which should be the main macOS interface)</Label>
     </Field>
         <Field id="mDNSapple_p2p"
            type="checkbox"
@@ -180,7 +179,7 @@ This means can keep image updated on opening Home to whatever degree requested h
      <Field id="HAPipaddress"
            type="textfield"
            tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>Homekit Server Options: Advertised Interfaces:</Label>
+        <Label>HomeKit Server Options: Advertised Interfaces:</Label>
     </Field>
         <Field id="spaceddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>eg. 192.168.1.9,::1
@@ -192,27 +191,17 @@ Default empty/blank
          <Field id="HAPServeripaddress"
            type="textfield"
            tooltip="Enter IP address to use" defaultValue="" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>Homekit Server : IP address</Label>
+        <Label>HomeKit Server : IP address</Label>
     </Field>
         <Field id="spacedddee11" type="label" fontSize="small" alignWithControl="true" visibleBindingId="advanced" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
         <Label>eg. 192.168.1.6
 Default blank or empty.
-IP address to be used as Homekit Server (HAP server).
+IP address to be used as HomeKit Server (HAP server).
 
 Delete all values from these boxes to restore system created defaults.
         </Label>
         </Field>
     <Field id="sepaaer4another" type="separator" visibleBindingId="advanced"  alwaysUseInDialogHeightCalc="true" visibleBindingValue="true"/>
-    <Field id="password"
-           type="textfield"
-           tooltip="Enter system Password" defaultValue="" visibleBindingId="advanced" hidden="true" visibleBindingValue="true" alwaysUseInDialogHeightCalc="true">
-        <Label>Enter System Password:</Label>
-    </Field>
-    <Field id="runSystem" type="button" fontSize="large" visibleBindingId="advanced" hidden="true" alwaysUseInDialogHeightCalc="true" visibleBindingValue="true">
-        <Label/>
-        <Title>unQuarantine files</Title>
-        <CallbackMethod>runSystem</CallbackMethod>
-    </Field>
         <Field id="previousVersion"
            type="textfield"
            defaultValue="0.0.1" hidden="true">

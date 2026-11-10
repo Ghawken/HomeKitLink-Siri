@@ -54,6 +54,14 @@ PARADOX_TO_HOMEKIT_TARGET = {
     "arming": HK_ALARM_DISARMED,
     "disarmed": HK_ALARM_DISARMED
 }
+## HomeKit target value -> ParadoxAlarm plugin controlAlarm "action" (see its Actions.xml)
+## Night uses ARM_STAY as EVO panels have no sleep arm; Spectra/Magellan accept both
+HOMEKIT_TO_PARADOX_ACTION = {
+    HK_ALARM_STAY_ARMED: "ARM_STAY",
+    HK_ALARM_AWAY_ARMED: "ARM",
+    HK_ALARM_NIGHT_ARMED: "ARM_STAY",
+    HK_ALARM_DISARMED: "DISARM",
+}
 DSC_TO_HOMEKIT_CURRENT = {
     "armed": HK_ALARM_STAY_ARMED,
     "armedStay":HK_ALARM_STAY_ARMED,
@@ -154,8 +162,12 @@ class SecuritySystem(HomeAccessory):
         serv_security = self.add_preload_service("SecuritySystem")
 
         currentstate = self.get_security()
-        self.char_current_state = serv_security.configure_char( 'SecuritySystemCurrentState')  ## 3 == unknown at startup
-        self.char_target_state = serv_security.configure_char("SecuritySystemTargetState", setter_callback=self.set_security )
+        if currentstate is None:
+            currentstate = HK_ALARM_DISARMED
+        ## Target state has no Triggered value (0-3 only), so fall back to Disarmed
+        targetstate = HK_ALARM_DISARMED if currentstate == HK_ALARM_TRIGGERED else currentstate
+        self.char_current_state = serv_security.configure_char( 'SecuritySystemCurrentState', value=currentstate)
+        self.char_target_state = serv_security.configure_char("SecuritySystemTargetState", value=targetstate, setter_callback=self.set_security )
 
         self.set_fromdeviceUpdate(device.states)
 
@@ -184,7 +196,11 @@ class SecuritySystem(HomeAccessory):
                     basePlugin.executeAction("setSecuritySystemState", deviceId=self.indigodeviceid, props={"securitySystemState": str(char_values)} )
                 elif self.plugin_inuse == "com.GlennNZ.indigoplugin.ParadoxAlarm":
                     partition= indigodevice.globalProps["com.GlennNZ.indigoplugin.ParadoxAlarm"]["zonePartition"]
-                    basePlugin.executeAction("controlAlarm", deviceId=self.indigodeviceid, props={"action": str(char_values), "partition": int(partition)})
+                    paradox_action = HOMEKIT_TO_PARADOX_ACTION.get(int(char_values))
+                    if paradox_action is None:
+                        logger.warning(f"No Paradox action for HomeKit security target {char_values}, ignoring.")
+                    else:
+                        basePlugin.executeAction("controlAlarm", deviceId=self.indigodeviceid, props={"action": paradox_action, "partition": int(partition)})
                 elif self.plugin_inuse == "com.frightideas.indigoplugin.dscAlarm":
                     if int(char_values) == HK_ALARM_DISARMED:
                         basePlugin.executeAction("actionDisarm", deviceId=self.indigodeviceid)
@@ -254,6 +270,7 @@ class SecuritySystem(HomeAccessory):
             logger.debug("get_Security Called")
             indigodevice = indigo.devices[self.indigodeviceid]
             state = ""
+            value = None
 
             if self.plugin_inuse in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm", "net.papamac.indigoplugin.alarmdecoder-bridge","com.berkinet.ad2usb"):
                 if str(self.device_current_state) in indigodevice.states:

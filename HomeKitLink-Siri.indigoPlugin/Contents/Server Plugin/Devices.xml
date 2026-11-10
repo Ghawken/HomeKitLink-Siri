@@ -65,26 +65,26 @@
 
 
 			<Field id="deviceSubtypeLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="showSubtypes" visibleBindingValue="true">
-				<Label>Select an available HomeKit Device Type. Try show ALl Options if correct option doesn't auto select	</Label>
+				<Label>Select an available HomeKit Device Type. Try Show All Options if the correct option doesn't auto-select	</Label>
 			</Field>
 
 			<Field id="deviceSubtype_LightInfo" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="LightBulb">
 				<Label>LightBulb - This really refers to 3 devices within HomeKit.
 1. Simple switch on/off which is a bulb, this can be changed in app to any other switch icon.
-2. Dimmerable Bulb with brightness control
-3. Dimmerable Bulb with RGB color support.
-The plugin will decide which is possible aiming for 3, then 2, then 1.  If one = a simple switch is wished regardless, select LightBulb_switch.
+2. Dimmable Bulb with brightness control
+3. Dimmable Bulb with RGB color support.
+The plugin will decide which is possible aiming for 3, then 2, then 1.  If a simple switch is wanted regardless, select LightBulb_switch.
 				</Label>
 			</Field>
 
-			<Field id="tempSelector" type="checkbox" tooltip="Enabling will select Fahrenheit ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor">
+			<Field id="tempSelector" type="checkbox" tooltip="Enabling will select Fahrenheit." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor">
 				<Label/>
 				<Description>Enable to Select Fahrenheit</Description>
 			</Field>
 			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor" alwaysUseInDialogHeightCalc="true">
 				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
-			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camaera Motion ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camera motion." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
 				<Label/>
 				<Description>Motion Sensor Enabled</Description>
 			</Field>
@@ -92,11 +92,11 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If one =
 				<Label>Enabled = use camera motion reports to trigger in HomeKit.
 Uncheck no motion sensor except through Action Group trigger.</Label>
 			</Field>
-			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will inverse Controls ." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window,Door">
+			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will invert controls." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window,Door">
 				<Label/>
-				<Description>Enable to Inverse Controls</Description>
+				<Description>Enable to Invert Controls</Description>
 			</Field>
-			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will select Audio ." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" >
+			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will enable audio." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" >
 				<Label/>
 				<Description>Support Audio</Description>
 			</Field>
@@ -118,7 +118,7 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 			<Field id="deviceSensorLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="showALL" visibleBindingValue="true">
 				<Label>This shows the state and == its current value to help guide the correct state to choose.
 
-If you are selecting a Sensor select the device State to send to homeKit.  If Temperature Sensor - device needs to be number without text C/F etc.
+If you are selecting a Sensor select the device State to send to HomeKit.  If Temperature Sensor - device needs to be number without text C/F etc.
 If incorrect, hopefully won't break bridge and update with this selector.   For many other devices, this should be BLANK without harm.
 				</Label>
 			</Field>
@@ -155,7 +155,7 @@ Plus the Publish checkbox must be enabled if you wish device in HomeKit</Label>
 
 	<Field id="sep21a1" type="separator"/>
 
-			<Field id="showALL" type="checkbox" tooltip="Enabling will ." enabledBindingId="HomeKit_publishDevice_2" dynamicReload="true">
+			<Field id="showALL" type="checkbox" tooltip="Enabling will show all HomeKit device options." enabledBindingId="HomeKit_publishDevice_2" dynamicReload="true">
         <Label></Label>
         <Description>Show all Options</Description>
 				<CallbackMethod>all_options_menuChanged</CallbackMethod>

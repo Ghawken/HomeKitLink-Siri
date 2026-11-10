@@ -162,8 +162,8 @@ class IndigoFFmpeg:
             try:
                 await self._loop.run_in_executor(None, _close)
                 _LOGGER.debug("Close FFmpeg process")
-            except (subprocess.TimeoutExpired, ValueError):
-                _LOGGER.warning("Timeout while waiting for FFmpeg")
+            except (subprocess.TimeoutExpired, ValueError, OSError):
+                _LOGGER.warning("Timeout or broken pipe while waiting for FFmpeg, killing")
                 self.kill()
             finally:
                 self._clear()
@@ -261,7 +261,7 @@ class IndigoFFmpegWorker(IndigoFFmpeg):
     ) -> None:
         """Start ffmpeg do process data from output."""
         if self.is_running:
-            _LOGGER.warning("Can't start worker. It is allready running!")
+            _LOGGER.warning("Can't start worker. It is already running!")
             return
 
         if reading == FFMPEG_STDERR:

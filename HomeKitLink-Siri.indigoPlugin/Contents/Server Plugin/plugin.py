@@ -297,6 +297,9 @@ class Plugin(indigo.PluginBase):
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
         self.previousVersion = self.pluginPrefs.get("previousVersion","0.0.1")
+        ## Unquarantine feature removed in 0.8.06 - clear any system password saved by older versions
+        if "password" in self.pluginPrefs:
+            del self.pluginPrefs["password"]
         self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20) )
 
         self.camera_refresh_max_time = int(self.pluginPrefs.get("cameratime",30))
@@ -595,6 +598,10 @@ class Plugin(indigo.PluginBase):
             # Probably reasonable.
             # DONE Need QR Code for each Bridge/Device
             checkid = device.pluginProps.get("bridgeUniqueID", "")
+            try:
+                checkid = int(checkid)  ## stored as text by the hidden textfield, internal lists use int
+            except (ValueError, TypeError):
+                checkid = ""
 
             if checkid != "":
                 self.logger.debug("Stopping {} HomeKitLink Bridge with Unique Bridge ID {}".format(device.name, checkid))
@@ -642,7 +649,7 @@ class Plugin(indigo.PluginBase):
                         threadtobedeleted = threads
                         threads.join(timeout=5)
                         if threads.is_alive():
-                            self.logger.debug("{} Thread is still alive. Timeout occured. Killing.".format(threads.name))
+                            self.logger.debug("{} Thread is still alive. Timeout occurred. Killing.".format(threads.name))
                             self.logger.error("Should restart Plugin ideally as thread not behaving.")
                 if threadtobedeleted != None:
                     self.driverthread_multiple.remove(threadtobedeleted)
@@ -753,7 +760,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info("{} Home Kit Accessories are now Started.".format(self.runningAccessoryCount))
 
             if int(self.count) > int(self.runningAccessoryCount):
-                self.logger.info('Given this difference, please review devices by Menu Item, Show Device Publications & Identity Devices Running for more information.')
+                self.logger.info('Given this difference, please review devices by Menu Item, Show Device Publications & Identify Devices Running for more information.')
                 self.logger.info("See Troubleshooting Menu items 1,2 and 3 from Plugin Menu for further aid")
 
             self.sleep(10)
@@ -772,7 +779,7 @@ class Plugin(indigo.PluginBase):
             for threads in self.driverthread_multiple:
                 threads.join(timeout=5)
                 if threads.is_alive():
-                    self.logger.debug("{} Thread is still alive. Timeout occured. Killing.".format(threads.name))
+                    self.logger.debug("{} Thread is still alive. Timeout occurred. Killing.".format(threads.name))
                     self.logger.info("Restarting Plugin as thread not behaving.")
                     self.restartPlugin()
             self.logger.info("Completing full Bridge Shutdown ...")
@@ -789,7 +796,7 @@ class Plugin(indigo.PluginBase):
             for threads in self.driverthread_multiple:
                 threads.join(timeout=5)
                 if threads.is_alive():
-                    self.logger.debug("{} Thread is still alive. Timeout occured. Killing.".format(threads.name))
+                    self.logger.debug("{} Thread is still alive. Timeout occurred. Killing.".format(threads.name))
                     self.logger.info("Restarting Plugin as thread not behaving.")
                     self.restartPlugin()
             self.logger.info("Completing full Bridge Shutdown ...")
@@ -914,7 +921,7 @@ class Plugin(indigo.PluginBase):
                 if int(item["bridgeID"]) == int(bridgenumber):
                     # self.logger.info("Matching Bridge Found setting up Accessory.")
                     # self.sleep(0.01)
-                    self.logger.debug(f"Item :{item} exisits for this bridge {bridge}")
+                    self.logger.debug(f"Item :{item} exists for this bridge {bridge}")
                     indigodevice = self.return_deviceorAG(item["deviceid"])
                     deviceAID = int(str(bridgenumber) + str(item["deviceid"]))
                     if self.debug1:
@@ -1151,7 +1158,7 @@ class Plugin(indigo.PluginBase):
                                         self.logger.debug("Found Camera name:{} in camera check with timevalue:{}".format(cameraRequested, timecheck))
                                     if t.time() - timecheck < int(self.camera_refresh_max_time):  ## Plugin Config setting
                                         if self.debug7:
-                                            self.logger.debug(" Skipping update as to soon, requested at timecheck difference {}".format(t.time() - timecheck))
+                                            self.logger.debug(" Skipping update as too soon, requested at timecheck difference {}".format(t.time() - timecheck))
                                         break
                                         # dont update timing
                                 else:
@@ -1179,7 +1186,7 @@ class Plugin(indigo.PluginBase):
                                         for chunk in r.iter_content(1024):
                                             f.write(chunk)
                                             if t.time() > (start + 10):
-                                                self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                                self.logger.debug(u' Download Image Taking too long.  Aborted.')
                                                 break
                                 else:
                                     self.logger.debug("Camera Unavailable returning, Status Code:{}".format(r.status_code))
@@ -1203,7 +1210,7 @@ class Plugin(indigo.PluginBase):
                                         self.logger.debug("Found Camera name:{} in camera check with timevalue:{}".format(cameraRequested, timecheck))
                                     if t.time() - timecheck < 30:  ## 30 seconds update
                                         if self.debug7:
-                                            self.logger.debug(" Skipping update as to soon, requested at timecheck difference {}".format(t.time() - timecheck))
+                                            self.logger.debug(" Skipping update as too soon, requested at timecheck difference {}".format(t.time() - timecheck))
                                         break
                                         # dont update timing
                                 else:
@@ -1257,10 +1264,10 @@ class Plugin(indigo.PluginBase):
                                         for chunk in r.iter_content(1024):
                                             f.write(chunk)
                                             if t.time() > (start + 10):
-                                                self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                                self.logger.debug(u' Download Image Taking too long.  Aborted.')
                                                 break
                                 else:
-                                    self.logger.debug("Error Downloading Camera Snashot, given Status Code:{}".format(r.status_code))
+                                    self.logger.debug("Error Downloading Camera Snapshot, given Status Code:{}".format(r.status_code))
                                     self.logger.debug("Quite likely camera or Security Spy offline.  Having a slight pause for effect.")
                                     self.sleep(3)
                                 if self.debug7:
@@ -1292,7 +1299,7 @@ class Plugin(indigo.PluginBase):
                                         for chunk in r.iter_content(1024):
                                             f.write(chunk)
                                             if t.time() > (start + 10):
-                                                self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                                self.logger.debug(u' Download Image Taking too long.  Aborted.')
                                                 break
                                 else:
                                     self.logger.debug("Camera Unavailable returning, Status Code:{}".format(r.status_code))
@@ -1302,8 +1309,8 @@ class Plugin(indigo.PluginBase):
                                     self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
 
                             elif "SS_name" in camera:
-                                cameracheck[cameraRequested] = t.time()
                                 cameraRequested = camera["SS_name"]
+                                cameracheck[cameraRequested] = t.time()
                                 camName = camera["SS_name"]
                                 theURL = camera["SS_imageURL"] + "&width=" + str(image_width)
                                 username = camera["SS_username"]
@@ -1318,10 +1325,10 @@ class Plugin(indigo.PluginBase):
                                         for chunk in r.iter_content(1024):
                                             f.write(chunk)
                                             if t.time() > (start + 10):
-                                                self.logger.debug(u' Download Image Taking to long.  Aborted.')
+                                                self.logger.debug(u' Download Image Taking too long.  Aborted.')
                                                 break
                                 else:
-                                    self.logger.debug("Error Downloading Camera Snashot, given Status Code:{}".format(r.status_code))
+                                    self.logger.debug("Error Downloading Camera Snapshot, given Status Code:{}".format(r.status_code))
                                     self.logger.debug("Quite likely camera or Security Spy offline.  Having a slight pause for effect.")
                                     self.sleep(3)
                                 if self.debug7:
@@ -1397,7 +1404,7 @@ class Plugin(indigo.PluginBase):
                 self.start_CameraSnapshots()
         except:
             self.logger.exception("Exception in single Bridge Startup")
-            device.updateStatesOnServer(key="status", value="Error")
+            device.updateStateOnServer(key="Status", value="Error")
             device.updateStateImageOnServer(indigo.kStateImageSel.PowerOff)
             device.setErrorStateOnServer("Failure to Start Bridge.")
 
@@ -1642,8 +1649,8 @@ class Plugin(indigo.PluginBase):
             return config
 
         except:
-            self.logger.info("Error adding this Camera Accessory. with Indigo ID {}".format(indigodeviceid))
-            self.logger.info("Accessory has been disabled currently.  Question BlueIris or Security Spy up and running?")
+            self.logger.info("Error adding this Camera Accessory with Indigo ID {}".format(indigodeviceid))
+            self.logger.info("Accessory has been disabled currently.  Is BlueIris or Security Spy up and running?")
             self.logger.debug("Caught Exception get Camera Options: Return Error", exc_info=True)
             return None  ## move to Camera Init
 
@@ -1748,13 +1755,13 @@ class Plugin(indigo.PluginBase):
                     # it should be in this below list as should match above only containing IDs
                     if deleted_device.id in self.device_list_internal_idonly:
                         self.device_list_internal_idonly.remove(deleted_device.id)
-                self.logger.error("Device: {} ,just deleted published and has active accessory within Homekit currently (!)".format(deleted_device.name))
+                self.logger.error("Device: {}, just deleted, was published and has an active accessory within HomeKit currently (!)".format(deleted_device.name))
                 try:
                     bridgeID = int(deleted_device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
                 except ValueError:
                     bridgeID = 99
                 if bridgeID != 99:
-                    self.logger.info("Deleted Device appears to be running of Bridge {}.  Attempting to restart Bridge and reset all Accessories.".format(bridgeID))
+                    self.logger.info("Deleted Device appears to be running off Bridge {}.  Attempting to restart Bridge and reset all Accessories.".format(bridgeID))
                     for device in indigo.devices.iter("self"):
                         # if device.enabled:  ## enabled or disabled if exists want to save state file
                         uniqueID = device.pluginProps.get("bridgeUniqueID", 99)
@@ -1769,7 +1776,7 @@ class Plugin(indigo.PluginBase):
                 ## this is list of all wished to published devices, event those off/not currently enabled for example.
                 ## this list is created on startup - but delete here
                 self.device_list.remove(deleted_device.id)
-                self.logger.debug("Device: {} ,just deleted published and within Homekit, will likely need appropriate Bridge Restarted.".format(deleted_device.name))
+                self.logger.debug("Device: {}, just deleted, was published and within HomeKit, will likely need appropriate Bridge Restarted.".format(deleted_device.name))
         except:
             self.logger.debug("Caught Exception in Delete Device", exc_info=True)
 
@@ -1841,8 +1848,11 @@ class Plugin(indigo.PluginBase):
                             listHvacModes = {indigo.kHvacMode.Off: 0,
                                              indigo.kHvacMode.Heat: 1,
                                              indigo.kHvacMode.Cool: 2,
-                                             indigo.kHvacMode.HeatCool: 3}
-                            homekitModeWished = listHvacModes[newmode]
+                                             indigo.kHvacMode.HeatCool: 3,
+                                             indigo.kHvacMode.ProgramHeat: 1,
+                                             indigo.kHvacMode.ProgramCool: 2,
+                                             indigo.kHvacMode.ProgramHeatCool: 3}
+                            homekitModeWished = listHvacModes.get(newmode, 0)
                             self.device_list_internal[checkindex]["accessory"].char_target_heat_cool.set_value(homekitModeWished)
 
                             ## Mode has been changed need to update target and range for HomeKit
@@ -1997,7 +2007,7 @@ class Plugin(indigo.PluginBase):
                                             self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
                                         else:
                                             if this_is_debug_device:
-                                                self.logger.warning("Humidty or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                                self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
                                             self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
                         else:
                             if "sensorValue" in updated_device.states:
@@ -2020,7 +2030,7 @@ class Plugin(indigo.PluginBase):
                                         self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
                                     else:
                                         if this_is_debug_device:
-                                            self.logger.warning("Humidty or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                            self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
                                         self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
 
                                     #self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)  ##CurrentTemperature is chartemp
@@ -2048,18 +2058,19 @@ class Plugin(indigo.PluginBase):
                                         self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
                                     else:
                                         if this_is_debug_device:
-                                            self.logger.warning("Humidty or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                            self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
                                         self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
 
                     # sensor type updated and check Battery
                     if "batteryLevel" in updated_device.states:
-                        if not self.device_list_internal[checkindex]["accessory"]._char_battery or not self.device_list_internal[checkindex]["accessory"]._char_low_battery:
-                            if updated_device.states["batteryLevel"] != original_device["batteryLevel"]:
+                        battery_accessory = self.device_list_internal[checkindex]["accessory"]
+                        if getattr(battery_accessory, "_char_battery", None) and getattr(battery_accessory, "_char_low_battery", None):
+                            if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
                                 batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
                                 if batteryLevel is not None:
-                                    self.device_list_internal[checkindex]["accessory"]._char_battery.set_value(batteryLevel)
+                                    battery_accessory._char_battery.set_value(batteryLevel)
                                     is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
-                                    self._char_low_battery.set_value(is_low_battery)
+                                    battery_accessory._char_low_battery.set_value(is_low_battery)
                                     if self.debug2:
                                         self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
 
@@ -2102,13 +2113,14 @@ class Plugin(indigo.PluginBase):
                                     self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
                     # sensor type updated and check Battery
                     if "batteryLevel" in updated_device.states:
-                        if not self.device_list_internal[checkindex]["accessory"]._char_battery or not self.device_list_internal[checkindex]["accessory"]._char_low_battery:
-                            if updated_device.states["batteryLevel"] != original_device["batteryLevel"]:
+                        battery_accessory = self.device_list_internal[checkindex]["accessory"]
+                        if getattr(battery_accessory, "_char_battery", None) and getattr(battery_accessory, "_char_low_battery", None):
+                            if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
                                 batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
                                 if batteryLevel is not None:
-                                    self.device_list_internal[checkindex]["accessory"]._char_battery.set_value(batteryLevel)
+                                    battery_accessory._char_battery.set_value(batteryLevel)
                                     is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
-                                    self._char_low_battery.set_value(is_low_battery)
+                                    battery_accessory._char_low_battery.set_value(is_low_battery)
                                     if self.debug2:
                                         self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
 
@@ -2224,7 +2236,7 @@ class Plugin(indigo.PluginBase):
 
                     motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
                     if self.debug2:
-                        self.logger.debug(f"Within the SecuritySpyCamera Moption Check. {motionEnabled=}")
+                        self.logger.debug(f"Within the SecuritySpyCamera Motion Check. {motionEnabled=}")
 
                     if motionEnabled:
                         if 'event_on' in updated_device.states:  ## Other plugin doesnt have it
@@ -2338,7 +2350,7 @@ class Plugin(indigo.PluginBase):
                         self.device_list_internal[checkindex]["accessory"].char_on.set_value(newstate)
 
         except (AttributeError):
-            self.logger.info(f"HomekitLink Published Device: {original_device.name} caused a Nonetype error, this usually means device, or entire bridge has not correctly started.")
+            self.logger.info(f"HomeKitLink Published Device: {original_device.name} caused a Nonetype error, this usually means device, or entire bridge has not correctly started.")
             self.logger.debug("Caught exception in Device Update", exc_info=True)
         except:
             self.logger.debug("Caught exception in Device Update", exc_info=True)
@@ -2399,7 +2411,7 @@ class Plugin(indigo.PluginBase):
                         indigomodewished = listHvacModes[modewished]
                         # 0 = off, 1- heat, 2 cool, 3 auto
                         if self.debug5:
-                            self.logger.debug("CurrentMode: {}, and wised Mode:{} and indigo Mode: {} ".format(currentMode, modewished, indigomodewished))
+                            self.logger.debug("CurrentMode: {}, and wished Mode:{} and indigo Mode: {} ".format(currentMode, modewished, indigomodewished))
                         if currentMode == indigo.kHvacMode.Off and modewished in (1, 2, 3):
                             indigo.thermostat.setHvacMode(accessoryself.indigodeviceid, value=indigomodewished)
                             newMode = indigomodewished
@@ -2449,9 +2461,9 @@ class Plugin(indigo.PluginBase):
                                 indigo.thermostat.setCoolSetpoint(accessoryself.indigodeviceid, value=target_temp)
                             elif currentMode == indigo.kHvacMode.Heat:
                                 if self.debug5:
-                                    self.logger.debug("Mode kHvac Cool setting HeatSetPoint to {}".format(target_temp))
+                                    self.logger.debug("Mode kHvac Heat setting HeatSetPoint to {}".format(target_temp))
                                 indigo.thermostat.setHeatSetpoint(accessoryself.indigodeviceid, value=target_temp)
-                        if currentMode == indigo.kHvacMode.HeatCool:
+                        if newMode == indigo.kHvacMode.HeatCool:
                             if "CoolingThresholdTemperature" in valuetoSet:
                                 cooltarget = valuetoSet["CoolingThresholdTemperature"]
                                 if unit:  ## if F select will need to convert
@@ -2464,7 +2476,7 @@ class Plugin(indigo.PluginBase):
                                 if unit:  ## if F select will need to convert
                                     heattarget = HKutils.celsius_to_fahrenheit(heattarget)
                                 if self.debug5:
-                                    self.logger.debug("Mode kHvac Auto, using HeatingThreshold Temp and setting HeatPoint to {}".format(cooltarget))
+                                    self.logger.debug("Mode kHvac Auto, using HeatingThreshold Temp and setting HeatPoint to {}".format(heattarget))
                                 indigo.thermostat.setHeatSetpoint(accessoryself.indigodeviceid, value=heattarget)
 
             elif statetoReturn == "lockState":
@@ -2488,7 +2500,7 @@ class Plugin(indigo.PluginBase):
                         elif isinstance(valuetoSet, int):
                             if valuetoSet == 1:
                                 if self.debug5:
-                                    self.logger.debug("Settter.  Lockstate: Int Device already Locked. But Given Lock will send command.")
+                                    self.logger.debug("Setter.  Lockstate: Int Device already Locked. But Given Lock will send command.")
                                 indigo.device.turnOn(accessoryself.indigodeviceid)
                                 accessoryself.char_target_state.set_value(1)  #
                                 #accessoryself.char_current_state.set_value(1)
@@ -2511,7 +2523,7 @@ class Plugin(indigo.PluginBase):
                                     accessoryself.char_target_state.set_value(0)
                             else:
                                 if self.debug5:
-                                    self.logger.debug(f"No LockTargetState found skipping.  vaLuetoSet: {valuetoSet}")
+                                    self.logger.debug(f"No LockTargetState found skipping.  valuetoSet: {valuetoSet}")
                         elif isinstance(valuetoSet, int):
                             ## 1 or 0 just set
                             if valuetoSet == 1:
@@ -2693,42 +2705,46 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Found a Hue state try using that (also using Sat)..")
                     if "Hue" in valuetoSet:
                         huetoSet = valuetoSet["Hue"]
-                        ## seems that if Hue always Saturdation.... not if 100%
+                        ## seems that if Hue always Saturation.... not if 100%
                         if "Saturation" in valuetoSet:
                             saturationtoSet = valuetoSet["Saturation"]
                         else:
                             saturationtoSet = 100
-                    rgbReturned = colorsys.hsv_to_rgb(huetoSet / 360.0, saturationtoSet / 100.0, 1)
-                    #  rgbReturned = colorsys.hls_to_rgb(huetoSet/360,1, saturationtoSet/100)
-                    if self.debug5:
-                        self.logger.debug("Returned RGB data: {}".format(rgbReturned))
-                        self.logger.debug("RGB:{}".format(rgbReturned))
-                    if len(rgbReturned) >= 2:
-                        if indigodevice.pluginId == "com.nathansheldon.indigoplugin.HueLights":
-                            ## Change approach as don't like impact elsewhere.  Select for Hue ssues
-                            ## When Hue plugin changes Hue of lights - sets Brightness to maximal value or RG or B
-                            ## see here: https://forums.indigodomo.com/viewtopic.php?t=24035&p=196064
-                            ## Hence everytime HomeKit requests a Hue change alone - brightness becomes annoyingly 100%
-                            if "Brightness" in valuetoSet:
-                                deviceBrightness = int(valuetoSet["Brightness"])
-                            else:
-                                #deviceBrightness = indigodevice.states["brightnessLevel"]
-                                deviceBrightness = accessoryself.HomeKitBrightnessLevel
-                            indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100 )
-                            if self.debug5:
-                                self.logger.debug("HueDeviceFound: Set Color Levels of Device to R:{}  G:{}  B:{}.   Current Device Brightness:{} ".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, deviceBrightness))
-                            if isinstance(deviceBrightness, int):
-                                indigo.dimmer.setBrightness(accessoryself.indigodeviceid, deviceBrightness)
+                    if "Hue" not in valuetoSet:
+                        if self.debug5:
+                            self.logger.debug("Hue setter called without a Hue value, skipping colour change.")
+                    else:
+                        rgbReturned = colorsys.hsv_to_rgb(huetoSet / 360.0, saturationtoSet / 100.0, 1)
+                        #  rgbReturned = colorsys.hls_to_rgb(huetoSet/360,1, saturationtoSet/100)
+                        if self.debug5:
+                            self.logger.debug("Returned RGB data: {}".format(rgbReturned))
+                            self.logger.debug("RGB:{}".format(rgbReturned))
+                        if len(rgbReturned) >= 2:
+                            if indigodevice.pluginId == "com.nathansheldon.indigoplugin.HueLights":
+                                ## Change approach as don't like impact elsewhere.  Select for Hue ssues
+                                ## When Hue plugin changes Hue of lights - sets Brightness to maximal value or RG or B
+                                ## see here: https://forums.indigodomo.com/viewtopic.php?t=24035&p=196064
+                                ## Hence everytime HomeKit requests a Hue change alone - brightness becomes annoyingly 100%
+                                if "Brightness" in valuetoSet:
+                                    deviceBrightness = int(valuetoSet["Brightness"])
+                                else:
+                                    #deviceBrightness = indigodevice.states["brightnessLevel"]
+                                    deviceBrightness = accessoryself.HomeKitBrightnessLevel
+                                indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100 )
                                 if self.debug5:
-                                    self.logger.debug("HueDeviceFound: Additional Brightness Setting. Set Brightness Seperately to  Brightness:{} ".format( deviceBrightness))
-                            else:  # do same in case of Hue Error/no Brightness given
+                                    self.logger.debug("HueDeviceFound: Set Color Levels of Device to R:{}  G:{}  B:{}.   Current Device Brightness:{} ".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100, deviceBrightness))
+                                if isinstance(deviceBrightness, int):
+                                    indigo.dimmer.setBrightness(accessoryself.indigodeviceid, deviceBrightness)
+                                    if self.debug5:
+                                        self.logger.debug("HueDeviceFound: Additional Brightness Setting. Set Brightness Separately to Brightness:{} ".format( deviceBrightness))
+                                else:  # do same in case of Hue Error/no Brightness given
+                                    indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
+                                    if self.debug5:
+                                        self.logger.debug("HueDeviceFound: Missing Details, Basic. Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
+                            else:
                                 indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
                                 if self.debug5:
-                                    self.logger.debug("HueDeviceFound: Missing Details, Basic. Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
-                        else:
-                            indigo.dimmer.setColorLevels(accessoryself.indigodeviceid, rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100)
-                            if self.debug5:
-                                self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
+                                    self.logger.debug("Set Color Levels of Device to R:{}  G:{}  B:{}".format(rgbReturned[0] * 100, rgbReturned[1] * 100, rgbReturned[2] * 100))
 
             elif statetoReturn == "ColorTemperature":  ## state and value named the same here..
                 if self.debug5:
@@ -3030,7 +3046,7 @@ class Plugin(indigo.PluginBase):
                             return 0
 
         except:
-            self.logger.exception("Plugin Setter Exception")
+            self.logger.exception("Plugin Getter Exception")
 
 
         ## aim of this routine is to be run once with creation of the HomeKit Bridge
@@ -3040,7 +3056,7 @@ class Plugin(indigo.PluginBase):
     def Plugin_addCallbacktoDeviceList(self, accessoryself):
         try:
             if self.debug4:
-                self.logger.debug("Inital at Start: Setting up Accessory {}".format(accessoryself.indigodeviceid))
+                self.logger.debug("Initial at Start: Setting up Accessory {}".format(accessoryself.indigodeviceid))
 
             check = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == accessoryself.indigodeviceid), None)
             # check=  next((item for item in self.device_list_internalif item["deviceid"] == ), False)
@@ -3121,13 +3137,13 @@ class Plugin(indigo.PluginBase):
         try:
             self.camera_passive_time = int(valuesDict.get("cameraupdate", 30))
         except ValueError:
-            self.logger.info("Please set Camera Refresh time to a number/integer. Defaulting to 60 minutes")
+            self.logger.info("Please set Passive Camera Update time to a number/integer. Defaulting to 60 minutes")
             self.camera_passive_time = 60
             valuesDict['cameraupdate'] = 60
         try:
             self.camera_passive_width = int(valuesDict.get("cameraupdate_width", 1280))
         except ValueError:
-            self.logger.info("Please set Camera Update Width time to a number/integer. Defaulting to 1280 pixels")
+            self.logger.info("Please set Camera Update Width to a number/integer. Defaulting to 1280 pixels")
             self.camera_passive_width = 1280
             valuesDict['cameraupdate_width'] = 1280
         try:
@@ -3207,7 +3223,7 @@ class Plugin(indigo.PluginBase):
             indigo.server.log(u'Set Logging to INFO')
             self.indigo_log_handler.setLevel(self.logLevel)
 
-        self.pluginPrefs[u"logLevel"] = self.logLevel
+        self.pluginPrefs["showDebugLevel"] = str(self.logLevel)  ## same key startup and closedPrefsConfigUi read
         return
         ## Triggers
 
@@ -3346,42 +3362,6 @@ class Plugin(indigo.PluginBase):
             self.logger.exception("Caught Exception DoorBell ")
 
     ########################################
-    def runSystem(self, values_dict, type_id="", dev_id=None):
-        # self.logger.info("{}".format(values_dict))
-        self.logger.info("Attempting to unquarantine Plugin files...")
-        self.logger.info("Command to run (copy into terminal) if fails\n{}".format("sudo xattr -rd com.apple.quarantine '" + indigo.server.getInstallFolderPath() + "/" + "Plugins'"))
-        locationofshfile = indigo.server.getInstallFolderPath() + "/" + "Plugins/HomeKitLink-Siri.indigoPlugin/Contents/Server Plugin/quarantine.sh"
-
-    #        # locationofshfile = locationofshfile.replace(' ', '\ ')
-    #         applescript1 = ('set ffmpeg to "\\\"/Library/Application Support/Perceptive Automation/Indigo 2022.1/Plugins/HomeKitL.indigoPlugin/Contents/Server Plugin/ffmpeg/ffmpeg\\\""')
-    #         applescript2 = ('set myscript to "sudo /usr/bin/xattr -rd com.apple.quarantine " & ffmpeg')
-    #         applescript3 = ('set myAppleScriptAsShellScript2 to "osascript -e \'do shell script \"" & myscript & "\"\'" with administrator privileges')
-    #         applescript4 = ('do shell script "echo The value: " & myAppleScriptAsShellScript2')
-    #         applescript5 = ('do shell script myAppleScriptAsShellScript2 with administrator privileges')
-    #
-    #         applescriptall = r'''
-    # set ffmpeg to "\\\"/Library/Application Support/Perceptive Automation/Indigo 2022.1/Plugins/HomeKitSpawn.indigoPlugin/Contents/Server Plugin/ffmpeg/ffmpeg\\\""
-    # set myscript to "sudo /usr/bin/xattr -rd com.apple.quarantine " & ffmpeg
-    # set myAppleScriptAsShellScript2 to "osascript -e 'do shell script \"" & myscript & "\"'"
-    # do shell script myAppleScriptAsShellScript2 with administrator privileges
-    #         '''
-    #         my_ascript_from_string = applescript.AppleScript(source=applescriptall)
-    #         reply = my_ascript_from_string.run()
-    #         self.logger.info("Reply: {}".format(reply))
-    # applescript = ('do shell script ""'+str(locationofshfile)+'"" ' 'with administrator privileges')
-
-    # exit_code = subprocess.call(['osascript', '-e', applescript1, "-e", applescript2, "-e", applescript3, "-e", applescript4, "-e",applescript5])
-    # self.logger.debug(f"{exit_code}")
-
-        path = indigo.server.getInstallFolderPath()+"/"+ "Plugins/"
-        path.replace(' ', '\ ')
-        command = ["xattr", "-rd","com.apple.quarantine",  path]
-
-        cmd1 = subprocess.Popen(['echo', str(values_dict["password" ]) ], stdout=subprocess.PIPE)
-        cmd2 = subprocess.Popen(['sudo', '-S'] + command, stdin=cmd1.stdout, stdout=subprocess.PIPE)
-        output = cmd2.stdout.read()
-        self.logger.info(output)
-
     def debug_device_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
         endpoint_list = []
         endpoint_list.append((-3, "No debug device"))
@@ -3563,7 +3543,7 @@ class Plugin(indigo.PluginBase):
                 device_list.append((-2, u"%%separator%%"))
 
             if len(assigned_device_list):
-                device_list.append((-3, "%%disabled:" + str(NametoUse) + "  on this Bridge published to HomeKit:%%"))
+                device_list.append((-3, "%%disabled:" + str(NametoUse) + " on this Bridge published to HomeKit:%%"))
                 device_list.extend(assigned_device_list)
                 device_list.append((-4, u"%%separator%%"))
 
@@ -3759,6 +3739,13 @@ class Plugin(indigo.PluginBase):
 
     #############################
 
+    def _bridge_id_matches(self, stored_id, bridge_id):
+        ## HomeKit_bridgeUniqueID may be stored as int or str depending on how it was saved
+        try:
+            return int(stored_id) == int(bridge_id)
+        except (ValueError, TypeError):
+            return False
+
     def return_deviceorAG(self, deviceorAGid):
         try:
             if (deviceorAGid in indigo.devices):
@@ -3938,7 +3925,7 @@ class Plugin(indigo.PluginBase):
                     self.logger.warn("Once you press Save the Bridge will restart for this to take effect.")
                     self.logger.warn("Please feel free to continue to add devices meanwhile.")
                 else:
-                    self.logger.warn("You have removed an HomeKit Device. ")
+                    self.logger.warn("You have removed a HomeKit Device.")
                     self.logger.warn("After pressing Save, the Bridge will restart for this to take effect.")
                     self.logger.warn("The device should disappear from HomeKit Clients in a short space of time.")
 
@@ -4037,7 +4024,7 @@ class Plugin(indigo.PluginBase):
                     continue
                 if spawnProps.get("HomeKit_publishDevice", False):
                     try:
-                        if spawnProps.get("HomeKit_bridgeUniqueID", 99) == fromBridge:
+                        if self._bridge_id_matches(spawnProps.get("HomeKit_bridgeUniqueID", 99), fromBridge):
                             device_props = dict(device.pluginProps)
                             device_props["HomeKit_bridgeUniqueID"] = toBridge
                             device_props["HomeKit_deviceSensor"] = spawnProps.get("HomeKit_deviceSensor")
@@ -4062,7 +4049,7 @@ class Plugin(indigo.PluginBase):
             for device in indigo.devices:
                 if device.pluginProps.get("HomeKit_publishDevice", False):
                     try:
-                        if device.pluginProps.get("HomeKit_bridgeUniqueID", 99) == fromBridge:
+                        if self._bridge_id_matches(device.pluginProps.get("HomeKit_bridgeUniqueID", 99), fromBridge):
                             device_props = dict(device.pluginProps)
                             device_props["HomeKit_bridgeUniqueID"] = toBridge
                             self.logger.warning("Found Device {} attached to Bridge ID {}, moving to new Bridge ID {}".format(device.name, fromBridge, toBridge))
@@ -4076,7 +4063,7 @@ class Plugin(indigo.PluginBase):
             for device in indigo.actionGroups:  ## actionGroup not Device - lazy
                 if device.pluginProps.get("HomeKit_publishDevice", False):
                     try:
-                        if device.pluginProps.get("HomeKit_bridgeUniqueID", 99) == fromBridge:
+                        if self._bridge_id_matches(device.pluginProps.get("HomeKit_bridgeUniqueID", 99), fromBridge):
                             device_props = dict(device.pluginProps)
                             device_props["HomeKit_bridgeUniqueID"] = toBridge
                             self.logger.warning("Found Device {} attached to Bridge {}, moving to new Bridge ID {}".format(device.name, fromBridge, toBridge))
@@ -4118,7 +4105,7 @@ class Plugin(indigo.PluginBase):
     def show_threads(self, *args, **kwargs):
         # Write all published devices to the event log with their friendly name
         self.logger.info(u"{0:=^165}".format(" Threads "))
-        self.logger.info('Nmber of Active Threads:' + str(threading.activeCount()))
+        self.logger.info('Number of Active Threads:' + str(threading.activeCount()))
         for thread in self.driverthread_multiple:
             self.logger.info(u"{0:=^165}".format(" Thread {} :".format(thread.name)))
 
@@ -4187,8 +4174,8 @@ class Plugin(indigo.PluginBase):
             else:
                 bridgemsg = "Bridge ID:" + str(endpoint[0])
                 self.logger.info("{0:<20} {1}".format(bridgemsg, endpoint[1]))
-        self.logger.info(u"{0:=^165}".format(" {} HomeKit Device Found".format(len(endpoint_list))))
-        self.logger.info(u"{0:=^165}".format(" Thats the end of Published Devices / Action Groups "))
+        self.logger.info(u"{0:=^165}".format(" {} HomeKit Devices Found".format(len(endpoint_list))))
+        self.logger.info(u"{0:=^165}".format(" That's the end of Published Devices / Action Groups "))
 
     #######################################
     # Menu Items
@@ -4243,7 +4230,7 @@ class Plugin(indigo.PluginBase):
         requirements_file = current_directory / "requirements.txt"
 
         self.logger.info(u"{0:=^190}".format(""))
-        self.logger.info("🔍🔍🔍 Checking Library dependencies, downloading and/or compiling in tempdirectory, without installing. 🔍🔍🔍")
+        self.logger.info("🔍🔍🔍 Checking Library dependencies, downloading and/or compiling in a temp directory, without installing. 🔍🔍🔍")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -4351,7 +4338,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info("❌ Common causes:")
             self.logger.info("❌   1. Xcode Command Line Tools are not installed (needed to compile C extensions)")
             self.logger.info("❌   2. Network issues prevented downloading packages from PyPI")
-            self.logger.info("❌   4. Insufficient disk space or file permission errors")
+            self.logger.info("❌   3. Insufficient disk space or file permission errors")
             self.logger.info("❌ Check the plugin log above for pip install error output.")
             self.logger.info("❌ You can also check for pip logs in: %s", packages_dir)
 
@@ -4469,7 +4456,7 @@ class Plugin(indigo.PluginBase):
         # for threads in self.driverthread_multiple:
         #     threads.join(timeout=5)
         #     if threads.is_alive():
-        #         self.logger.debug("{} Thread is still alive. Timeout occured. Killing.".format(threads.name))
+        #         self.logger.debug("{} Thread is still alive. Timeout occurred. Killing.".format(threads.name))
         #         self.logger.info("Restarting Plugin as thread not behaving.")
         #         self.restartPlugin()
         #
@@ -4537,6 +4524,9 @@ class Plugin(indigo.PluginBase):
             self.logger.info(u"{0:=^190}".format(""))
         for num in range(0, len(missing_id) ):
             device = self.return_deviceorAG(missing_id[num])
+            if device is None:
+                deleted_devices.append(missing_id[num])
+                continue
             device_props = dict(device.pluginProps)
             devicename = device_props.get("homekit-name", "")
             deviceType = device_props.get("HomeKit_deviceSubtype", "")
@@ -4552,7 +4542,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info(u"{0:=^190}".format(" No longer in Indigo yet registered in HomeKit "))
             self.logger.info(u"{0:=^190}".format(""))
             for num in range(0, len(deleted_devices)):
-                self.logger.warning(f"Indigo Device ID:  Deleted but still in HomeKit.  Device Id:{num}")
+                self.logger.warning(f"Indigo Device ID {deleted_devices[num]}: Deleted but still in HomeKit.")
 
         #self.logger.info(f"{missing_id}")
 
@@ -4565,7 +4555,7 @@ class Plugin(indigo.PluginBase):
         # self.ffmpeg_lastCommand = democall
         self.logger.info(u"{0:=^130}".format(" Run Ffmpeg Command "))
         self.logger.info("This will rerun the last ffmpeg video command so that output can be checked for errors and reviewed.")
-        self.logger.info("If you haven't opened a stream it will be blank.  It may freeeze and need plugin to be restarted....")
+        self.logger.info("If you haven't opened a stream it will be blank.  It may freeze and need plugin to be restarted....")
         self.logger.info("It will try for 15 seconds, any longer and something is up....")
         self.logger.info("Command List to run :")
         self.logger.info("{}".format(self.ffmpeg_lastCommand))
@@ -4678,8 +4668,17 @@ class Plugin(indigo.PluginBase):
                 elif s.get("codec_type") == "audio" and audio_stream is None:
                     audio_stream = s
 
+            # --- Frame rate (needed by GOP detection below) ---
+            v_fps = 0.0
+            if video_stream:
+                v_fps_raw = video_stream.get("r_frame_rate", "0/1")
+                try:
+                    num, den = v_fps_raw.split("/")
+                    v_fps = round(int(num) / int(den), 1) if int(den) else 0.0
+                except Exception:
+                    v_fps = 0.0
+
             # --- GOP detection (read a few seconds of frames) ---
-            # --- GOP detection ---
             gop_frames = None
             gop_seconds = None
             if video_stream:
@@ -4743,12 +4742,6 @@ class Plugin(indigo.PluginBase):
                 v_height = video_stream.get("height", 0)
                 v_profile = video_stream.get("profile", "unknown")
                 v_pix_fmt = video_stream.get("pix_fmt", "unknown")
-                v_fps_raw = video_stream.get("r_frame_rate", "0/1")
-                try:
-                    num, den = v_fps_raw.split("/")
-                    v_fps = round(int(num) / int(den), 1) if int(den) else 0.0
-                except Exception:
-                    v_fps = 0.0
 
                 v_can_copy = v_codec == "h264"
                 v_pix_ok = v_pix_fmt == "yuv420p"
@@ -4797,7 +4790,7 @@ class Plugin(indigo.PluginBase):
                     if gop_seconds is not None:
                         log("[%s]   GOP: %d frames (%.1fs between keyframes)", cam_name, gop_frames, gop_seconds)
                     else:
-                        log("[%s]   GOP: %d+ frames (only 1 keyframe in ~10s sample)", cam_name, gop_frames)
+                        log("[%s]   GOP: %d+ frames (only 1 keyframe in ~5s sample)", cam_name, gop_frames)
                     if not v_gop_ok:
                         log(
                             "[%s]   ⚠ GOP is very large (%s). HomeKit needs frequent keyframes (every 2-4s). "
@@ -4811,12 +4804,9 @@ class Plugin(indigo.PluginBase):
 
                 if v_copy_safe:
                     log( "[%s]   ✓ H.264 + yuv420p — safe for copy/passthrough.", cam_name)
-                if v_level:
-                    log(f"[%s]   Level={v_level} (HomeKit advertises best ≤4.0) ", cam_name)
-                elif v_can_copy and not v_pix_ok:
-                    log("[%s]   ⚠ H.264 but pix_fmt=%s (HomeKit expects yuv420p). Copy may cause playback issues.", cam_name, v_pix_fmt)
-                else:
+                elif not v_can_copy:
                     log("[%s]   ✗ Source is %s — must transcode.", cam_name, v_codec)
+                log(f"[%s]   Level={v_level} (HomeKit advertises best ≤4.0) ", cam_name)
                 if v_can_copy and not v_copy_safe:
                     reasons = []
                     if not v_pix_ok:
@@ -5282,7 +5272,7 @@ class Plugin(indigo.PluginBase):
             import struct
 
             self.logger.info(u"{0:=^190}".format(""))
-            self.logger.info(u"{0:=^190}".format(" Network Trouble Shooting "))
+            self.logger.info(u"{0:=^190}".format(" Network Troubleshooting "))
             self.logger.info(u"{0:=^190}".format(""))
 
             ## ── Step 1: System information ──
@@ -5533,7 +5523,7 @@ class Plugin(indigo.PluginBase):
             self.logger.info("    - Copy and paste the above output when reporting network issues.")
 
             self.logger.info(u"{0:=^190}".format(""))
-            self.logger.info(u"{0:=^190}".format(" Network Trouble Shooting Complete "))
+            self.logger.info(u"{0:=^190}".format(" Network Troubleshooting Complete "))
             self.logger.info(u"{0:=^190}".format(""))
 
         except Exception:
