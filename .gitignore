@@ -1,2 +1,9 @@
 /HomeKitLink-Siri.indigoPlugin/Contents/Packages/
 /HomeKitLink-Siri.indigoPlugin/.idea
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
