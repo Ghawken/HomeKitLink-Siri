@@ -146,28 +146,26 @@ Delete the bridge from Home app first, then reset, then restart plugin, then re-
 
 [u][size=125]New: Troubleshoot 4 — HomeKit Pairing & Security Keys[/size][/u]
 
-- New menu item [b]ℹ️ Troubleshoot 4 HomeKit Pairing & Security Keys[/b] — checks every bridge's saved and running security keys, the Home users paired with it (👑 owner / 👤 shared), connected devices and Home hubs, and failed connection attempts.
-- Clear ✅ / ⚠️ / ❌ verdict per bridge, a 🛠️ fix for each problem, and a 📖 guide explaining common HomeKit issues ("No Response", "Accessory already added", setup code incorrect, and more).
-- Detects corrupt or copied state files, pairings not being saved, Home users missing from some bridges, and devices connecting with a pairing the bridge no longer has.
-- The pairing log message no longer blames the client's OS version — it now explains the bridge and Home app are out of sync and points to Troubleshoot 4.
+- New menu item that checks each bridge's pairing and security keys, Home users and connected Home hubs.
+- Clear ✅ / ⚠️ / ❌ result per bridge, a fix for each problem, and a guide to common HomeKit issues.
+- Run it when a bridge won't add, shows "No Response", or you see pairing errors.
 
 [u][size=125]New: Show QR Code Page[/size][/u]
 
 [img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/HomeKit.png?raw=true[/img]
 
-- Redesigned pairing page: QR code, large setup code, pairing status ([b]Ready to add[/b] / [b]Already paired with a Home[/b] / [b]Bridge not running[/b]) and step-by-step instructions. Works offline.
+- QR code, setup code, pairing status and step-by-step instructions.
 
-[u][size=125]Bug Fixes (0.8.06)[/size][/u]
+[u][size=125]Bug Fixes[/size][/u]
 
-- Removed a stray [i]scipy[/i] import that could stop the plugin loading.
-- Battery level / low battery now update in HomeKit; 0% batteries get a battery service; motion sensors honour the low battery threshold. CO sensors with batteries publish correctly.
-- Thermostats: setpoint changes only update the matching Heat/Cool target; Program modes supported; Auto thresholds apply when mode and thresholds change together.
-- Security System: correct state at startup (no longer shows Armed when unknown); Paradox arm/disarm from HomeKit now works.
-- Cameras: streams no longer stall on unusual ffmpeg output; ffmpeg and audio proxy cleaned up when a stream fails or won't close; GOP / transcode analysis fixed; SecuritySpy refresh timing fixed.
-- Bridges: Move Accessories and bridge shutdown match bridge IDs reliably.
-- Fixed crashes in the Hue setter, Door / Window / Blind accessories, valves and the support menu. Toggle Debug now remembers its level.
-- Removed the hidden legacy "unQuarantine files" option (any saved system password is cleared).
-- Many typo and wording fixes in menus, dialogs and logs.
+- Plugin could fail to load (stray scipy import).
+- Battery levels now update in HomeKit.
+- Thermostat setpoints, security system startup state and Paradox arm/disarm.
+- Camera stream stability and clean-up.
+- Move Accessories, several crashes, Toggle Debug remembers its level.
+- Clearer log message when a Home app device can't connect to a bridge.
+- Removed the hidden legacy "unQuarantine files" option.
+- Typo and wording fixes.
 
 [img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
 

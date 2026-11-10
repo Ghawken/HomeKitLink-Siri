@@ -8,42 +8,23 @@ Complete version history for HomeKitLink Siri.
 
 ## 0.8.08 — 2026-11-10
 
-### 🔐 Troubleshoot 4 redesigned
-- ✅ ⚠️ ❌ status icons and a one-line summary per bridge
-- 👥 Home users listed once across all bridges (👑 owner / 👤 shared), flagging anyone missing from some bridges
-- 📡 Connected devices per IP, with Home hub detection
-- 🔍 Bridge detail expanded only when something is wrong, with a 🛠️ fix for each problem
-- 📖 Guide to common HomeKit issues at the end of the report
-
----
-
-## 0.8.07 — 2026-11-10
-
 ### 🔐 New: Troubleshoot 4 — HomeKit Pairing & Security Keys
-- Compares each bridge's saved state file with the running bridge (MAC, key pair, paired Home users)
-- Verifies the saved key pair, lists paired Home users and admin rights, live connections and failed connection attempts
-- Detects copied state files (duplicate MACs), leftover state files and an unwritable state folder
-- Pair-verify recording added to the HomeKit driver to support the report
-- The "not paired" log message no longer blames the client OS version; it points to Troubleshoot 4
+- New menu item that checks each bridge's pairing and security keys, Home users and connected Home hubs
+- Clear ✅ / ⚠️ / ❌ result per bridge, a fix for each problem, and a guide to common HomeKit issues
+- See [Plugin Menu Items](Plugin-Menu-Items) for details
 
 ### 📱 New: Show QR Code page
-- Redesigned page with banner, QR code, large setup code, pairing status and steps; works offline
-
----
-
-## 0.8.06 — 2026-11-10
+- QR code, setup code, pairing status and step-by-step instructions
 
 ### 🐛 Bug fixes
-- Removed a stray `scipy` import that could stop the plugin loading
-- Battery level / low battery now update live; 0% batteries get a battery service; motion sensors honour the low battery threshold; CO sensors with batteries publish correctly
-- Thermostats: setpoint changes only update the matching Heat/Cool target; Program modes supported; Auto thresholds use the new mode
-- Security System: correct initial state; Paradox arm/disarm sends valid commands
-- Cameras: tolerant ffmpeg log decoding; GOP / transcode analysis fixed; SecuritySpy refresh timing fixed; no double stop on shutdown; ffmpeg and audio proxy cleaned up on failed start; kill fallback on broken pipe
-- Bridges: bridge ID matching fixed in shutdown and Move Accessories
-- Fixed crashes in the Hue setter, Door / Window / Blind getters, valve error handling and the support menu
-- Toggle Debug now remembers its level
-- Removed the hidden legacy "unQuarantine files" option and clear any saved password
-- Typo and wording fixes across menus, dialogs and logs
+- Plugin could fail to load (stray `scipy` import)
+- Battery levels now update in HomeKit
+- Thermostat setpoints, security system startup state and Paradox arm/disarm
+- Camera stream stability and clean-up
+- Move Accessories, several crashes, Toggle Debug remembers its level
+- Clearer log message when a Home app device can't connect to a bridge
+- Removed the hidden legacy "unQuarantine files" option
+- Typo and wording fixes
 
 ---
 

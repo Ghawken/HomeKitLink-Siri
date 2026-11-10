@@ -122,27 +122,12 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
 ### 0.8.08 — Latest
-- **Troubleshoot 4 redesigned** for readability: ✅ ⚠️ ❌ status icons, one-line bridge summary, Home users listed once (👑 owner / 👤 shared), connected devices with Home hub detection, detail expanded only for bridges with problems, 🛠️ fix for every problem, and a 📖 guide to common HomeKit issues
-- Shared users that haven't connected are now explained as normal (they reach bridges through the Home hub)
-- Detects Home users missing from some bridges
-
-### 0.8.07
-- **New menu item: Troubleshoot 4 HomeKit Pairing & Security Keys.** Per bridge: saved vs running keys and pairings, paired Home controllers (admin, last verified, connected), live connections, recent pair-verify failures, copied/corrupt state files, with a plain-English fix
-- **Clearer log message** when a Home controller connects with a pairing the bridge doesn't recognise (no longer blames the client's OS version)
-- **Redesigned Show QR Code page:** banner, QR code, large setup code, pairing status (ready / already paired / not running) and step-by-step instructions; works offline
-
-### 0.8.06
-- **Startup:** Removed stray `scipy` import that could stop the plugin loading on systems without scipy
-- **Sensors:** Battery level / low battery now update live; CO sensors with batteries now publish correctly
-- **Thermostats:** Setpoint changes no longer overwrite the wrong target in Heat/Cool mode; Program modes supported; Auto thresholds apply when mode and thresholds change together
-- **Security System:** Correct initial state at startup (no longer shows Armed when state is unknown); Paradox arm/disarm from HomeKit now sends valid commands
-- **Cameras:** ffmpeg log decoding can no longer stall streams; GOP timing detection and transcode warnings fixed; SecuritySpy passive refresh timing fixed; streams no longer stopped twice on shutdown; ffmpeg and audio proxy cleaned up if a stream fails to start or won't close
-- **Bridges:** Move Accessories and bridge shutdown now match bridge IDs reliably
-- **Batteries:** Sensors reporting 0% now get a battery service; motion sensors honour the low battery threshold
-- **Logging:** Toggle Debug menu item now persists the chosen level
-- **Removed:** Legacy hidden "unQuarantine files" option (and any saved system password is cleared from prefs)
-- **Lights / Coverings / Valves:** Fixed crashes in Hue setter, Door/Window/Blind getters and valve error handling
-- Numerous typo and wording fixes across menus, config dialogs and logs
+- **New menu item: Troubleshoot 4 — HomeKit Pairing & Security Keys.** Checks each bridge's pairing and security keys, Home users and connected Home hubs, and explains any problem with a fix
+- **New Show QR Code page:** QR code, setup code, pairing status and steps
+- Clearer log message when a Home app device can't connect to a bridge
+- **Bug fixes:** plugin could fail to load (stray `scipy` import); battery levels now update in HomeKit; thermostat setpoints; security system startup state and Paradox arm/disarm; camera stream stability and clean-up; Move Accessories; several crashes; Toggle Debug remembers its level
+- Removed the hidden legacy "unQuarantine files" option
+- Typo and wording fixes
 
 ### 0.8.05
 - **Camera Audio:** Opus SRTP proxy — near-perfect HomeKit audio for BlueIris & SecuritySpy cameras
