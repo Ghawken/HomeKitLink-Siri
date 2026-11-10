@@ -22,7 +22,6 @@ import hashlib
 import logging
 import os
 import re
-import socket
 import sys
 import tempfile
 import time
@@ -72,9 +71,16 @@ LEADING_TRAILING_SPACE_DASH = re.compile(r"^[ -]+|[ -]+$")
 DASH_REGEX = re.compile(r"[-]+")
 
 
+# The HAP client whose write is currently being processed (used by HKSV to
+# find the session secret for HomeKit Data Stream setup).
+CURRENT_WRITE_CLIENT = None
+
+
 def _wrap_char_setter(char, value, client_addr):
     """Process an characteristic setter callback trapping and logging all exceptions."""
+    global CURRENT_WRITE_CLIENT
     try:
+        CURRENT_WRITE_CLIENT = client_addr
         result = char.client_update_value(value, client_addr)
     except Exception:  # pylint: disable=broad-except
         logger.exception(
@@ -862,17 +868,26 @@ class AccessoryDriver:
                     available = acc.available
                     char = acc.iid_manager.get_obj(iid)
 
-                if available:
+                if char is None or not hasattr(char, "get_value"):
+                    # The controller is asking for an IID this accessory no
+                    # longer has (its cached layout is out of date).
+                    logger.debug("%s: read for unknown characteristic %s", self.accessory.display_name, (aid, iid))
+                    rep[HAP_REPR_STATUS] = HAP_SERVER_STATUS.RESOURCE_DOES_NOT_EXIST
+                elif available:
                     rep[HAP_REPR_VALUE] = char.get_value()
                     rep[HAP_REPR_STATUS] = HAP_SERVER_STATUS.SUCCESS
 
 
-            except CharacteristicError:
-                logger.error(
-                    "%s: Error getting value for characteristic %s.",
-                    self.accessory.display_name,
-                    (aid, iid),
-                )
+            except CharacteristicError as err:
+                if getattr(err, "quiet", False):
+                    # Deliberate "no value yet" (e.g. HKSV selected configuration)
+                    logger.debug("%s: %s %s", self.accessory.display_name, (aid, iid), err)
+                else:
+                    logger.error(
+                        "%s: Error getting value for characteristic %s.",
+                        self.accessory.display_name,
+                        (aid, iid),
+                    )
             except Exception:  # pylint: disable=broad-except
                 logger.exception(
                     "%s: Unexpected error getting value for characteristic %s.",
@@ -951,11 +966,24 @@ class AccessoryDriver:
             else:
                 acc = self.accessory.accessories.get(aid)
 
+            if acc is None:
+                # Write for an accessory that no longer exists on this bridge
+                # (e.g. just unpublished): report it rather than raising.
+                logger.debug("%s: write for unknown aid %s", client_addr, aid)
+                had_error = True
+                for iid in new_iid_values:
+                    setter_results[aid][iid] = HAP_SERVER_STATUS.RESOURCE_DOES_NOT_EXIST
+                continue
+
             updates_by_service = {}
             char_to_iid = {}
             for iid, value in new_iid_values.items():
                 # Characteristic level setter callbacks
                 char = acc.get_characteristic(aid, iid)
+                if char is None:
+                    had_error = True
+                    setter_results[aid][iid] = HAP_SERVER_STATUS.RESOURCE_DOES_NOT_EXIST
+                    continue
 
                 set_result, set_result_value = _wrap_char_setter(char, value, client_addr)
                 if set_result != HAP_SERVER_STATUS.SUCCESS:

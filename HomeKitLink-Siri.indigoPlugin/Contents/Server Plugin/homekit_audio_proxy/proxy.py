@@ -9,7 +9,8 @@ import sys
 
 from ._worker import SRTP_OPUS_CLOCK_RATE
 
-_LOGGER = logging.getLogger(__name__)
+# Indigo: log under the plugin logger so messages reach the Indigo log
+_LOGGER = logging.getLogger("Plugin.HomeKitSpawn.AudioProxy")
 
 
 class AudioProxy:
@@ -26,6 +27,7 @@ class AudioProxy:
         srtp_key_b64: str,
         target_clock_rate: int,
         python_path: str | None = None,
+        talkback: dict | None = None,
     ) -> None:
         """Initialize the audio proxy.
 
@@ -40,6 +42,7 @@ class AudioProxy:
         self._srtp_key_b64 = srtp_key_b64
         self._target_clock_rate = target_clock_rate
         self._python_path = python_path or sys.executable
+        self._talkback = talkback
         self._process: asyncio.subprocess.Process | None = None
         self._stderr_task: asyncio.Task[None] | None = None
         self.local_port: int = 0
@@ -76,6 +79,11 @@ class AudioProxy:
         # Pass SRTP key via stdin to avoid exposing it in process args
         if self._process.stdin:
             self._process.stdin.write(self._srtp_key_b64.encode() + b"\n")
+            # Optional talkback config (Indigo two-way audio), also via stdin
+            # because it carries the Protect API key.
+            import json as _json
+            self._process.stdin.write(
+                (_json.dumps(self._talkback) if self._talkback else "").encode() + b"\n")
             await self._process.stdin.drain()
             self._process.stdin.close()
 
@@ -123,10 +131,16 @@ class AudioProxy:
             line = await stderr.readline()
             if not line:
                 return
-            _LOGGER.warning(
-                "Audio proxy: %s",
-                line.decode(errors="replace").rstrip(),
-            )
+            text = line.decode(errors="replace").rstrip()
+            level, _, msg = text.partition(" ")
+            if level == "INFO":
+                _LOGGER.info("%s", msg)
+            elif level == "DEBUG":
+                _LOGGER.debug("%s", msg)
+            elif level == "WARNING":
+                _LOGGER.warning("%s", msg)
+            else:
+                _LOGGER.warning("Audio proxy: %s", text)
 
     async def async_stop(self) -> None:
         """Stop the proxy subprocess and wait for port release."""

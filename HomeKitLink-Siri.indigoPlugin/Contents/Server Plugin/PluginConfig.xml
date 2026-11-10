@@ -103,6 +103,37 @@
            tooltip="Enter batterylowLevel" defaultValue="20"  alwaysUseInDialogHeightCalc="true">
         <Label>Battery Percentage Low:</Label>
     </Field>
+    <Field id="sepCamerasHW" type="separator" alwaysUseInDialogHeightCalc="true" />
+    <Field id="labelCamerasHW" type="label" alignText="right" alwaysUseInDialogHeightCalc="true">
+        <Label>Cameras:</Label>
+    </Field>
+    <Field id="useHardwareEncoding" type="checkbox" defaultValue="false" alwaysUseInDialogHeightCalc="true">
+        <Label/>
+        <Description>Use Apple hardware video encoding (UniFi cameras and HomeKit Secure Video)</Description>
+    </Field>
+    <Field id="labelHW" type="label" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Uses the Mac's VideoToolbox encoder instead of software. Much lower CPU use, especially with several HKSV cameras. Applies to new streams; the HKSV prebuffer restarts with the bridge.</Label>
+    </Field>
+    <Field id="hksvDoorbellExtends" type="checkbox" defaultValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label/>
+        <Description>Doorbell presses keep HomeKit Secure Video recordings going</Description>
+    </Field>
+    <Field id="labelDoorbellExtends" type="label" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+        <Label>A recording continues for 30 seconds after a press even if no motion is detected (e.g. a visitor standing still).</Label>
+    </Field>
+    <Field id="talkEchoSuppress" type="checkbox" defaultValue="true" alwaysUseInDialogHeightCalc="true">
+        <Label/>
+        <Description>Reduce echo on two-way talk</Description>
+    </Field>
+    <Field id="labelEcho" type="label" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+        <Label>While you're speaking, the doorbell's own audio is muted so you don't hear yourself back (like a walkie-talkie). The visitor's reply comes through as soon as you stop.</Label>
+    </Field>
+    <Field id="customFfmpegPath" type="textfield" defaultValue="" alwaysUseInDialogHeightCalc="true">
+        <Label>Custom ffmpeg path:</Label>
+    </Field>
+    <Field id="labelCustomFfmpeg" type="label" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+        <Label>Optional. Leave blank to use the bundled ffmpeg (6.x). Point at a newer build (e.g. /opt/homebrew/bin/ffmpeg) to use it for all cameras; it's checked on save and the bundled one is used if it won't run.</Label>
+    </Field>
     <Field id="sepaeesre244" type="separator"  alwaysUseInDialogHeightCalc="true" />
     <Field id="cameratime"
            type="textfield"

@@ -15,11 +15,21 @@ if len(sys.argv) != 4:
 
 # SRTP key is passed via stdin to avoid exposing it in process args
 _srtp_key = sys.stdin.readline().strip()
+# Optional second line: JSON talkback config (Indigo two-way audio)
+_talkback = None
+_line = sys.stdin.readline().strip()
+if _line:
+    import json
+    try:
+        _talkback = json.loads(_line)
+    except ValueError:
+        _talkback = None
 sys.exit(
     run_proxy(
         dest_addr=sys.argv[1],
         dest_port=int(sys.argv[2]),
         srtp_key_b64=_srtp_key,
         target_clock_rate=int(sys.argv[3]),
+        talkback=_talkback,
     )
 )

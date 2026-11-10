@@ -17,6 +17,7 @@
 				    <Option value="sensor">Indigo Sensor Devices</Option>
 				    <Option value="BI_camera">Blue Iris Camera</Option>
 				 	<Option value="SS_camera">Security Spy Camera</Option>
+				 	<Option value="UP_camera">UniFi Protect Camera</Option>
                 </List>
 				  <CallbackMethod>menuChanged</CallbackMethod>
 			</Field>
@@ -84,11 +85,17 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If a sim
 			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor" alwaysUseInDialogHeightCalc="true">
 				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
-			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camera motion." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camera motion." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiCamera">
 				<Label/>
 				<Description>Motion Sensor Enabled</Description>
 			</Field>
-			<Field id="motionEnabledlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera" alwaysUseInDialogHeightCalc="true">
+			<Field id="motionName" type="textfield" defaultValue="" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiCamera">
+				<Label>Motion sensor name:</Label>
+			</Field>
+			<Field id="motionNameLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiCamera">
+				<Label>Leave blank to use "&lt;HomeKit name&gt; Motion", e.g. "Lounge Camera Motion".</Label>
+			</Field>
+			<Field id="motionEnabledlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiCamera" alwaysUseInDialogHeightCalc="true">
 				<Label>Enabled = use camera motion reports to trigger in HomeKit.
 Uncheck no motion sensor except through Action Group trigger.</Label>
 			</Field>
@@ -96,14 +103,57 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 				<Label/>
 				<Description>Enable to Invert Controls</Description>
 			</Field>
-			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will enable audio." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" >
+			<Field id="audioSelector" defaultValue="true" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will enable audio." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera,UniFiCamera" >
 				<Label/>
 				<Description>Support Audio</Description>
 			</Field>
-			<Field id="savelabelAudio" type="label" fontColor="orange" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" alwaysUseInDialogHeightCalc="true">
-				<Label>Audio: This may break the playback of Stream.</Label>
+			<Field id="savelabelAudio" type="label" fontColor="orange" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera,UniFiCamera" alwaysUseInDialogHeightCalc="true">
+				<Label>If stream doesn't work disable audio support</Label>
 			</Field>
 
+			<Field id="unifiQuality" type="menu" defaultValue="high" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera">
+				<Label>Stream quality:</Label>
+				<List>
+					<Option value="high">High (recommended)</Option>
+					<Option value="medium">Medium</Option>
+					<Option value="low">Low</Option>
+				</List>
+			</Field>
+			<Field id="unifiTransport" type="menu" defaultValue="rtsp" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera">
+				<Label>Connect using:</Label>
+				<List>
+					<Option value="rtsp">RTSP, port 7447 (recommended)</Option>
+					<Option value="rtsps">RTSPS, port 7441</Option>
+				</List>
+			</Field>
+			<Field id="unifiMaxSize" type="menu" defaultValue="0" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera">
+				<Label>Largest size offered:</Label>
+				<List>
+					<Option value="0">Automatic</Option>
+					<Option value="1920">Up to 1920</Option>
+					<Option value="1280">Up to 1280</Option>
+					<Option value="1024">Up to 1024</Option>
+					<Option value="640">Up to 640</Option>
+				</List>
+			</Field>
+			<Field id="unifiHKSV" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera,SecuritySpyCamera">
+				<Label/>
+				<Description>HomeKit Secure Video</Description>
+			</Field>
+			<Field id="biHKSV" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera">
+				<Label/>
+				<Description>HomeKit Secure Video (experimental)</Description>
+			</Field>
+			<Field id="hksvLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera,SecuritySpyCamera,BlueIrisCamera">
+				<Label>HomeKit Secure Video is switched on automatically once the Home app has added the camera. Needs the motion sensor enabled.</Label>
+			</Field>
+			<Field id="unifiDoorbell" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera">
+				<Label/>
+				<Description>Treat as a doorbell</Description>
+			</Field>
+			<Field id="unifiLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiCamera">
+				<Label>Uses the RTSP URL states from the UniFi plugin (run its Enable RTSP Streaming action first). Cameras whose model contains "Doorbell" become doorbells automatically. Restart the bridge after changing these.</Label>
+			</Field>
 			<Field id="doorbellId" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
 				<Label>DoorBell Linked:</Label>
 				<List class="self" method="doorbell_list_generator" dynamicReload="true" />
@@ -129,6 +179,13 @@ If incorrect, hopefully won't break bridge and update with this selector.   For 
 				</Label>
 			</Field>
 
+			<Field id="newIdentity" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+				<Label/>
+				<Description>Give this device a new HomeKit identity when saved</Description>
+			</Field>
+			<Field id="newIdentityLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+				<Label>Use if HomeKit won't let go of a stale accessory. The Home app sees it as brand new: room, name and automations need setting again.</Label>
+			</Field>
 			<Field id="save" type="button"  alignWithControl="true" fontSize="large" fontColor="red" enabledBindingId="isDeviceSelected">
 				<Label>Click Here to Save: </Label>
 				<Title>**        Save Device      **</Title>

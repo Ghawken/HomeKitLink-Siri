@@ -2,29 +2,12 @@
 
 import logging
 
-from pyhap.accessory import Accessory, Bridge
-from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import * # (CATEGORY_FAN,
                         # CATEGORY_LIGHTBULB,
                        #  CATEGORY_GARAGE_DOOR_OPENER,
                        #  CATEGORY_SENSOR)
-from pyhap.const import (
-    CATEGORY_CAMERA,
-    CATEGORY_TARGET_CONTROLLER,
-    CATEGORY_TELEVISION,
-    HAP_REPR_VALUE,
-    STANDALONE_AID,
-)
-from pyhap.const import (
-    CATEGORY_FAUCET,
-    CATEGORY_OUTLET,
-    CATEGORY_SHOWER_HEAD,
-    CATEGORY_SPRINKLER,
-    CATEGORY_SWITCH,
-)
 
 from HKConstants import *
-import HKutils
 
 from HomeKitDevices import HomeAccessory
 

@@ -62,7 +62,8 @@
    },
    "CameraRTPStreamManagement": {
       "OptionalCharacteristics": [
-         "Name"
+         "Name",
+         "Active"
       ],
       "RequiredCharacteristics": [
          "SupportedVideoStreamConfiguration",
@@ -362,7 +363,8 @@
          "StatusFault",
          "StatusTampered",
          "StatusLowBattery",
-         "Name"
+         "Name",
+         "ConfiguredName"
       ],
       "RequiredCharacteristics": [
          "MotionDetected"
@@ -585,5 +587,37 @@
          "NFCAccessSupportedConfiguration"
       ],
       "UUID": "00000266-0000-1000-8000-0026BB765291"
+   },
+   "CameraOperatingMode": {
+      "OptionalCharacteristics": [
+         "PeriodicSnapshotsActive"
+      ],
+      "RequiredCharacteristics": [
+         "EventSnapshotsActive",
+         "HomeKitCameraActive"
+      ],
+      "UUID": "0000021A-0000-1000-8000-0026BB765291"
+   },
+   "CameraRecordingManagement": {
+      "OptionalCharacteristics": [
+         "RecordingAudioActive"
+      ],
+      "RequiredCharacteristics": [
+         "Active",
+         "SelectedCameraRecordingConfiguration",
+         "SupportedAudioRecordingConfiguration",
+         "SupportedCameraRecordingConfiguration",
+         "SupportedVideoRecordingConfiguration"
+      ],
+      "UUID": "00000204-0000-1000-8000-0026BB765291"
+   },
+   "DataStreamTransportManagement": {
+      "OptionalCharacteristics": [],
+      "RequiredCharacteristics": [
+         "SetupDataStreamTransport",
+         "SupportedDataStreamTransportConfiguration",
+         "Version"
+      ],
+      "UUID": "00000129-0000-1000-8000-0026BB765291"
    }
 }

@@ -1,16 +1,15 @@
 """Class to hold all camera accessories."""
 import asyncio
+import time
 from datetime import timedelta
 import logging
+
 
 from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 from homekit_audio_proxy import AudioProxy
 from typing import Any
 from HKutils import pid_is_alive
 from HKutils import SimpleIntervalScheduler
-import time as t
-import datetime
-from typing import Callable
 
 from pyhap.camera import (
     VIDEO_CODEC_PARAM_LEVEL_TYPES,
@@ -23,19 +22,12 @@ import signal
 import sys
 from HomeKitDevices import HomeAccessory
 
-from pyhap.accessory import Accessory, Bridge
 
-from pyhap.const import CATEGORY_CAMERA
 
 from HKConstants import (
-    CHAR_MOTION_DETECTED,
-    CHAR_MUTE,
-    CHAR_PROGRAMMABLE_SWITCH_EVENT,
     CONF_AUDIO_CODEC,
     CONF_AUDIO_MAP,
     CONF_AUDIO_PACKET_SIZE,
-    CONF_LINKED_DOORBELL_SENSOR,
-    CONF_LINKED_MOTION_SENSOR,
     CONF_MAX_FPS,
     CONF_MAX_HEIGHT,
     CONF_MAX_WIDTH,
@@ -58,10 +50,6 @@ from HKConstants import (
     DEFAULT_VIDEO_MAP,
     DEFAULT_VIDEO_PACKET_SIZE,
     DEFAULT_STREAM_SOURCE,
-    SERV_DOORBELL,
-    SERV_MOTION_SENSOR,
-    SERV_SPEAKER,
-    SERV_STATELESS_PROGRAMMABLE_SWITCH,
 )
 
 
@@ -393,6 +381,19 @@ CONFIG_DEFAULTS = {
 
 
 
+
+def name_motion_service(serv_motion, display_name, config):
+    """Give a camera's motion sensor its own name: the configured name, or
+    '<HomeKit device name> Motion'. Sets Name and ConfiguredName (the Home
+    app uses ConfiguredName for service names on current iOS)."""
+    name = str(config.get("motion_name") or "").strip() or "{} Motion".format(display_name)
+    for char_name in ("Name", "ConfiguredName"):
+        try:
+            serv_motion.configure_char(char_name, value=name)
+        except Exception:
+            pass
+    return name
+
 class Camera(HomeAccessory,  PyhapCamera):
     """Generate a Camera accessory."""
    #def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):#self, *args, **kwargs):
@@ -473,8 +474,11 @@ class Camera(HomeAccessory,  PyhapCamera):
         self.linked_motion_sensor = indigodeviceid  ## indigodevice.Id for moment use indigodeviceid.. potential to change to another device later
         if config["useMotionSensor"]:
             _LOGGER.debug("useMotionSensor Enabled, setting up callbacks")
-            serv_motion = self.add_preload_service("MotionSensor")
+            serv_motion = self.add_preload_service(
+                "MotionSensor", chars=["Name", "ConfiguredName"] + (["StatusActive"] if config.get("hksv") else []))
             self.char_motion_detected = serv_motion.configure_char("MotionDetected", value=False) #), getter_callback=self.get_bulb )
+            name_motion_service(serv_motion, display_name, config)
+            self._serv_motion = serv_motion
             #oops...self.char_motion_detected.setter_callback = self._set_chars
 
         if "DoorBell_ID" in config:
@@ -483,6 +487,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             self._char_doorbell_detected_switch = None
             self.doorbellID = int(config["DoorBell_ID"] )  ## self
             serv_doorbell = self.add_preload_service("Doorbell")
+            self._serv_doorbell = serv_doorbell
 
             self._char_doorbell_detected = serv_doorbell.configure_char(
                 "ProgrammableSwitchEvent",
@@ -501,6 +506,46 @@ class Camera(HomeAccessory,  PyhapCamera):
             serv_speaker = self.add_preload_service("Speaker")
             serv_speaker.configure_char("Mute", value=0)
 
+        # HomeKit Secure Video (experimental for Blue Iris cameras)
+        self.hksv = None
+        if config.get("hksv"):
+            try:
+                import os as _os
+                from HKSV import HKSVRecording
+                config["hksv_ffmpeg"] = str(self.plugin.ffmpeg_command_line)
+                storage_dir = _os.path.join(_os.path.dirname(self.plugin.cameraimagePath), "hksv")
+                self.hksv = HKSVRecording(self, config, storage_dir,
+                                          motion_service=getattr(self, "_serv_motion", None),
+                                          doorbell="DoorBell_ID" in config,
+                                          doorbell_service=getattr(self, "_serv_doorbell", None))
+            except Exception:
+                _LOGGER.exception("[%s] Couldn't set up HomeKit Secure Video", display_name)
+
+
+    # ---- availability / HKSV helpers (Indigo additions) -----------------
+    @property
+    def available(self):
+        """False while the source camera reports itself disconnected, so the
+        Home app shows No Response instead of failing to load."""
+        return getattr(self, "_hk_available", True)
+
+    def set_available(self, value):
+        self._hk_available = bool(value)
+
+    def _note_hksv_accepted(self):
+        """HKSV two-phase add: the Home app has used this camera, so HomeKit
+        has accepted it; ask the plugin to switch HKSV on."""
+        if self.config.get("hksv_pending") and not getattr(self, "_hksv_reported", False):
+            self._hksv_reported = True
+            try:
+                self.plugin.hksv_camera_accepted(self.indigodeviceid)
+            except Exception:
+                _LOGGER.debug("hksv_camera_accepted failed", exc_info=True)
+
+    def note_doorbell_press(self):
+        hksv = getattr(self, "hksv", None)
+        if hksv is not None:
+            hksv.last_doorbell_press = time.monotonic()
 
     async def run(self):
         #if self.plugin.debug6:
@@ -1182,7 +1227,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             )
 
             session_info[FFMPEG_WATCHER].start()
-            _LOGGER.debug(f"Started Watcher for ffmpeg Stream.")
+            _LOGGER.debug("Started Watcher for ffmpeg Stream.")
 
             return await self._async_ffmpeg_watch(session_info["id"])
 
@@ -1257,10 +1302,10 @@ class Camera(HomeAccessory,  PyhapCamera):
         """Cleanup a streaming session after stopping."""
         try:
             if self.plugin.debug7:
-                _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
+                _LOGGER.debug("_async_stop_ffmpeg_watch called")
             self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
         except:
-            _LOGGER.debug(f"Exception in async stop ffmpeg stream", exc_info=True)
+            _LOGGER.debug("Exception in async stop ffmpeg stream", exc_info=True)
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
@@ -1402,7 +1447,7 @@ class Camera(HomeAccessory,  PyhapCamera):
     async def stop_stream(self, session_info: dict[str, Any]) -> None:
         """Stop the stream for the given ``session_id``."""
         if self.plugin.debug7:
-            _LOGGER.debug(f"*** stop_stream called")
+            _LOGGER.debug("*** stop_stream called")
         session_id = session_info["id"]
         if proxy := session_info.pop(AUDIO_PROXY, None):
             await proxy.async_stop()
@@ -1431,8 +1476,24 @@ class Camera(HomeAccessory,  PyhapCamera):
             except OSError:
                 _LOGGER.debug("[%s] Failed to kill stream", session_id, exc_info=True)
 
+    async def stop(self):
+        """Stop any streams when the accessory is stopped."""
+        hksv = getattr(self, "hksv", None)
+        if hksv is not None:
+            for part in (getattr(hksv, "recorder", None), getattr(hksv, "hds", None)):
+                if part is None:
+                    continue
+                try:
+                    part.stop() if hasattr(part, "stop") else part.close()
+                except Exception:
+                    pass
+        for session_info in self.sessions.values():
+            asyncio.create_task(self.stop_stream(session_info))
+        await super().stop()
+
     def get_snapshot(self, image_size):  # pylint: disable=unused-argument, no-self-use
     #async def async_get_snapshot(self, image_size):
+        self._note_hksv_accepted()
         try:
             debug_function = False
             if self.plugin.debug7:

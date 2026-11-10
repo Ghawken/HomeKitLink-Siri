@@ -5,20 +5,13 @@ import logging
 import math
 import collections
 import datetime
-from typing import Any, cast
+from typing import Any
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
 from pyhap.const import * # (CATEGORY_FAN,
                         # CATEGORY_LIGHTBULB,
                        #  CATEGORY_GARAGE_DOOR_OPENER,
                        #  CATEGORY_SENSOR)
-from pyhap.const import (
-    CATEGORY_CAMERA,
-    CATEGORY_TARGET_CONTROLLER,
-    CATEGORY_TELEVISION,
-    HAP_REPR_VALUE,
-    STANDALONE_AID,
-)
 from pyhap.const import (
     CATEGORY_FAUCET,
     CATEGORY_OUTLET,
@@ -31,14 +24,11 @@ from pyhap.iid_manager import AccessoryIIDStorage, HomeIIDManager
 from pyhap.service import Service
 from pyhap.characteristic import Characteristic
 
-import time
 
 logger = logging.getLogger("Plugin.HomeKit_Devices")
 
 from HKConstants import *
-import base36
 from pyqrcode import QRCode
-import tlv8
 import HKutils
 import base64
 #import HKDevicesCamera
@@ -50,6 +40,109 @@ CHARACTERISTIC_IID = 1
 TRANSITION_TYPE = 2
 BRIGHTNESS = 1
 COLOR_TEMPERATURE = 2
+
+# ============================================================================
+# External controller integration (Window / Door / future covering classes)
+# ----------------------------------------------------------------------------
+# Companion plugins (e.g. WindowDoorController) drive these accessories by
+# publishing well-known state names on the underlying Indigo device:
+#
+#   hkPosition         int 0..100     0 = closed, 100 = open
+#   hkTargetPosition   int 0..100     destination (optional, defaults to hkPosition)
+#   hkPositionState    str            "opening" | "closing" | "stopped"
+#                                     (also accepts "idle", "open", "closed")
+#   hkObstructed       bool           true if controller flagged a jam
+#
+# A controller plugin can read HKLINK_EXTERNAL_PROTOCOL_VERSION (an integer)
+# via the plugin's published-states or via the HomeKitLink-Siri plugin object
+# to detect which version of the contract this build of HomeKitLink-Siri
+# implements. Bump this whenever the contract changes incompatibly.
+# ============================================================================
+HKLINK_EXTERNAL_PROTOCOL_VERSION = 1
+
+EXTERNAL_STATE_KEY        = "hkPosition"
+EXTERNAL_TARGET_STATE_KEY = "hkTargetPosition"
+EXTERNAL_PSTATE_STATE_KEY = "hkPositionState"
+EXTERNAL_OBSTRUCT_KEY     = "hkObstructed"
+
+# Map controller's hkPositionState to HomeKit PositionState characteristic.
+#   0 = Decreasing (closing)
+#   1 = Increasing (opening)
+#   2 = Stopped
+# Accepts the terminal states "open"/"closed" as synonyms for stopped so a
+# controller that reports its idle state as "open"/"closed" still works.
+_EXTERNAL_POS_STATE_MAP = {
+    "opening": 1,
+    "increasing": 1,
+    "closing": 0,
+    "decreasing": 0,
+    "stopped":  2,
+    "idle":     2,
+    "open":     2,
+    "closed":   2,
+    "stop":     2,
+    "":         2,
+}
+
+
+def _coerce_position(value):
+    """Coerce a value to int 0..100. Accepts int, float, numeric string.
+    Returns None if value can't be sensibly interpreted.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        # bool is a subclass of int — guard against True/False sneaking in
+        return None
+    if isinstance(value, (int, float)):
+        return max(0, min(100, int(round(value))))
+    if isinstance(value, str):
+        s = value.strip()
+        if s == "":
+            return None
+        try:
+            return max(0, min(100, int(round(float(s)))))
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+_warned_position_states = set()
+
+
+def _coerce_position_state(value):
+    """Map an hkPositionState string to a HomeKit PositionState int (0/1/2).
+    Unknown values default to 2 (Stopped) — safer than guessing direction.
+    Each distinct unknown value is logged once as a warning.
+    """
+    if value is None:
+        return None
+    key = str(value).strip().lower()
+    if key not in _EXTERNAL_POS_STATE_MAP:
+        if key not in _warned_position_states:
+            _warned_position_states.add(key)
+            logger.warning("Unrecognised hkPositionState {!r} - treating as 'stopped'".format(value))
+        return 2
+    return _EXTERNAL_POS_STATE_MAP[key]
+
+
+def _coerce_bool(value):
+    """Lenient bool coercion: accepts bool, int, and common string forms."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key in ("true", "1", "yes", "on"):
+            return True
+        if key in ("false", "0", "no", "off", ""):
+            return False
+        return None
+    return None
+
 
 def bytes_to_base64_string(value: bytes) -> str:
    return base64.b64encode(value).decode('ASCII')
@@ -1085,7 +1178,7 @@ class Valve(HomeAccessory):
             self.plugin.Plugin_setter_callback(self, "valveState", char_values)
 
         except:
-            logger.exception(f"Exception in Set Valve")
+            logger.exception("Exception in Set Valve")
 
     def get_valve(self):
         if self.activate_only:
@@ -1174,7 +1267,7 @@ class Irrigation(HomeAccessory):
             self.plugin.Plugin_setter_callback(self, "valveState", char_values)
 
         except:
-            logger.exception(f"Exception in Set Valve")
+            logger.exception("Exception in Set Valve")
 
     def get_valve(self):
         if self.activate_only:
@@ -1262,7 +1355,7 @@ class Showerhead(HomeAccessory):
             self.plugin.Plugin_setter_callback(self, "valveState", char_values)
 
         except:
-            logger.exception(f"Exception in Set Valve")
+            logger.exception("Exception in Set Valve")
 
     def get_valve(self):
         if self.activate_only:
@@ -1354,7 +1447,7 @@ class Faucet(HomeAccessory):
             self.plugin.Plugin_setter_callback(self, "valveState", char_values)
 
         except:
-            logger.exception(f"Exception in Set Valve")
+            logger.exception("Exception in Set Valve")
 
     def get_valve(self):
         if self.activate_only:
@@ -1727,15 +1820,15 @@ class LockNew(HomeAccessory):
 
 
     def get_configuration_state(self):
-        logger.error(f"get_configuration_state")
+        logger.error("get_configuration_state")
         return 0
 
     def get_nfc_access_supported_configuration(self):
-       logger.error(f"get_nfc_access_supported_configuration")
+       logger.error("get_nfc_access_supported_configuration")
        return "AQEQAgEQ"
 
     def get_nfc_access_control_point(self):
-        logger.error(f"get_nfc_access_control_point")
+        logger.error("get_nfc_access_control_point")
         return ""
 
     def set_nfc_access_control_point(self,value):
@@ -1746,7 +1839,7 @@ class LockNew(HomeAccessory):
         logger.error(f"set_lock_control_point: {value}")
 
     def get_lock_version(self):
-        logger.error(f"get_lock_version")
+        logger.error("get_lock_version")
         return ""
 
     async def run(self):
@@ -1781,6 +1874,9 @@ class DoorDoor(HomeAccessory):
     ],
     '''
 
+    # External-controller integration: see module-level documentation near
+    # HKLINK_EXTERNAL_PROTOCOL_VERSION. Mirrors the Window class.
+
     def __init__(self, driver, plugin, indigodeviceid, display_name, aid):
         super().__init__(driver, plugin, indigodeviceid, display_name, aid)
 
@@ -1798,7 +1894,14 @@ class DoorDoor(HomeAccessory):
             logger.debug("Inverse Controls Not enabled. Inverse Selection:  {}".format(inverseSelector))
             self._inverse = False
 
-        serv_door = self.add_preload_service("Door")
+        # Does this device expose the external-controller state contract?
+        self._external_controlled = EXTERNAL_STATE_KEY in indigodevice.states
+        self._external_first_update_logged = False
+        if self._external_controlled:
+            logger.info("Door '{}': external controller detected (states include {}). HomeKitLink protocol v{}.".format(
+                display_name, EXTERNAL_STATE_KEY, HKLINK_EXTERNAL_PROTOCOL_VERSION))
+
+        serv_door = self.add_preload_service("Door", chars=["ObstructionDetected"])
 
         self.char_current_position = serv_door.configure_char(
             "CurrentPosition", value=0)  # getter_callback=self.get_state)
@@ -1809,14 +1912,81 @@ class DoorDoor(HomeAccessory):
         self.char_position_state = serv_door.configure_char(
             "PositionState", value=2
         )
+        # ObstructionDetected is an optional characteristic of both the
+        # Window and Door services. Driven by the controller's hkObstructed.
+        self.char_obstruction_detected = serv_door.configure_char(
+            "ObstructionDetected", value=False
+        )
+        self._obstructed = False
 
         # add state from start and set.
         currentstate = self.get_state()
         if currentstate is not None:
             self.char_target_position.set_value(currentstate)
             self.char_current_position.set_value(currentstate)
+            # If externally controlled, initialise PositionState/TargetPosition
+            # from the controller's current values (it may already be mid-travel).
+            if self._external_controlled:
+                try:
+                    ext_target = _coerce_position(indigodevice.states.get(EXTERNAL_TARGET_STATE_KEY))
+                    if ext_target is not None:
+                        self.char_target_position.set_value(self._apply_inverse(ext_target))
+                    ext_pstate = _coerce_position_state(indigodevice.states.get(EXTERNAL_PSTATE_STATE_KEY, "stopped"))
+                    if ext_pstate is not None:
+                        if self._inverse and ext_pstate in (0, 1):
+                            ext_pstate = 1 - ext_pstate
+                        self.char_position_state.set_value(ext_pstate)
+                    ext_obs = _coerce_bool(indigodevice.states.get(EXTERNAL_OBSTRUCT_KEY))
+                    if ext_obs is not None:
+                        self._obstructed = ext_obs
+                        self.char_obstruction_detected.set_value(ext_obs)
+                except Exception:
+                    logger.debug("Door '{}': external init read failed".format(display_name), exc_info=True)
 
         serv_door.setter_callback = self._set_chars  ## Setter for everything
+
+    def _kind_label(self):
+        return "Door" if isinstance(self, DoorDoor) else "Window"
+
+    def _apply_obstruction(self, hk_obstructed):
+        """Push hkObstructed to HomeKit's ObstructionDetected characteristic.
+        Logs once on each transition rather than on every update."""
+        if hk_obstructed is None:
+            return
+        obstructed = _coerce_bool(hk_obstructed)
+        if obstructed is None:
+            logger.warning("{} '{}': ignored unparseable hkObstructed={!r}".format(
+                self._kind_label(), self.display_name, hk_obstructed))
+            return
+        if obstructed != self._obstructed:
+            if obstructed:
+                logger.warning("{} '{}': obstruction reported by controller".format(
+                    self._kind_label(), self.display_name))
+            else:
+                logger.info("{} '{}': obstruction cleared".format(
+                    self._kind_label(), self.display_name))
+        self._obstructed = obstructed
+        self.char_obstruction_detected.set_value(obstructed)
+
+    def enable_external_control(self, states):
+        """Switch to external-controller mode if the device has started
+        publishing hkPosition since this accessory was created (e.g. the
+        controller plugin added its states after HomeKitLink started).
+        Returns True if external control is (now) active."""
+        if self._external_controlled:
+            return True
+        if EXTERNAL_STATE_KEY not in states:
+            return False
+        self._external_controlled = True
+        logger.info("{} '{}': external controller detected after startup (states include {}). HomeKitLink protocol v{}.".format(
+            self._kind_label(), self.display_name, EXTERNAL_STATE_KEY, HKLINK_EXTERNAL_PROTOCOL_VERSION))
+        return True
+
+    def _apply_inverse(self, position):
+        """Apply inverse setting to a 0-100 position."""
+        if not self._inverse:
+            return position
+        return 100 - position
 
     def is_activate(self, deviceid):
         """Check if entity is activate only."""
@@ -1833,6 +2003,16 @@ class DoorDoor(HomeAccessory):
         if self.activate_only:
             # logger.debug("Active Only switch setting to False")
             return False
+
+        ## External controller takes precedence if available
+        if self._external_controlled:
+            try:
+                indigodevice = indigo.devices[self.indigodeviceid]
+                pos = _coerce_position(indigodevice.states.get(EXTERNAL_STATE_KEY))
+                if pos is not None:
+                    return self._apply_inverse(pos)
+            except Exception:
+                logger.debug("Door get_state: external read failed", exc_info=True)
 
         ## use tuple here
         result = self.plugin.Plugin_getter_callback(self, "windowCovering")
@@ -1863,6 +2043,15 @@ class DoorDoor(HomeAccessory):
     def set_covering_state(self, brightness, onOffStatevalue):
         if self.plugin.debug6:
             logger.debug("Door: set covering state called with values {}, onOffState {}, and inverse {}".format(brightness, onOffStatevalue, self._inverse))
+
+        # If we're being driven by an external controller, ignore generic
+        # brightness/onOff updates — the controller will push hkPosition /
+        # hkPositionState / hkTargetPosition via update_external_state instead.
+        if self._external_controlled:
+            if self.plugin.debug6:
+                logger.debug("Door: external controller present — ignoring legacy set_covering_state")
+            return
+
         if brightness is not None:
             if self._inverse == False:
                 self.char_target_position.set_value(brightness)
@@ -1887,6 +2076,47 @@ class DoorDoor(HomeAccessory):
                     else:
                         self.char_target_position.set_value(100)
                         self.char_current_position.set_value(100)
+
+    def update_external_state(self, hk_position=None, hk_target_position=None, hk_position_state=None, hk_obstructed=None):
+        """Called by plugin.deviceUpdated when an external-controller-driven
+        Indigo device pushes new hkPosition / hkTargetPosition / hkPositionState
+        / hkObstructed values. Mirrors Window.update_external_state.
+        """
+        if not self._external_controlled:
+            return
+
+        if not getattr(self, "_external_first_update_logged", False):
+            logger.info(
+                "Door '{}': first external-controller update received "
+                "(protocol v{}). pos={} target={} state={} obstructed={}".format(
+                    self.display_name, HKLINK_EXTERNAL_PROTOCOL_VERSION,
+                    hk_position, hk_target_position, hk_position_state, hk_obstructed))
+            self._external_first_update_logged = True
+        elif self.plugin.debug6:
+            logger.debug("Door '{}': update_external_state pos={} target={} state={} obstructed={}".format(
+                self.display_name, hk_position, hk_target_position, hk_position_state, hk_obstructed))
+
+        pos = _coerce_position(hk_position)
+        if pos is not None:
+            self.char_current_position.set_value(self._apply_inverse(pos))
+        elif hk_position is not None:
+            logger.warning("Door '{}': ignored unparseable hkPosition={!r}".format(
+                self.display_name, hk_position))
+
+        target = _coerce_position(hk_target_position)
+        if target is not None:
+            self.char_target_position.set_value(self._apply_inverse(target))
+        elif hk_target_position is not None:
+            logger.warning("Door '{}': ignored unparseable hkTargetPosition={!r}".format(
+                self.display_name, hk_target_position))
+
+        pstate = _coerce_position_state(hk_position_state)
+        if pstate is not None:
+            if self._inverse and pstate in (0, 1):
+                pstate = 1 - pstate
+            self.char_position_state.set_value(pstate)
+
+        self._apply_obstruction(hk_obstructed)
 
     def _set_chars(self, char_values):
         """This will be called every time the value of one of the
@@ -1941,17 +2171,24 @@ class GarageDoor(HomeAccessory):
         self.char_obstruction_detected = serv_garage_door.configure_char(
             "ObstructionDetected", value=False
         )
-        # self.char_obstruction_detected = serv_garage_door.configure_char(
-        #     "ObstructionDeteced", value=False
-        # )
-        # Could be like Doorbell and Camera - obstruction sensor - except this type Sensor True/False
-        # TODO add support - will need config changes/menu
+        self._obstructed = False
 
         # add state from start and set.
         currentstate = self.get_state()
         if currentstate is not None:
-            self.char_target_state.set_value(currentstate)
+            # CurrentDoorState is 0-4, but TargetDoorState only accepts
+            # 0 (open) or 1 (closed): opening -> open, closing -> closed.
             self.char_current_state.set_value(currentstate)
+            self.char_target_state.set_value((0, 1, 0, 1, 0)[int(currentstate)])
+
+        # Controllers such as Virtual Doors & Windows publish hkObstructed.
+        # When present it is the authoritative obstruction signal.
+        try:
+            states = indigo.devices[indigodeviceid].states
+            if EXTERNAL_OBSTRUCT_KEY in states:
+                self.set_obstruction(states.get(EXTERNAL_OBSTRUCT_KEY))
+        except Exception:
+            logger.debug("GarageDoor '{}': obstruction init read failed".format(display_name), exc_info=True)
 
         serv_garage_door.setter_callback = self._set_chars  ## Setter for everything
 
@@ -1959,6 +2196,23 @@ class GarageDoor(HomeAccessory):
         """Check if entity is activate only."""
         return self.plugin.check_activateOnly(deviceid)
         # check for absence of onOffState or whether active group - probably reverse logic
+
+    def set_obstruction(self, hk_obstructed):
+        """Set ObstructionDetected from a controller's hkObstructed state.
+        Logs once per transition."""
+        obstructed = _coerce_bool(hk_obstructed)
+        if obstructed is None:
+            if hk_obstructed is not None:
+                logger.warning("GarageDoor '{}': ignored unparseable hkObstructed={!r}".format(
+                    self.display_name, hk_obstructed))
+            return
+        if obstructed != self._obstructed:
+            if obstructed:
+                logger.warning("GarageDoor '{}': obstruction reported by controller".format(self.display_name))
+            else:
+                logger.info("GarageDoor '{}': obstruction cleared".format(self.display_name))
+        self._obstructed = obstructed
+        self.char_obstruction_detected.set_value(obstructed)
 
     async def run(self):
         if self.plugin.debug6:
@@ -2142,6 +2396,11 @@ class Window(HomeAccessory):
 
     category = CATEGORY_WINDOW
 
+    # External-controller integration: see module-level documentation near
+    # HKLINK_EXTERNAL_PROTOCOL_VERSION. If the underlying Indigo device
+    # exposes hkPosition, this accessory becomes externally-controlled and
+    # the legacy brightnessLevel / onOffState fallback is bypassed.
+
     def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
         super().__init__( driver, plugin, indigodeviceid, display_name, aid)
 
@@ -2158,7 +2417,14 @@ class Window(HomeAccessory):
             logger.debug("Inverse Controls Not enabled. Inverse Selection:  {}".format(inverseSelector))
             self._inverse = False
 
-        serv_window_covering = self.add_preload_service("Window")
+        # Does this device expose the external-controller state contract?
+        self._external_controlled = EXTERNAL_STATE_KEY in indigodevice.states
+        self._external_first_update_logged = False
+        if self._external_controlled:
+            logger.info("Window '{}': external controller detected (states include {}). HomeKitLink protocol v{}.".format(
+                display_name, EXTERNAL_STATE_KEY, HKLINK_EXTERNAL_PROTOCOL_VERSION))
+
+        serv_window_covering = self.add_preload_service("Window", chars=["ObstructionDetected"])
 
         self.char_current_position = serv_window_covering.configure_char(
             "CurrentPosition", value=0 )# getter_callback=self.get_state)
@@ -2169,14 +2435,82 @@ class Window(HomeAccessory):
         self.char_position_state = serv_window_covering.configure_char(
             "PositionState", value=2
         )
+        # ObstructionDetected is an optional characteristic of both the
+        # Window and Door services. Driven by the controller's hkObstructed.
+        self.char_obstruction_detected = serv_window_covering.configure_char(
+            "ObstructionDetected", value=False
+        )
+        self._obstructed = False
 
         # add state from start and set.
         currentstate = self.get_state()
         if currentstate is not None:
             self.char_target_position.set_value(currentstate)
             self.char_current_position.set_value(currentstate)
+            # If externally controlled, also initialise PositionState and TargetPosition
+            # from the controller's reported values (the controller may already be
+            # mid-travel when we start up).
+            if self._external_controlled:
+                try:
+                    ext_target = _coerce_position(indigodevice.states.get(EXTERNAL_TARGET_STATE_KEY))
+                    if ext_target is not None:
+                        self.char_target_position.set_value(self._apply_inverse(ext_target))
+                    ext_pstate = _coerce_position_state(indigodevice.states.get(EXTERNAL_PSTATE_STATE_KEY, "stopped"))
+                    if ext_pstate is not None:
+                        if self._inverse and ext_pstate in (0, 1):
+                            ext_pstate = 1 - ext_pstate
+                        self.char_position_state.set_value(ext_pstate)
+                    ext_obs = _coerce_bool(indigodevice.states.get(EXTERNAL_OBSTRUCT_KEY))
+                    if ext_obs is not None:
+                        self._obstructed = ext_obs
+                        self.char_obstruction_detected.set_value(ext_obs)
+                except Exception:
+                    logger.debug("Window '{}': external init read failed".format(display_name), exc_info=True)
 
         serv_window_covering.setter_callback = self._set_chars  ## Setter for everything
+
+    def _kind_label(self):
+        return "Door" if isinstance(self, DoorDoor) else "Window"
+
+    def _apply_obstruction(self, hk_obstructed):
+        """Push hkObstructed to HomeKit's ObstructionDetected characteristic.
+        Logs once on each transition rather than on every update."""
+        if hk_obstructed is None:
+            return
+        obstructed = _coerce_bool(hk_obstructed)
+        if obstructed is None:
+            logger.warning("{} '{}': ignored unparseable hkObstructed={!r}".format(
+                self._kind_label(), self.display_name, hk_obstructed))
+            return
+        if obstructed != self._obstructed:
+            if obstructed:
+                logger.warning("{} '{}': obstruction reported by controller".format(
+                    self._kind_label(), self.display_name))
+            else:
+                logger.info("{} '{}': obstruction cleared".format(
+                    self._kind_label(), self.display_name))
+        self._obstructed = obstructed
+        self.char_obstruction_detected.set_value(obstructed)
+
+    def enable_external_control(self, states):
+        """Switch to external-controller mode if the device has started
+        publishing hkPosition since this accessory was created (e.g. the
+        controller plugin added its states after HomeKitLink started).
+        Returns True if external control is (now) active."""
+        if self._external_controlled:
+            return True
+        if EXTERNAL_STATE_KEY not in states:
+            return False
+        self._external_controlled = True
+        logger.info("{} '{}': external controller detected after startup (states include {}). HomeKitLink protocol v{}.".format(
+            self._kind_label(), self.display_name, EXTERNAL_STATE_KEY, HKLINK_EXTERNAL_PROTOCOL_VERSION))
+        return True
+
+    def _apply_inverse(self, position):
+        """Apply inverse setting to a 0-100 position. Used for both directions."""
+        if not self._inverse:
+            return position
+        return 100 - position
 
     def is_activate(self, deviceid):
         """Check if entity is activate only."""
@@ -2193,6 +2527,16 @@ class Window(HomeAccessory):
         if self.activate_only:
             #logger.debug("Active Only switch setting to False")
             return False
+
+        ## External controller takes precedence if available
+        if self._external_controlled:
+            try:
+                indigodevice = indigo.devices[self.indigodeviceid]
+                pos = _coerce_position(indigodevice.states.get(EXTERNAL_STATE_KEY))
+                if pos is not None:
+                    return self._apply_inverse(pos)
+            except Exception:
+                logger.debug("Window get_state: external read failed", exc_info=True)
 
         ## use tuple here
         result = self.plugin.Plugin_getter_callback(self, "windowAlone")
@@ -2223,6 +2567,17 @@ class Window(HomeAccessory):
     def set_covering_state(self, brightness, onOffStatevalue):
         if self.plugin.debug6:
             logger.debug("Window: set Window state called with values {}, onOffState {}, and inverse {}".format(brightness, onOffStatevalue, self._inverse))
+
+        # If we're being driven by an external controller, ignore generic
+        # brightness/onOff updates — the controller will push hkPosition /
+        # hkPositionState / hkTargetPosition via update_external_state instead.
+        # (This avoids the controller's mid-travel "motor on" relay flipping
+        # the slider to 100% prematurely.)
+        if self._external_controlled:
+            if self.plugin.debug6:
+                logger.debug("Window: external controller present — ignoring legacy set_covering_state")
+            return
+
         if brightness is not None:
             if self._inverse == False:
                 self.char_target_position.set_value(brightness)
@@ -2247,6 +2602,60 @@ class Window(HomeAccessory):
                     else:
                         self.char_target_position.set_value(100)
                         self.char_current_position.set_value(100)
+
+    def update_external_state(self, hk_position=None, hk_target_position=None, hk_position_state=None, hk_obstructed=None):
+        """Called by plugin.deviceUpdated when an external-controller-driven
+        Indigo device pushes new hkPosition / hkTargetPosition / hkPositionState
+        / hkObstructed values. Any subset of args may be provided.
+
+        Values are in 0..100 with 0=closed, 100=open. The inverse setting is
+        applied here so the controller plugin always speaks in physical terms.
+
+        Defensive against type sloppiness: positions as strings ("47"), floats,
+        position-state as terminal "open"/"closed", etc. Garbage is logged and
+        ignored rather than crashing.
+        """
+        if not self._external_controlled:
+            return
+
+        # First time we see an external update on this accessory, log at INFO
+        # level so the user can confirm the integration is alive during their
+        # controller-plugin testing. Subsequent updates go to debug only.
+        if not getattr(self, "_external_first_update_logged", False):
+            logger.info(
+                "Window '{}': first external-controller update received "
+                "(protocol v{}). pos={} target={} state={} obstructed={}".format(
+                    self.display_name, HKLINK_EXTERNAL_PROTOCOL_VERSION,
+                    hk_position, hk_target_position, hk_position_state, hk_obstructed))
+            self._external_first_update_logged = True
+        elif self.plugin.debug6:
+            logger.debug("Window '{}': update_external_state pos={} target={} state={} obstructed={}".format(
+                self.display_name, hk_position, hk_target_position, hk_position_state, hk_obstructed))
+
+        pos = _coerce_position(hk_position)
+        if pos is not None:
+            self.char_current_position.set_value(self._apply_inverse(pos))
+        elif hk_position is not None:
+            logger.warning("Window '{}': ignored unparseable hkPosition={!r}".format(
+                self.display_name, hk_position))
+
+        target = _coerce_position(hk_target_position)
+        if target is not None:
+            self.char_target_position.set_value(self._apply_inverse(target))
+        elif hk_target_position is not None:
+            logger.warning("Window '{}': ignored unparseable hkTargetPosition={!r}".format(
+                self.display_name, hk_target_position))
+
+        pstate = _coerce_position_state(hk_position_state)
+        if pstate is not None:
+            # When inverse is set, opening/closing semantics flip too: an
+            # "opening" controller event corresponds to the slider moving
+            # toward 0 from HomeKit's perspective, i.e. Decreasing.
+            if self._inverse and pstate in (0, 1):
+                pstate = 1 - pstate
+            self.char_position_state.set_value(pstate)
+
+        self._apply_obstruction(hk_obstructed)
 
     def _set_chars(self, char_values):
         """This will be called every time the value of one of the

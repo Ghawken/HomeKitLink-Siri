@@ -11,8 +11,9 @@ try:
 except:
     pass
 
-import preflight  # This runs the dependency checks immediately upon import
+import preflight  # noqa: F401 - This runs the dependency checks immediately upon import
 import os
+import datetime
 from os import path
 from pathlib import Path
 
@@ -26,17 +27,20 @@ import random
 import tempfile
 from glob import glob
 import ifaddr
-from ipaddress import IPv4Address, IPv6Address, ip_address
+from ipaddress import IPv4Address, IPv6Address
 from queue import Queue, Empty
 
 import logging
-from logging.handlers import TimedRotatingFileHandler
 
 import socket
 
 try:
     import requests
-except:
+    # UniFi Protect snapshots come from the console's self-signed HTTPS
+    # endpoint; don't log an InsecureRequestWarning for every one.
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except Exception:
     pass
 
 import time as t
@@ -44,20 +48,16 @@ import platform
 import sys
 
 import urllib
+import urllib.parse
 import colorsys
-import logging
 
 import xml.dom.minidom
-import random
 import shutil
 from os import listdir
 from os.path import isfile, join
-from pyhap.accessory import Accessory, Bridge
-from pyhap.accessory_driver import AccessoryDriver
 from pyhap.iid_manager import HomeIIDManager, AccessoryIIDStorage
 from zeroconf.asyncio import AsyncZeroconf, IPVersion, Zeroconf, InterfaceChoice
 
-from packaging import version
 from homekitlink_ffmpeg import get_ffmpeg_binary
 
 try:
@@ -71,11 +71,28 @@ try:
 except:
     pass
 
-from HomeKitDevices import HomeAccessory, HomeDriver, HomeBridge
+from HomeKitDevices import HomeDriver, HomeBridge
+
+# UniFi Protect cameras from Durosity's UniFi plugin
+UNIFI_PLUGIN_ID = "com.durosity.indigoplugin.unifi"
+UNIFI_CAMERA_TYPE = "protectCamera"
+# A G6 Entry / G4 Doorbell Pro's second (package) lens, as its own device
+UNIFI_PACKAGE_CAMERA_TYPE = "protectPackageCamera"
+UNIFI_CAMERA_TYPES = (UNIFI_CAMERA_TYPE, UNIFI_PACKAGE_CAMERA_TYPE)
+# Package cameras trigger on packages as well as ordinary motion
+UNIFI_PACKAGE_MOTION_STATES = ("packageDetected", "motionDetected", "personDetected")
+UNIFI_QUALITY_STATES = {"high": "rtspUrlHigh", "medium": "rtspUrlMedium", "low": "rtspUrlLow"}
+UNIFI_QUALITY_SIZES = {"high": (1920, 1080), "medium": (1280, 720), "low": (640, 360)}
+UNIFI_MOTION_STATES = ("motionDetected", "personDetected", "vehicleDetected")
+# HomeKit only understands 16:9 and 4:3 resolution families. Portrait doorbells
+# (G4 Doorbell, G6 Entry: 720x960 etc.) are advertised using the *landscape* 4:3
+# table plus their native size, as homebridge-unifi-protect does; ffmpeg then
+# scales to the requested height and keeps the portrait shape.
+UNIFI_4X3_SIZES = [(1920, 1440), (1280, 960), (1024, 768), (640, 480), (480, 360), (320, 240)]
+UNIFI_16X9_SIZES = [(1920, 1080), (1280, 720), (640, 360), (480, 270), (320, 180)]
 
 import HKSecuritySystem
 import HomeKitDevices
-import HKConstants
 import HKDevicesCamera
 import HKDevicesCameraSecuritySpy
 import HKThermostat
@@ -215,7 +232,8 @@ class Plugin(indigo.PluginBase):
         self.cameraSnapShots = threading.Thread(target=self.thread_cameraSnapShots, daemon=True)
         self.device_list = set()
         self.device_list_internal = []
-        self.device_list_internal_idonly = []
+        self.device_list_internal_idonly = set()
+        self._internal_index_cache = {}
         self.pluginStartingUp = True
         self.pluginDisplayName = pluginDisplayName
         self.pluginId = pluginId
@@ -235,7 +253,8 @@ class Plugin(indigo.PluginBase):
         self.subTypesSupported = ["HueLightBulb", "Lock", "LightBulb", "MotionSensor", "GarageDoor", "Fan", "TemperatureSensor", "Switch", "Outlet", "OccupancySensor", "ContactSensor", "CarbonDioxideSensor", "BlueIrisCamera"]
 
         self.homeKitSubTypes = {"service_Switch": [ "Switch", "Fan", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor","Door"],
-                                "service_Camera": ["BlueIrisCamera", "SecuritySpyCamera"],
+                                "service_Camera": ["BlueIrisCamera", "SecuritySpyCamera", "UniFiCamera"],
+                                "service_UniFiCamera": ["UniFiCamera"],
                                 "service_LockMechanism": ["Lock"],
                                 "service_Fanv2": ["Fan"],
                                 "service_Outlet": ["Outlet"],
@@ -250,6 +269,7 @@ class Plugin(indigo.PluginBase):
                                 "service_Lightbulb": ["LightBulb", "LightBulb_switch"], #, "LightBulb_Adaptive"],
                                 "service_WindowCovering" : ["Blind"],
                                 "service_Window" : ["Window"],
+                                "service_Door" : ["Door"],
                                 "service_Security" :["Security"]
                                 }
 
@@ -272,6 +292,7 @@ class Plugin(indigo.PluginBase):
 
 
         self.ffmpeg_command_line = get_ffmpeg_binary()
+        self._bundled_ffmpeg = self.ffmpeg_command_line
 
         self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
         self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
@@ -289,6 +310,7 @@ class Plugin(indigo.PluginBase):
         self.debug5 = self.pluginPrefs.get('debug5', False)
         self.debug6 = self.pluginPrefs.get('debug6', False)
         self.debug7 = self.pluginPrefs.get('debug7', False)
+        self._apply_module_log_levels()
         self.debug8 = self.pluginPrefs.get('debug8', False)
         self.debug9 = self.pluginPrefs.get('debug9', False)
         self.debug10 = self.pluginPrefs.get('debug10', False)
@@ -303,6 +325,18 @@ class Plugin(indigo.PluginBase):
         self.low_battery_threshold = int(self.pluginPrefs.get("batterylow",20) )
 
         self.camera_refresh_max_time = int(self.pluginPrefs.get("cameratime",30))
+        # Optional: Apple VideoToolbox hardware H.264 encoding (UniFi live view + HKSV)
+        self.use_hw_encoding = bool(self.pluginPrefs.get("useHardwareEncoding", False))
+        # Optional: a doorbell press keeps an HKSV recording going like motion
+        self.hksv_doorbell_extends = bool(self.pluginPrefs.get("hksvDoorbellExtends", True))
+        self.talk_echo_suppress = bool(self.pluginPrefs.get("talkEchoSuppress", True))
+        # Optional: use a different ffmpeg binary (e.g. a newer build)
+        _ff = str(self.pluginPrefs.get("customFfmpegPath", "") or "").strip()
+        self.custom_ffmpeg_path = _ff
+        if _ff:
+            self._apply_ffmpeg_path()
+        # Tidy leftover HKSV state files once the bridges have been running a while
+        threading.Timer(180, self._cleanup_hksv_state_files).start()
         self.camera_passive_width = int(self.pluginPrefs.get("cameraupdate_width", 720))
         self.camera_passive_time = int(self.pluginPrefs.get("cameraupdate", 30))
 
@@ -396,7 +430,7 @@ class Plugin(indigo.PluginBase):
         elif "." in HAPipaddress or ":" in HAPipaddress:
             self.HAPAdvertised_ipaddress = [HAPipaddress]
         else:
-            self.logger.warning(f"HAP Interface to use in error state, using default.  Check Plugin Config advanced settings")
+            self.logger.warning("HAP Interface to use in error state, using default.  Check Plugin Config advanced settings")
             self.HAPAdvertised_ipaddress = None
 
         self.HAPServeripaddress = None
@@ -445,6 +479,13 @@ class Plugin(indigo.PluginBase):
             self.debugLog(u"User prefs dialog cancelled.")
         if not userCancelled:
             self.logLevel = int(valuesDict.get("showDebugLevel", '5'))
+            self.use_hw_encoding = bool(valuesDict.get("useHardwareEncoding", False))
+            self.hksv_doorbell_extends = bool(valuesDict.get("hksvDoorbellExtends", True))
+            self.talk_echo_suppress = bool(valuesDict.get("talkEchoSuppress", True))
+            _ff = str(valuesDict.get("customFfmpegPath", "") or "").strip()
+            if _ff != self.custom_ffmpeg_path:
+                self.custom_ffmpeg_path = _ff
+                self._apply_ffmpeg_path()
             self.fileloglevel = int(valuesDict.get("showDebugFileLevel", '5'))
             self.debug1 = valuesDict.get('debug1', False)
             self.debug2 = valuesDict.get('debug2', False)
@@ -476,6 +517,7 @@ class Plugin(indigo.PluginBase):
                 self.debugDeviceid = -3
 
             self.indigo_log_handler.setLevel(self.logLevel)
+            self._apply_module_log_levels()
             self.plugin_file_handler.setLevel(self.fileloglevel)
 
             if self.debug10:
@@ -685,7 +727,7 @@ class Plugin(indigo.PluginBase):
                                     del self.device_list_internal[checkindex]
                                     # it should be in this below list as should match above only containing IDs
                                     if device.id in self.device_list_internal_idonly:
-                                        self.device_list_internal_idonly.remove(device.id)
+                                        self.device_list_internal_idonly.discard(device.id)
                                     if device.id in self.running_deviceids:
                                         self.running_deviceids.remove(device.id)
                     except:
@@ -906,7 +948,7 @@ class Plugin(indigo.PluginBase):
                                                           "devicemodel": devicemodel,
                                                           "devicesensor": devicesensor,
                                                           "manufacturername": manufacturerName})
-                        self.device_list_internal_idonly.append(int(item))
+                        self.device_list_internal_idonly.add(int(item))
             except:
                 self.logger.exception("Caught Exception with device_list:  Hopefully still adding other devices..")
 
@@ -924,6 +966,14 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug(f"Item :{item} exists for this bridge {bridge}")
                     indigodevice = self.return_deviceorAG(item["deviceid"])
                     deviceAID = int(str(bridgenumber) + str(item["deviceid"]))
+                    # "New HomeKit identity": a generation number changes the AID,
+                    # so HomeKit drops the old accessory and adds a fresh one.
+                    try:
+                        aid_gen = int(indigodevice.pluginProps.get("HomeKit_aidGeneration", 0) or 0)
+                    except Exception:
+                        aid_gen = 0
+                    if aid_gen > 0:
+                        deviceAID = int(str(bridgenumber) + str(aid_gen) + str(item["deviceid"]))
                     if self.debug1:
                         self.logger.debug("Adding Accessory Name: {},  ID  {} , Type: {}".format(item['devicename'], deviceAID, item['subtype']))
                     if item['subtype'] == "LightBulb":
@@ -1006,7 +1056,7 @@ class Plugin(indigo.PluginBase):
                                                        "manufacturername": "Blue Iris Linked"
                                                        }
                                                       )
-                            self.device_list_internal_idonly.append(int(device_add_id))
+                            self.device_list_internal_idonly.add(int(device_add_id))
                     elif item['subtype'] == "SecuritySpyCamera":
                         cameraoptions = self.get_CameraOptions(item["deviceid"])
                         if cameraoptions == None:
@@ -1035,7 +1085,18 @@ class Plugin(indigo.PluginBase):
                                                        "manufacturername": "Security Spy Linked"
                                                        }
                                                       )
-                            self.device_list_internal_idonly.append(int(device_add_id))
+                            self.device_list_internal_idonly.add(int(device_add_id))
+                    elif item['subtype'] == "UniFiCamera":
+                        cameraoptions = self.get_CameraOptions(item["deviceid"])
+                        if cameraoptions is None:
+                            self.logger.debug("Error in getting UniFi camera settings.  Skipping setup")
+                            continue
+                        if self.debug7:
+                            self.logger.debug("Options:\n\n{}\n".format(cameraoptions))
+                        # SecuritySpyCamera is a generic RTSP camera accessory driven by its config
+                        accessory = HKDevicesCameraSecuritySpy.SecuritySpyCamera(driver, plugin=self, indigodeviceid=item["deviceid"], display_name=item['devicename'], aid=deviceAID, config=cameraoptions)
+                        self.listofenabledcameras.append(cameraoptions)
+                        self._unifi_after_create(accessory, item["deviceid"])
                     elif item['subtype'] == "Valve":
                         accessory = HomeKitDevices.Valve(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Irrigation":
@@ -1142,7 +1203,22 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("Got request Image for this camera {} & currently {} items in que".format(cameraRequested, self.camera_snapShot_Requested_que.qsize()))
 ## Download as requested.
                     for camera in self.listofenabledcameras:
-                        if "BI_name" in camera:
+                        if "UP_deviceId" in camera:
+                            if camera["SS_name"] == cameraRequested:
+                                last = cameracheck.get(cameraRequested, 0)
+                                if t.time() - last < int(self.camera_refresh_max_time):
+                                    if self.debug7:
+                                        self.logger.debug("Skipping UniFi snapshot for {}, too soon".format(camera.get("cameraName")))
+                                    break
+                                cameracheck[cameraRequested] = t.time()
+                                path = self.cameraimagePath + '/' + camera["SS_name"] + '.jpg'
+                                try:
+                                    if not self._unifi_fetch_snapshot(session, camera, image_width, path):
+                                        self.sleep(3)
+                                except Exception:
+                                    self.logger.debug("UniFi snapshot failed for {}".format(camera.get("cameraName")), exc_info=True)
+                                break
+                        elif "BI_name" in camera:
                             # self.logger.info("cameraREquested:{}  and canName:{}".format(cameraRequested, camera["BI_name"]))
                             if camera["BI_name"] == cameraRequested:
                                 if self.debug7:
@@ -1281,7 +1357,11 @@ class Plugin(indigo.PluginBase):
                             if self.debug7:
                                 self.logger.debug(f"Updating Images for {camera}")
                             image_width = self.camera_passive_width
-                            if "BI_name" in camera:
+                            if "UP_deviceId" in camera:
+                                cameracheck[camera["SS_name"]] = t.time()
+                                path = self.cameraimagePath + '/' + camera["SS_name"] + '.jpg'
+                                self._unifi_fetch_snapshot(session, camera, image_width, path)
+                            elif "BI_name" in camera:
                                 # self.logger.info("cameraREquested:{}  and canName:{}".format(cameraRequested, camera["BI_name"]))
                                 cameraRequested = camera["BI_name"]
                                 cameracheck[cameraRequested] = t.time()
@@ -1442,6 +1522,249 @@ class Plugin(indigo.PluginBase):
             return valueStr
         except:
             self.logger.debug("Exception in ElementValuebyTagName")
+
+    ########################################
+    # UniFi Protect camera helpers
+    ########################################
+    def _unifi_stream_url(self, dev, quality, transport):
+        """Return (url, quality_used) for a UniFi Protect camera device.
+        Falls back through the other qualities if the requested one isn't
+        enabled. Protect hands out rtsps://host:7441/TOKEN?enableSrtp; by
+        default this is converted to plain rtsp://host:7447/TOKEN, which any
+        ffmpeg build can read."""
+        order = [quality] + [q for q in ("high", "medium", "low") if q != quality]
+        for q in order:
+            url = str(dev.states.get(UNIFI_QUALITY_STATES.get(q, ""), "") or "").strip()
+            if url:
+                return self._unifi_convert_url(url, transport), q
+        return "", quality
+
+    @staticmethod
+    def _unifi_convert_url(url, transport):
+        parsed = urllib.parse.urlsplit(url)
+        host = parsed.hostname or ""
+        path = parsed.path
+        if transport == "rtsps":
+            port = parsed.port or 7441
+            return "rtsps://{}:{}{}".format(host, port, path)
+        return "rtsp://{}:7447{}".format(host, path)
+
+    def _unifi_probe_size(self, url, name):
+        """Quick ffprobe of the stream's video size, (0, 0) if unknown."""
+        try:
+            from homekitlink_ffmpeg import get_ffprobe_binary
+            cmd = [get_ffprobe_binary(), "-v", "error", "-rtsp_transport", "tcp",
+                   "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                   "-of", "csv=p=0:s=x", url]
+            result = subprocess.run(cmd, capture_output=True, timeout=10, text=True)
+            w, h = result.stdout.strip().splitlines()[0].split("x")[:2]
+            return int(w), int(h)
+        except Exception:
+            self.logger.debug("{}: couldn't probe stream size".format(name), exc_info=True)
+            return 0, 0
+
+    def _unifi_after_create(self, accessory, devid):
+        """UniFi camera start-up extras: initial availability, and replaying a
+        doorbell press that happened while HomeKitLink wasn't running."""
+        try:
+            dev = indigo.devices[int(devid)]
+        except Exception:
+            return
+        if "isConnected" in dev.states and hasattr(accessory, "set_available"):
+            accessory.set_available(bool(dev.states.get("isConnected", True)))
+        if getattr(accessory, "_char_doorbell_detected", None) is None:
+            return
+        last = str(dev.states.get("lastDoorbellRing", "") or "").strip()
+        if not last:
+            return
+        try:
+            pressed = datetime.datetime.strptime(last[:19], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return
+        age = (datetime.datetime.now() - pressed).total_seconds()
+        if 0 <= age <= 90:
+            self.logger.info("{}: doorbell was pressed {:.0f}s ago while HomeKitLink was starting - "
+                             "notifying HomeKit now".format(dev.name, age))
+
+            def fire():
+                try:
+                    accessory._char_doorbell_detected.set_value(0)
+                    accessory._char_doorbell_detected_switch.set_value(0)
+                    if hasattr(accessory, "note_doorbell_press"):
+                        accessory.note_doorbell_press()
+                except Exception:
+                    self.logger.debug("doorbell catch-up failed", exc_info=True)
+            # Give HomeKit controllers time to reconnect to the bridge first
+            threading.Timer(15, fire).start()
+
+    def _cleanup_hksv_state_files(self):
+        """Remove saved HKSV state for accessories that no longer exist
+        (e.g. after a new HomeKit identity)."""
+        try:
+            if not getattr(self, "cameraimagePath", None):
+                return
+            folder = os.path.join(os.path.dirname(self.cameraimagePath), "hksv")
+            if not os.path.isdir(folder):
+                return
+            live = set()
+            for item in self.device_list_internal:
+                acc = item.get("accessory")
+                if acc is not None and getattr(acc, "aid", None):
+                    live.add("hksv-{}.json".format(acc.aid))
+            if not live:
+                return
+            for name in os.listdir(folder):
+                if name.startswith("hksv-") and name.endswith(".json") and name not in live:
+                    os.remove(os.path.join(folder, name))
+                    self.logger.debug("Removed stale HKSV state {}".format(name))
+        except Exception:
+            self.logger.debug("HKSV state cleanup failed", exc_info=True)
+
+    def _apply_module_log_levels(self):
+        """HKSV, data stream, recorder and audio proxy debug output only when
+        camera debugging (option 7) is on, whatever the Indigo log level."""
+        level = logging.DEBUG if getattr(self, "debug7", False) else logging.INFO
+        for name in ("Plugin.HomeKitSpawn.HKSV", "Plugin.HomeKitSpawn.AudioProxy"):
+            logging.getLogger(name).setLevel(level)
+
+    def _apply_ffmpeg_path(self):
+        """Use the custom ffmpeg if set and runnable, else the bundled one."""
+        path = getattr(self, "custom_ffmpeg_path", "")
+        if path:
+            try:
+                out = subprocess.run([path, "-hide_banner", "-version"], capture_output=True, text=True, timeout=10)
+                if out.returncode == 0:
+                    self.ffmpeg_command_line = path
+                    self.logger.info("Using custom ffmpeg: {} ({})".format(path, (out.stdout.splitlines() or ["?"])[0]))
+                    return
+                self.logger.warning("Custom ffmpeg at {} didn't run; using the bundled one.".format(path))
+            except Exception as exc:
+                self.logger.warning("Custom ffmpeg at {} isn't usable ({}); using the bundled one.".format(path, exc))
+        self.ffmpeg_command_line = getattr(self, "_bundled_ffmpeg", self.ffmpeg_command_line)
+
+    def hksv_camera_accepted(self, devid):
+        """Phase 2 of adding an HKSV camera: the Home app has used it, so
+        HomeKit has accepted it. Mark HKSV ready and restart its bridge."""
+        try:
+            dev = indigo.devices[int(devid)]
+            props = dev.pluginProps
+            if not props.get("HomeKit_unifiHKSV", False) or props.get("HomeKit_hksvReady", False):
+                return
+            props["HomeKit_hksvReady"] = True
+            dev.replacePluginPropsOnServer(props)
+            bridge_id = int(props.get("HomeKit_bridgeUniqueID", 99))
+        except Exception:
+            self.logger.debug("hksv_camera_accepted failed", exc_info=True)
+            return
+        self.logger.info("{}: HomeKit has accepted the camera - HomeKit Secure Video will be switched on in 2 minutes "
+                         "(bridge restart), once the home hubs have finished adding it.".format(dev.name))
+
+        def restart():
+            # The first use is often the iPhone talking to the bridge directly,
+            # before the home hubs have finished adding the accessory. Changing
+            # its layout seconds later (as 0.8.07.32-0.8.08.02 did) can leave
+            # HomeKit with a stale copy, so give the hubs time first.
+            t.sleep(120)
+            for bdev in indigo.devices.iter("self"):
+                try:
+                    if int(bdev.pluginProps.get("bridgeUniqueID", 98)) == bridge_id:
+                        indigo.device.enable(bdev.id, False)
+                        t.sleep(2)
+                        indigo.device.enable(bdev.id, True)
+                except Exception:
+                    self.logger.debug("bridge restart failed", exc_info=True)
+        threading.Thread(target=restart, daemon=True).start()
+
+    _unifi_flags_cache = {}
+
+    def unifi_camera_has_speaker(self, dev):
+        """Ask Protect (once per camera) whether it has a speaker."""
+        cam_id = str(dev.ownerProps.get("cameraId", "") or "")
+        if not cam_id:
+            return False
+        if cam_id in self._unifi_flags_cache:
+            return self._unifi_flags_cache[cam_id]
+        info = self.unifi_talkback_info(dev.id)
+        has = False
+        if info:
+            try:
+                r = requests.get("https://{}/proxy/protect/integration/v1/cameras/{}".format(info["host"], cam_id),
+                                 headers={"X-API-KEY": info["api_key"]}, timeout=5, verify=False)
+                if r.status_code == 200:
+                    has = bool((r.json().get("featureFlags") or {}).get("hasSpeaker", False))
+            except Exception:
+                self.logger.debug("Protect speaker query failed", exc_info=True)
+        self._unifi_flags_cache[cam_id] = has
+        return has
+
+    def unifi_talkback_info(self, devid):
+        """Protect details the audio proxy needs to open a talkback session:
+        console host, Protect camera id and API key. Returns None if any is
+        missing."""
+        dev = indigo.devices[int(devid)]
+        if dev.pluginId != UNIFI_PLUGIN_ID:
+            return None
+        camera_id = str(dev.ownerProps.get("cameraId", "") or "").strip()
+        controller_id = int(dev.ownerProps.get("controllerId", 0) or 0)
+        if not camera_id or not controller_id:
+            return None
+        controller = indigo.devices[controller_id]
+        api_key = str(controller.ownerProps.get("networkApiKey", "") or "").strip()
+        host = urllib.parse.urlsplit(str(dev.states.get("snapshotUrl", "") or "")).hostname
+        if not host:
+            for key in ("host", "ipAddress", "address", "controllerHost"):
+                host = str(controller.ownerProps.get(key, "") or "").strip()
+                if host:
+                    break
+        if not (api_key and host):
+            return None
+        return {"host": host, "camera_id": camera_id, "api_key": api_key}
+
+    @staticmethod
+    def _unifi_is_doorbell(dev):
+        if dev.pluginProps.get("HomeKit_unifiDoorbell", False):
+            return True
+        model = str(dev.states.get("model", "") or "").lower()
+        return "doorbell" in model or "entry" in model
+
+    def _unifi_fetch_snapshot(self, session, camera, image_width, path):
+        """Download a snapshot for a UniFi camera via the Protect integration
+        API, using the API key from the UniFi plugin's controller device.
+        Nothing is logged by the UniFi plugin, so repeated Home app refreshes
+        don't fill the event log."""
+        dev = indigo.devices[int(camera["UP_deviceId"])]
+        if camera.get("UP_package"):
+            # Protect's snapshot API returns the main lens, so grab a frame from
+            # the package lens's own stream instead.
+            try:
+                width = max(320, min(int(image_width or 640), 1920))
+                r = subprocess.run([self.ffmpeg_command_line, "-hide_banner", "-loglevel", "error",
+                                    "-rtsp_transport", "tcp", "-i", camera.get(HKDevicesCamera.CONF_STREAM_SOURCE, ""),
+                                    "-frames:v", "1", "-vf", "scale={}:-2".format(width), "-q:v", "4",
+                                    "-y", "-f", "image2", path], capture_output=True, timeout=12)
+                return r.returncode == 0 and os.path.exists(path)
+            except Exception:
+                self.logger.debug("{}: package camera snapshot failed".format(dev.name), exc_info=True)
+                return False
+        url = str(dev.states.get("snapshotUrl", "") or "")
+        if not url:
+            if self.debug7:
+                self.logger.debug("{}: no snapshotUrl state yet".format(dev.name))
+            return False
+        controller_id = int(dev.ownerProps.get("controllerId", 0) or 0)
+        api_key = str(indigo.devices[controller_id].ownerProps.get("networkApiKey", "") or "").strip()
+        if not api_key:
+            self.logger.debug("{}: UniFi controller has no API key; can't fetch snapshot".format(dev.name))
+            return False
+        headers = {"X-API-KEY": api_key, "Authorization": "Bearer {}".format(api_key)}
+        params = {"highQuality": "true"} if int(image_width or 0) > 1280 else None
+        r = session.get(url, headers=headers, params=params, timeout=10, verify=False)
+        if r.status_code == 200 and r.content:
+            with open(path, "wb") as f:
+                f.write(r.content)
+            return True
+        self.logger.debug("{}: snapshot request returned HTTP {}".format(dev.name, r.status_code))
+        return False
 
     #
     def get_CameraOptions(self, indigodeviceid):
@@ -1624,6 +1947,111 @@ class Plugin(indigo.PluginBase):
                     ssWidth = 1280
                 config[HKDevicesCamera.CONF_STREAM_SOURCE] = "{}&width={}".format(ssURL_rtsp,  ssWidth)
 
+            elif indigo.devices[indigodeviceid].pluginId == UNIFI_PLUGIN_ID:
+                upDev = indigo.devices[indigodeviceid]
+                if upDev.deviceTypeId not in UNIFI_CAMERA_TYPES:
+                    self.logger.warning("{}: only UniFi Protect Camera devices can be HomeKit cameras.".format(upDev.name))
+                    return None
+                is_package = upDev.deviceTypeId == UNIFI_PACKAGE_CAMERA_TYPE
+                quality = upDev.pluginProps.get("HomeKit_unifiQuality", "high") or "high"
+                transport = upDev.pluginProps.get("HomeKit_unifiTransport", "rtsp") or "rtsp"
+                if is_package:
+                    # The package lens has a single stream
+                    _pkg = str(upDev.states.get("rtspUrlPackage", "") or "").strip()
+                    stream_url, used_quality = (self._unifi_convert_url(_pkg, transport) if _pkg else ""), quality
+                    config["UP_package"] = True
+                else:
+                    stream_url, used_quality = self._unifi_stream_url(upDev, quality, transport)
+                if not stream_url:
+                    self.logger.warning("{}: no RTSP stream URL yet. Run the UniFi plugin's 'Enable RTSP Streaming' action on this camera, then restart this HomeKit bridge.".format(upDev.name))
+                    return None
+                if used_quality != quality:
+                    self.logger.info("{}: {} quality stream not enabled in Protect, using {} instead.".format(upDev.name, quality, used_quality))
+                width, height = UNIFI_QUALITY_SIZES.get(used_quality, (1280, 720))
+                # Use the real stream size where we can get it. Doorbells stream
+                # in portrait (e.g. 720x960), and HomeKit must be offered portrait
+                # sizes for those, or it asks for landscape video it never gets.
+                src_w, src_h = self._unifi_probe_size(stream_url, upDev.name)
+                if src_w and src_h:
+                    width, height = src_w, src_h
+                # Build the size list the homebridge-unifi-protect way: the
+                # 4:3 or 16:9 table (portrait cameras use the 4:3 landscape
+                # table), sizes smaller than the camera by longest side, plus
+                # HomeKit's mandated 1920/1280 widths, plus the native size.
+                portrait = height > width
+                longest = max(width, height)
+                ratio_43 = max(width, height) * 3 == min(width, height) * 4
+                table = UNIFI_4X3_SIZES if (portrait or ratio_43) else UNIFI_16X9_SIZES
+                sizes = [(w, h) for (w, h) in table if max(w, h) < longest or w in (1920, 1280)]
+                # Offer the camera's own size too, unless it's bigger than HomeKit
+                # streams anyway (the G6 Entry package lens is 3264x2448).
+                if (width, height) not in sizes and max(width, height) <= 1920:
+                    sizes.append((width, height))
+                # Optional per-camera cap on the largest size offered
+                try:
+                    cap = int(upDev.pluginProps.get("HomeKit_unifiMaxSize", 0) or 0)
+                except ValueError:
+                    cap = 0
+                uncapped_sizes = list(sizes)
+                if cap > 0:
+                    capped = [(w, h) for (w, h) in sizes if max(w, h) <= cap]
+                    sizes = capped or [min(sizes, key=lambda x: x[0] * x[1])]
+                config["custom_resolutions"] = sizes
+                # HomeKit Secure Video (opt-in per camera)
+                if upDev.pluginProps.get("HomeKit_unifiHKSV", False):
+                    config["hksv"] = True
+                    # Recording ignores the live-view cap: home hubs only accept
+                    # recording offers that include 1280x720 / 1920x1080 sizes.
+                    # Recording offers use Apple's standard 16:9 sizes ONLY. HKSV was
+                    # accepted while the Utility Camera offered just standard sizes;
+                    # every offer that included a camera's native size (1024x576,
+                    # 1056x1408) made HomeKit reject the accessory. Live view still
+                    # offers native sizes, which is fine there.
+                    config["hksv_resolutions"] = [(1920, 1080), (1280, 720), (640, 360), (480, 270), (320, 180)]
+                # Always send exactly the frame size HomeKit asks for
+                config["fit_mode"] = "pad"
+                self.logger.info("{}: {} stream {}x{}, offering HomeKit up to {}".format(
+                    upDev.name, "portrait" if portrait else "landscape", width, height,
+                    "x".join(str(v) for v in max(sizes, key=lambda x: x[0] * x[1]))))
+                # Stop the generic max-size filter discarding listed entries
+                width, height = max(width, 1920), max(height, 1440)
+
+                config["support_audio"] = upDev.pluginProps.get("HomeKit_audioSelector", False)
+                config[HKDevicesCamera.CONF_VIDEO_CODEC] = "libx264"
+                config[HKDevicesCamera.CONF_AUDIO_CODEC] = "libopus"
+                config[HKDevicesCamera.CONF_MAX_HEIGHT] = height
+                config[HKDevicesCamera.CONF_MAX_WIDTH] = width
+                config[HKDevicesCamera.CONF_MAX_FPS] = 30
+                # Protect streams put audio first (0:0) and video second (0:1),
+                # so select by type rather than by index.
+                config[HKDevicesCamera.CONF_VIDEO_MAP] = "0:v:0"
+                config[HKDevicesCamera.CONF_AUDIO_MAP] = "0:a:0?"
+                config[HKDevicesCamera.CONF_STREAM_SOURCE] = stream_url
+                # A little more probing than the SecuritySpy default, so ffmpeg
+                # sees both of Protect's streams before choosing the video one.
+                config["start_commands_extra"] = "-probesize 32768 -analyzeduration 500000 "
+                config["useMotionSensor"] = True
+                config["match_homekit_request"] = True
+                # Snapshot naming and the accessory's get_snapshot both key off SS_name
+                config["SS_name"] = "unifi-{}".format(upDev.id)
+                config["UP_deviceId"] = upDev.id
+                config["cameraName"] = upDev.name
+                if not is_package and not self._unifi_is_doorbell(upDev) and self.unifi_camera_has_speaker(upDev):
+                    # Non-doorbell camera with a speaker: two-way talk too
+                    config["two_way_audio"] = True
+                    config["speaker_service"] = True
+                    if not config["support_audio"]:
+                        self.logger.info("{}: has a speaker - tick Support Audio to enable two-way talk.".format(upDev.name))
+                if not is_package and self._unifi_is_doorbell(upDev):
+                    # The doorbell lives on the camera device itself (doorbellRinging),
+                    # so the "linked" doorbell is the camera's own Indigo ID.
+                    config["DoorBell_ID"] = upDev.id
+                    # Doorbells get a HomeKit speaker; forward the Home app's
+                    # talk audio to the doorbell via a Protect talkback session.
+                    config["two_way_audio"] = True
+                    if not config["support_audio"]:
+                        self.logger.info("{}: tick Support Audio to enable two-way talk.".format(upDev.name))
+
             else:  # Yikes not a camera
                 self.logger.warning("This device ID {} with Name {} ** CANNOT ** be a camera device in HomeKit. Please remove and update. ".format(indigodeviceid, indigo.devices[indigodeviceid].name))
                 return None
@@ -1645,6 +2073,28 @@ class Plugin(indigo.PluginBase):
             except:
                 self.logger.debug("Caught Exception in defaulting Camera Snapshot at creation")
 
+            # HomeKit Secure Video for any camera type (UniFi, SecuritySpy, Blue Iris)
+            try:
+                _props = indigo.devices[indigodeviceid].pluginProps
+                # Only an explicit False means "not yet accepted". Cameras that had
+                # HKSV before the two-phase add existed have no flag: treat as ready
+                # (otherwise upgrading briefly strips HKSV from working cameras).
+                if _props.get("HomeKit_unifiHKSV", False) and _props.get("HomeKit_hksvReady", None) is False:
+                    # Phase 1: publish without HKSV until HomeKit has accepted the camera
+                    config.pop("hksv", None)
+                    config["hksv_pending"] = True
+                elif _props.get("HomeKit_unifiHKSV", False):
+                    config["hksv"] = True
+                    config.setdefault("hksv_resolutions", [(1920, 1080), (1280, 720), (640, 360), (480, 270), (320, 180)])
+                    if not config.get("useMotionSensor"):
+                        self.logger.info("{}: HomeKit Secure Video records on motion - enable the motion sensor for it to work.".format(indigo.devices[indigodeviceid].name))
+            except Exception:
+                pass
+            # Optional custom name for the camera's motion sensor
+            try:
+                config["motion_name"] = str(indigo.devices[indigodeviceid].pluginProps.get("HomeKit_motionName", "") or "").strip()
+            except Exception:
+                config["motion_name"] = ""
             self.logger.debug("Config Now\n{}\n".format(config))
             return config
 
@@ -1699,7 +2149,7 @@ class Plugin(indigo.PluginBase):
         )
 
     def _get_adapters(self):
-        self.logger.debug(f"_get_adapters to generate IP address")
+        self.logger.debug("_get_adapters to generate IP address")
         list_adapters = []
         for adapter in ifaddr.get_adapters():
             if self._ip_address_is_external(adapter):
@@ -1754,7 +2204,7 @@ class Plugin(indigo.PluginBase):
                     del self.device_list_internal[checkindex]
                     # it should be in this below list as should match above only containing IDs
                     if deleted_device.id in self.device_list_internal_idonly:
-                        self.device_list_internal_idonly.remove(deleted_device.id)
+                        self.device_list_internal_idonly.discard(deleted_device.id)
                 self.logger.error("Device: {}, just deleted, was published and has an active accessory within HomeKit currently (!)".format(deleted_device.name))
                 try:
                     bridgeID = int(deleted_device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
@@ -1782,6 +2232,17 @@ class Plugin(indigo.PluginBase):
 
     ########################################
 
+    def _internal_index(self, devid):
+        """Return the index of devid in device_list_internal, or None.
+        Uses a cache that self-validates, so it stays correct however the
+        list is appended to or deleted from elsewhere."""
+        idx = self._internal_index_cache.get(devid)
+        lst = self.device_list_internal
+        if idx is not None and idx < len(lst) and lst[idx]["deviceid"] == devid:
+            return idx
+        self._internal_index_cache = {item["deviceid"]: i for i, item in enumerate(lst)}
+        return self._internal_index_cache.get(devid)
+
     def deviceUpdated(self, original_device, updated_device):
 
         ## Below checks for device in device list and if device updated, then update its states
@@ -1800,7 +2261,7 @@ class Plugin(indigo.PluginBase):
                 return
 
             this_is_debug_device = False
-            checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == original_device.id), None)
+            checkindex = self._internal_index(original_device.id)
 
             if checkindex != None:
                 if self.debug2:
@@ -1874,7 +2335,7 @@ class Plugin(indigo.PluginBase):
                             ## Given mode change also change the current setting depending on heater cooler mode immediately
                             if updated_device.hvacMode == indigo.kHvacMode.Off:
                                 if self.debug2:
-                                    self.logger.debug(f"hvacMode == Off")
+                                    self.logger.debug("hvacMode == Off")
                                 self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
                             elif updated_device.hvacMode == indigo.kHvacMode.Heat:
                                 ## set targettemp to setpointHeat
@@ -1936,7 +2397,7 @@ class Plugin(indigo.PluginBase):
                                     # if auto - is the hvac heating or cooling currently..  Use Image selector...
                                 if updated_device.hvacMode == indigo.kHvacMode.Off:
                                     if self.debug2:
-                                        self.logger.debug(f"hvacMode == Off")
+                                        self.logger.debug("hvacMode == Off")
                                     self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
                                 elif updated_device.hvacMode == indigo.kHvacMode.Heat:
                                     ## set targettemp to setpointHeat
@@ -2163,6 +2624,11 @@ class Plugin(indigo.PluginBase):
                         return
 
                 elif str(updateddevice_subtype) == "GarageDoor":
+                    accessory = self.device_list_internal[checkindex]["accessory"]
+                    has_hk_obstructed = "hkObstructed" in updated_device.states
+                    if has_hk_obstructed and hasattr(accessory, "set_obstruction"):
+                        if updated_device.states.get("hkObstructed") != original_device.states.get("hkObstructed"):
+                            accessory.set_obstruction(updated_device.states.get("hkObstructed"))
                     for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
                         # doorState:    0 -> open, 1 -> closed, 2 -> opening, 3 -> closing, 4 -> stopped, 5 -> reversing
                         # onOffState:   0 -> open, 1 -> closed
@@ -2185,10 +2651,12 @@ class Plugin(indigo.PluginBase):
                                 targetDoorState = (0, 1, 0, 1, 0, 0)[newstate]
                                 accessory.char_target_state.set_value(targetDoorState)
 
-                                # ObstructionDetected must be 0 -> False or 1 -> True
-                                obstructionDetected = (None, 0, None, None, 1, 1)[newstate]
-                                if obstructionDetected is not None:
-                                    accessory.char_obstruction_detected.set_value(obstructionDetected)
+                                # ObstructionDetected must be 0 -> False or 1 -> True.
+                                # Devices publishing hkObstructed are handled above.
+                                if not has_hk_obstructed:
+                                    obstructionDetected = (None, 0, None, None, 1, 1)[newstate]
+                                    if obstructionDetected is not None:
+                                        accessory.char_obstruction_detected.set_value(obstructionDetected)
 
                             break
                     return
@@ -2215,6 +2683,9 @@ class Plugin(indigo.PluginBase):
                             ## Trigger doorbell if state change, rather than just On.if newstate:  ##
                             self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
                             self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
+                            _acc = self.device_list_internal[checkindex]["accessory"]
+                            if hasattr(_acc, "note_doorbell_press"):
+                                _acc.note_doorbell_press()
                     # if Doorbell nothing further to do... return regardless
                     return
 
@@ -2230,6 +2701,35 @@ class Plugin(indigo.PluginBase):
                                 self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                             self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
                             return
+
+                elif str(updateddevice_subtype) == "UniFiCamera":
+                    accessory = self.device_list_internal[checkindex]["accessory"]
+                    if accessory is None:
+                        return
+                    if updated_device.pluginProps.get("HomeKit_motionEnabled", True):
+                        _mstates = UNIFI_PACKAGE_MOTION_STATES if updated_device.deviceTypeId == UNIFI_PACKAGE_CAMERA_TYPE else UNIFI_MOTION_STATES
+                        old_motion = any(bool(original_device.states.get(k, False)) for k in _mstates)
+                        new_motion = any(bool(updated_device.states.get(k, False)) for k in _mstates)
+                        if new_motion != old_motion and getattr(accessory, "char_motion_detected", None) is not None:
+                            if self.debug2:
+                                self.logger.debug("{}: UniFi motion now {}".format(updated_device.name, new_motion))
+                            accessory.char_motion_detected.set_value(new_motion)
+                    if updated_device.states.get("doorbellRinging", False) and not original_device.states.get("doorbellRinging", False):
+                        if getattr(accessory, "_char_doorbell_detected", None) is not None:
+                            self.logger.info("{}: doorbell pressed, notifying HomeKit".format(updated_device.name))
+                            accessory._char_doorbell_detected.set_value(0)
+                            accessory._char_doorbell_detected_switch.set_value(0)
+                            if hasattr(accessory, "note_doorbell_press"):
+                                accessory.note_doorbell_press()
+                    # Camera offline in Protect -> "No Response" in the Home app
+                    if "isConnected" in updated_device.states and hasattr(accessory, "set_available"):
+                        now_conn = bool(updated_device.states.get("isConnected", True))
+                        if now_conn != bool(original_device.states.get("isConnected", True)):
+                            accessory.set_available(now_conn)
+                            self.logger.info("{}: camera {} in Protect - HomeKit will show it as {}".format(
+                                updated_device.name, "connected" if now_conn else "disconnected",
+                                "available" if now_conn else "No Response"))
+                    return
 
                 elif str(updateddevice_subtype) == "SecuritySpyCamera":
                     # if type(original_device) == indigo.RelayDevice:
@@ -2271,7 +2771,41 @@ class Plugin(indigo.PluginBase):
                                 self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(speedLevel)
 
                 elif str(updateddevice_subtype) in ("Blind", "Window", "Door"):
-                    if "brightnessLevel" in updated_device.states:
+                    # ---- External controller integration (new) ----
+                    # If the underlying Indigo device exposes hkPosition (or its
+                    # companion states), prefer them. This is the integration
+                    # contract for the WindowDoorController companion plugin
+                    # that handles travel-time animation and sensor confirmation.
+                    # Applies to Window and Door subtypes (not Blind — covers
+                    # tend to report position natively).
+                    accessory_obj = self.device_list_internal[checkindex]["accessory"]
+                    if (str(updateddevice_subtype) in ("Window", "Door")
+                            and hasattr(accessory_obj, "enable_external_control")
+                            and accessory_obj.enable_external_control(updated_device.states)):
+                        changed_pos    = (updated_device.states.get("hkPosition")
+                                          != original_device.states.get("hkPosition"))
+                        changed_target = (updated_device.states.get("hkTargetPosition")
+                                          != original_device.states.get("hkTargetPosition"))
+                        changed_pstate = (updated_device.states.get("hkPositionState")
+                                          != original_device.states.get("hkPositionState"))
+                        changed_obs    = (updated_device.states.get("hkObstructed")
+                                          != original_device.states.get("hkObstructed"))
+                        if changed_pos or changed_target or changed_pstate or changed_obs:
+                            try:
+                                accessory_obj.update_external_state(
+                                    hk_position         = updated_device.states.get("hkPosition") if changed_pos    else None,
+                                    hk_target_position  = updated_device.states.get("hkTargetPosition") if changed_target else None,
+                                    hk_position_state   = updated_device.states.get("hkPositionState") if changed_pstate else None,
+                                    hk_obstructed       = updated_device.states.get("hkObstructed") if changed_obs    else None,
+                                )
+                            except Exception as e:
+                                self.logger.warning("{}: failed to apply external-controller update to HomeKit ({}). Enable debug for details.".format(updated_device.name, e))
+                                self.logger.debug("update_external_state failed", exc_info=True)
+                            # Done — skip legacy brightness/onOff handling
+                            pass
+                        else:
+                            pass
+                    elif "brightnessLevel" in updated_device.states:
                         if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
                             brightness = updated_device.states["brightnessLevel"]
                             if self.debug2:
@@ -3008,7 +3542,7 @@ class Plugin(indigo.PluginBase):
                 if "hvacOperationModeIsOff" in indigodevice.states:
                     if indigodevice.states["hvacOperationModeIsOff"]:
                         if self.debug4:
-                            self.logger.debug(f"Getter: hvacMode == Off, returning 0")
+                            self.logger.debug("Getter: hvacMode == Off, returning 0")
                         return 0
                 if "hvacOperationModeIsAuto" in indigodevice.states:
                     if indigodevice.states["hvacOperationModeIsAuto"]:
@@ -3077,7 +3611,7 @@ class Plugin(indigo.PluginBase):
                 if check_doorbell != None:
                     ## is DoorBell and potentially other Special == linked devices
                     self.logger.debug("Found Doorbell Service {}".format(accessoryself))
-                    if accessoryself.doorbellID != None:
+                    if accessoryself.doorbellID != None and int(accessoryself.doorbellID) != int(accessoryself.indigodeviceid):
                         self.logger.debug("Found DoorBell ID in Accessory. = {} \nSearching self.device_list_internal for it..".format(accessoryself.doorbellID))
                         doorbell_ID_Found = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == int(accessoryself.doorbellID)), None)
                         if doorbell_ID_Found != None:
@@ -3311,12 +3845,14 @@ class Plugin(indigo.PluginBase):
         if self.logLevel == logging.INFO:
             self.logLevel = logging.DEBUG
             self.indigo_log_handler.setLevel(self.logLevel)
+            self._apply_module_log_levels()
 
             indigo.server.log(u'Set Logging to DEBUG')
         else:
             self.logLevel = logging.INFO
             indigo.server.log(u'Set Logging to INFO')
             self.indigo_log_handler.setLevel(self.logLevel)
+            self._apply_module_log_levels()
 
         self.pluginPrefs["showDebugLevel"] = str(self.logLevel)  ## same key startup and closedPrefsConfigUi read
         return
@@ -3379,7 +3915,7 @@ class Plugin(indigo.PluginBase):
                         deviceBridgeID = 99
                     if self.debug11:
                         self.logger.debug("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
-                    if deviceType=="BlueIrisCamera" or deviceType=="SecuritySpyCamera":
+                    if deviceType in ("BlueIrisCamera", "SecuritySpyCamera", "UniFiCamera"):
                         camera_device_list.append( (device.id, devicename))
 
             if devicetype == "camera_doorbell":
@@ -3392,6 +3928,28 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Caught Exception action device list generator", exc_info=True)
 
     ### callbacks from device selection menus
+    def action_hklinkProtocolVersion(self, action):
+        """Action callback for cross-plugin protocol version discovery.
+
+        Companion plugins (e.g. WindowDoorController) call this to verify the
+        external-controller integration version this build supports:
+
+            hk = indigo.server.getPlugin("com.GlennNZ.indigoplugin.HomeKitLink-Siri")
+            if hk.isEnabled():
+                version = hk.executeAction(
+                    "hklinkProtocolVersion",
+                    deviceId=0,
+                    waitUntilDone=True,
+                    props={}
+                )
+
+        Returns an integer version number. Currently always 1.
+        """
+        try:
+            return HomeKitDevices.HKLINK_EXTERNAL_PROTOCOL_VERSION
+        except (NameError, AttributeError):
+            return 1
+
     def action_triggerHomeKitDevice(self, action):
         try:
             if self.debug11:
@@ -3432,10 +3990,40 @@ class Plugin(indigo.PluginBase):
                     return
 
             else:
-                self.logger.info(f"Device not able to be found.  ? Not running successfully in Homekit Plugin.")
+                self.logger.info("Device not able to be found.  ? Not running successfully in Homekit Plugin.")
                 return
         except:
-            self.logger.exception(f"Caught Exception with Action Notification.")
+            self.logger.exception("Caught Exception with Action Notification.")
+
+    ########################################
+    # External-controller integration discovery
+    ########################################
+    def hklink_external_protocol_version(self):
+        """Public method for companion plugins (e.g. WindowDoorController) to
+        verify which version of the external-controller integration contract
+        this build of HomeKitLink-Siri implements.
+
+        Companion-plugin usage (from any other Indigo plugin):
+
+            hk = indigo.server.getPlugin("com.GlennNZ.indigoplugin.HomeKitLink-Siri")
+            if hk.isEnabled():
+                version = hk.executeAction("hklinkProtocolVersion", deviceId=0,
+                                           waitUntilDone=True, props={})
+            # version == 1 for this build
+
+        Or, if the plugin is loaded in-process and the object is reachable:
+            from HomeKitDevices import HKLINK_EXTERNAL_PROTOCOL_VERSION
+
+        The contract: when this returns N, the controller's device may publish
+        states named hkPosition / hkTargetPosition / hkPositionState /
+        hkObstructed and the Window/Door accessories will consume them as
+        described in HomeKitDevices.py module docstring.
+        """
+        try:
+            return HomeKitDevices.HKLINK_EXTERNAL_PROTOCOL_VERSION
+        except (NameError, AttributeError):
+            # HomeKitDevices imported under a different alias in some builds
+            return 1
 
     def doorbell_list_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
         try:
@@ -3556,6 +4144,22 @@ class Plugin(indigo.PluginBase):
                                 assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
                         else:
                             unassigned_device_list.append((device.id, device.name))
+            elif isdevorAG == "UP_camera":
+                NametoUse = "UniFi Protect Cameras"
+                for device in indigo.devices.iter(UNIFI_PLUGIN_ID):
+                    if device.deviceTypeId not in UNIFI_CAMERA_TYPES:
+                        continue
+                    if device.id in self.device_list:
+                        try:
+                            bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+                        except ValueError:
+                            bridgeassigned = 99
+                        if int(bridgeassigned) == bridgeuniqueID:
+                            assigned_device_list.append((device.id, device.name))
+                        else:
+                            assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device.name) + ":%%"))
+                    else:
+                        unassigned_device_list.append((device.id, device.name))
             elif isdevorAG == "SS_camera":
                 NametoUse = "Security Spy Cameras"
                 for device in indigo.devices:
@@ -3679,6 +4283,16 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId in ("com.boisypitre.vss","com.GlennNZ.indigoplugin.ParadoxAlarm","com.frightideas.indigoplugin.dscAlarm","com.berkinet.ad2usb", "net.papamac.indigoplugin.alarmdecoder-bridge"):
                 return "service_Security"
 
+            if dev.pluginId == "com.durosity.indigoplugin.virtualdoors":
+                if dev.deviceTypeId == "opener":
+                    return "service_GarageDoorOpener"
+                if dev.deviceTypeId == "smartWindow":
+                    return "service_Window"
+                if dev.deviceTypeId == "smartDoor":
+                    return "service_Door"
+                if dev.deviceTypeId == "lock":
+                    return "service_LockMechanism"
+
             if dev.model == "BlindsT1234":
                 return "service_WindowCovering"
             elif "Shutter" in dev.model:
@@ -3687,6 +4301,9 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == "com.fogbert.indigoplugin.fantasticwWeather":
                 if dev.deviceTypeId == 'Weather': return "service_TemperatureSensor"
                 if dev.deviceTypeId == 'Daily': return "service_HumiditySensor"
+
+            if dev.pluginId == UNIFI_PLUGIN_ID and dev.deviceTypeId in UNIFI_CAMERA_TYPES:
+                return "service_UniFiCamera"
 
             if dev.pluginId == "com.GlennNZ.indigoplugin.BlueIris" or dev.pluginId == "org.cynic.indigo.securityspy" or dev.pluginId == "com.flyingdiver.indigoplugin.securityspy":
                 return "service_Camera"
@@ -3868,8 +4485,16 @@ class Plugin(indigo.PluginBase):
             values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
             values_dict["tempSelector"] = device.pluginProps.get("HomeKit_tempSelector", False)
             values_dict["motionEnabled"] = device.pluginProps.get("HomeKit_motionEnabled", True)
+            values_dict["motionName"] = device.pluginProps.get("HomeKit_motionName", "") or ""
             values_dict["inverseSelector"] = device.pluginProps.get("HomeKit_inverseSelector",False)
-            values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", False)
+            # New cameras default to audio on
+            values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", True)
+            values_dict["unifiQuality"] = device.pluginProps.get("HomeKit_unifiQuality", "high") or "high"
+            values_dict["unifiTransport"] = device.pluginProps.get("HomeKit_unifiTransport", "rtsp") or "rtsp"
+            values_dict["unifiDoorbell"] = device.pluginProps.get("HomeKit_unifiDoorbell", False)
+            values_dict["unifiMaxSize"] = device.pluginProps.get("HomeKit_unifiMaxSize", "0") or "0"
+            values_dict["unifiHKSV"] = device.pluginProps.get("HomeKit_unifiHKSV", False)
+            values_dict["biHKSV"] = device.pluginProps.get("HomeKit_unifiHKSV", False)
 
             ## auto select correct subtype
             detecttype = self.detectHomeKitType(int(values_dict["deviceId"]))
@@ -3881,7 +4506,8 @@ class Plugin(indigo.PluginBase):
                 values_dict["deviceSubtype"] = device.pluginProps.get("HomeKit_deviceSubtype", "")
 
             alt_name = self.get_alt_name(device)
-            values_dict["altName"] = alt_name if alt_name != device.name else ""
+            # Pre-fill with the Indigo device's own name when no HomeKit name is set
+            values_dict["altName"] = alt_name or HKutils.cleanup_name_for_homekit(device.name)
 
         except KeyError:
             # No device is selected, so hide everything
@@ -3911,6 +4537,9 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("Error Saving this device.")
                 return
             device_props = dict(device.pluginProps)
+            # Remember how things were before this save (HKSV two-phase add)
+            _was_published = bool(device_props.get("HomeKit_publishDevice", False))
+            _new_identity = bool(values_dict.get("newIdentity", False))
 
             if values_dict["HomeKit_publishDevice_2"]:
                 # Note the 2 here - in the Alexa plugin this field was the same in the device and in the pluginConfig XML
@@ -3958,6 +4587,9 @@ class Plugin(indigo.PluginBase):
                         device_props["HomeKit_bridgeUniqueID"] = bridge_id
 
                 ## add motion Selector selector
+                if "motionName" in values_dict and device_props.get("HomeKit_motionName", "") != values_dict["motionName"].strip():
+                    device_props["HomeKit_motionName"] = values_dict["motionName"].strip()
+
                 if values_dict["motionEnabled"] != "":
                     motionEnabled = values_dict['motionEnabled']
                     if device_props.get("HomeKit_motionEnabled") != motionEnabled:
@@ -3977,6 +4609,30 @@ class Plugin(indigo.PluginBase):
                     audioSelector = values_dict['audioSelector']
                     if device_props.get("HomeKit_audioSelector") != audioSelector:
                         device_props["HomeKit_audioSelector"] = audioSelector
+
+                # HKSV tickbox: one field for UniFi/SecuritySpy, one (experimental) for Blue Iris
+                if values_dict.get("deviceSubtype") == "BlueIrisCamera" and "biHKSV" in values_dict:
+                    device_props["HomeKit_unifiHKSV"] = bool(values_dict["biHKSV"])
+                elif values_dict.get("deviceSubtype") == "SecuritySpyCamera" and "unifiHKSV" in values_dict:
+                    device_props["HomeKit_unifiHKSV"] = bool(values_dict["unifiHKSV"])
+
+                if values_dict.get("deviceSubtype") == "UniFiCamera":
+                    for field, prop in (("unifiQuality", "HomeKit_unifiQuality"),
+                                        ("unifiTransport", "HomeKit_unifiTransport"),
+                                        ("unifiDoorbell", "HomeKit_unifiDoorbell"),
+                                        ("unifiMaxSize", "HomeKit_unifiMaxSize"),
+                                        ("unifiHKSV", "HomeKit_unifiHKSV")):
+                        if field in values_dict and device_props.get(prop) != values_dict[field]:
+                            device_props[prop] = values_dict[field]
+
+                if values_dict.get("newIdentity", False):
+                    gen = int(device_props.get("HomeKit_aidGeneration", 0) or 0) + 1
+                    device_props["HomeKit_aidGeneration"] = gen
+                    values_dict["newIdentity"] = False
+                    publication_change = True
+                    self.logger.warning("{}: will get a new HomeKit identity when the bridge restarts. "
+                                        "HomeKit will remove the old accessory and add it as new; set its room "
+                                        "and settings again in the Home app.".format(device.name))
 
                 if not device_props.get("HomeKit_publishDevice", False): publication_change = True
                 self.device_list.add(device.id)
@@ -4000,17 +4656,39 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_motionEnabled"] = ""
                 device_props["HomeKit_inverseSelector"] = ""
                 device_props["HomeKit_audioSelector"] = ""
+                device_props["HomeKit_unifiQuality"] = ""
+                device_props["HomeKit_unifiTransport"] = ""
+                device_props["HomeKit_unifiDoorbell"] = ""
+                device_props["HomeKit_unifiMaxSize"] = ""
+                device_props["HomeKit_unifiHKSV"] = ""
+                device_props["HomeKit_hksvReady"] = False
+                device_props["HomeKit_motionName"] = ""
                 try:
-                    self.device_list.remove(device.id)  ## not good to just remove here and internal list no longer deleted.
+                    self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
                     if checkindex != None:
                         self.logger.info("Deleting item:{}".format(self.device_list_internal[checkindex]))
                         del self.device_list_internal[checkindex]
                         if device.id in self.device_list_internal_idonly:
-                            self.device_list_internal_idonly.remove(device.id)
+                            self.device_list_internal_idonly.discard(device.id)
                     self.logger.info("Given just unpublished device to HomeKit, Bridge will need to be restarted for changes to take effect")
                 except:
                     self.logger.debug("device_list remove error, Exception\n", exc_info=True)
+            # HKSV two-phase add: HomeKit rejects a camera that already has HKSV
+            # the first time it sees it, but accepts HKSV added to a camera it
+            # knows. So HKSV is only "ready" for a camera that was already
+            # published (and not given a new identity); otherwise it is switched
+            # on automatically once the Home app has used the camera.
+            if device_props.get("HomeKit_unifiHKSV", False) and device_props.get("HomeKit_publishDevice", False):
+                if not _was_published or _new_identity:
+                    if device_props.get("HomeKit_hksvReady", False) or not _was_published:
+                        self.logger.info("{}: will be added to HomeKit without HomeKit Secure Video first; HKSV switches on "
+                                         "automatically once the Home app has used the camera.".format(device.name))
+                    device_props["HomeKit_hksvReady"] = False
+                elif not device_props.get("HomeKit_hksvReady", False):
+                    device_props["HomeKit_hksvReady"] = True
+            elif not device_props.get("HomeKit_unifiHKSV", False):
+                device_props["HomeKit_hksvReady"] = False
             self.logger.debug(u"saving plugin props: \n{}".format(device_props))
             device.replacePluginPropsOnServer(indigo.Dict(device_props))
 
@@ -4586,10 +5264,6 @@ class Plugin(indigo.PluginBase):
                 self.logger.debug("{}".format(self.bridge_multiple[num].accessories))
             self.logger.info("{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in self.bridge_multiple[num].accessories.items()) + "}")
 
-    def Menu_reset_pairing(self, *args, **kwargs):
-        self.logger.debug("reset Paired Clients called...")
-        self.logger.info("{}".format())
-
     def Menu_show_runningids(self, *args, **kwargs):
         self.logger.debug("Show Running Ids called...")
         deleted_devices = []
@@ -4815,6 +5489,15 @@ class Plugin(indigo.PluginBase):
                                 if time_val is not None:
                                     keyframe_times.append(time_val)
 
+                        # Frame rate is parsed later for the main report; compute it
+                        # here too so the GOP fallback below can use it.
+                        v_fps = 0.0
+                        if video_stream:
+                            try:
+                                _num, _den = video_stream.get("r_frame_rate", "0/1").split("/")
+                                v_fps = round(int(_num) / int(_den), 1) if int(_den) else 0.0
+                            except (ValueError, ZeroDivisionError):
+                                v_fps = 0.0
                         if len(keyframe_indices) >= 2:
                             gop_frames = keyframe_indices[1] - keyframe_indices[0]
                             if len(keyframe_times) >= 2:
@@ -5526,7 +6209,7 @@ class Plugin(indigo.PluginBase):
                     discovered_services.append((name, state_change))
 
                 zc = Zeroconf(ip_version=self.select_ip_version)
-                from zeroconf import ServiceBrowser, ServiceStateChange, ServiceInfo
+                from zeroconf import ServiceBrowser, ServiceInfo
                 browser = ServiceBrowser(zc, "_hap._tcp.local.", handlers=[on_service_state_change])
                 t.sleep(5)  # allow time for service discovery
                 browser.cancel()
@@ -5740,7 +6423,7 @@ class Plugin(indigo.PluginBase):
                     filter_msg = f" for filter: {grep_filter}" if grep_filter else ""
                     self.logger.info(f"    (no matching output{filter_msg})")
             else:
-                self.logger.info(f"    (no output)")
+                self.logger.info("    (no output)")
             if stderr and stderr.strip():
                 for line in stderr.strip().splitlines():
                     self.logger.warning(f"    {line}")
