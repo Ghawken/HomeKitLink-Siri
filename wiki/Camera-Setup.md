@@ -59,6 +59,51 @@ HKLS uses **Stream 2** from Blue Iris for HomeKit. Optimal settings for zero-tra
 
 ---
 
+## Remote / Mobile Viewing — Blue Iris (v0.8.09+)
+
+At home on Wi-Fi the Home app asks for about **1280×720 at 299 kbps**. HKLS sends Stream 2 straight through at full camera resolution, which works well on a local network.
+
+Away from home (mobile data, 5G, or another Wi-Fi) the stream goes via your **Home hub** (Apple TV / HomePod), and the Home app asks for something much smaller, typically **640×360 at 132 kbps**. A Stream 2 set to *Direct-to-wire* can't do that: Blue Iris passes the camera's own stream untouched and ignores the requested size and bitrate (for example 4K at 25 Mbps, around 190× too much). The stream fails to start or stalls.
+
+So for remote requests (under 1280 wide or under 299 kbps) HKLS uses a **second Blue Iris stream** that Blue Iris re-encodes, asking for exactly the size and bitrate HomeKit wants (`&h=` and `&kbps=`). At-home viewing is unchanged.
+
+### Set up the remote stream in Blue Iris
+
+Blue Iris has three encoder profiles (Stream 0, 1, 2), all user configurable in **Settings → Web server → Advanced → Encoding**. Use one that is not Stream 2 (Stream 0 by default) and set it to:
+
+| Setting | Value | Why |
+|---|---|---|
+| **Video** | H.264 | HomeKit doesn't support H.265 |
+| **Direct-to-wire** | **Off** | Direct-to-wire can't resize or limit bitrate |
+| **Rate control** | **Target bitrate** (not quality) | Quality-based profiles ignore `&kbps=` (seen: 1–2.5 Mbps when 132k was asked for) |
+| **Frame type layout / keyframe interval** | 15–30 frames at 15 fps (a keyframe every 1–2 s) | HomeKit needs frequent keyframes to start the stream |
+| **Profile / preset** | Main, superfast, zero frame rate latency | The Blue Iris defaults, lowest delay |
+| **Resize** | Not needed | HKLS asks for the size per request |
+
+Then choose that stream in **Plugin Config → BlueIris Remote Viewing Stream** (Stream 0 default, Stream 1, or Off) and restart the plugin.
+
+### Startup check
+
+When the plugin starts, each Blue Iris camera's remote stream is tested at 360p / 132 kbps for a few seconds. The plugin only uses it if Blue Iris really resizes it and holds the bitrate:
+
+```
+[Camera] Remote viewing: ✓ BlueIris Stream 0 resizes and limits bitrate (640x360, 144k when 132k asked for).
+```
+
+If not, a warning names the setting to fix, and remote viewing for that camera stays on Stream 2:
+
+```
+[Camera] Remote viewing: BlueIris Stream 1 ignores the bitrate HomeKit asks for (1698k when 132k asked for). ...
+```
+
+When a remote stream starts you'll see:
+
+```
+[Camera] Remote / low-bandwidth request (640x360 @ 132k): using BlueIris Stream 0 (re-encoded by BlueIris)
+```
+
+---
+
 ## Camera Stream Intelligence (v0.7.25+)
 
 HKLS now includes automatic stream compatibility checking via `ffprobe`:
@@ -105,6 +150,11 @@ BI cameras default to **libopus** for audio encoding. After enabling this featur
 
 ### SecuritySpy Cameras
 SecuritySpy cameras gain the same libopus audio proxy support.
+
+### Remote viewing audio (v0.8.10+)
+Away from home the Home app asks for longer audio packets (60 ms instead of 20 ms). At 60 ms an Opus packet can be bigger than the old 188-byte audio packet size (seen: 257 bytes), which stopped ffmpeg's audio output. The video kept playing and the volume control showed, but there was no sound. HKLS now sizes audio packets to the negotiated packet time; at-home (20 ms) audio is unchanged.
+
+The audio proxy also now forwards audio **RTCP** sender reports (encrypted as SRTCP, on the same port as the audio, as HomeKit expects). Before, only the audio packets themselves were sent.
 
 ---
 
@@ -155,6 +205,9 @@ Enable **Debug 7 — Camera** in Plugin Config for verbose camera stream logging
 | High CPU usage | Stream requires transcoding | Fix BI Profile 2 settings for H.264 passthrough |
 | Camera not appearing in list | BI/SS plugin not installed or camera not configured | Install respective plugin, configure cameras |
 | Stream check shows "borderline GOP" | GOP too large | Reduce keyframe interval in BI Profile 2 |
+| Works on Wi-Fi but not on mobile data | Stream 2 is Direct-to-wire (full camera resolution / bitrate) | Set up a remote stream — see [Remote / Mobile Viewing](#remote--mobile-viewing--blue-iris-v0809) |
+| Remote video works but no sound | 60 ms audio packets too big (before v0.8.10) | Update to v0.8.10+ |
+| Startup warning "Remote viewing: … did not resize / ignores the bitrate" | Remote stream is Direct-to-wire or quality based | Change that Blue Iris stream's settings, or pick another in Plugin Config |
 
 ---
 

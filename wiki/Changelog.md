@@ -6,6 +6,21 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.10 — 2026-11-10
+
+### 📷 Blue Iris remote / mobile camera viewing
+- Away from home, cameras now use a Blue Iris stream re-encoded to the size and bitrate HomeKit asks for (e.g. 640×360 at 132 kbps), instead of the full-resolution Stream 2. At-home Wi-Fi viewing is unchanged
+- New Plugin Config option **BlueIris Remote Viewing Stream** (Stream 0 default, Stream 1, Off)
+- Each camera's remote stream is checked at startup; if Blue Iris doesn't resize it, a warning explains what to change
+- See [Camera Setup → Remote / Mobile Viewing](Camera-Setup#remote--mobile-viewing--blue-iris-v0809)
+
+### 🔊 Remote viewing audio
+- Fixed no sound away from home: the longer audio packets HomeKit asks for remotely were too big and stopped the audio
+- Audio RTCP sender reports are now sent to HomeKit (SRTCP)
+- Negotiated audio settings are now included in the camera debug log
+
+---
+
 ## 0.8.08 — 2026-11-10
 
 ### 🔐 New: Troubleshoot 4 — HomeKit Pairing & Security Keys

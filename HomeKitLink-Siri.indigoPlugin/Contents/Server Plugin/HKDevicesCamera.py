@@ -171,7 +171,7 @@ AUDIO_OUTPUT = (
     "{a_frame_duration}"
     "-payload_type 110 "
     "-ssrc {a_ssrc} -f rtp "
-    "rtp://127.0.0.1:{a_proxy_port}?pkt_size={a_pkt_size}"
+    "rtp://127.0.0.1:{a_proxy_port}?rtcpport={a_proxy_port}&pkt_size={a_pkt_size}"
 )
 
 
@@ -511,6 +511,18 @@ class Camera(HomeAccessory,  PyhapCamera):
 
 
 
+    def _audio_pkt_size(self, stream_config):
+        """RTP packet size for audio: room for one Opus frame at the negotiated packet time
+        and bitrate (x3 for VBR peaks), never below the configured size or above video's 1316."""
+        configured = int(self.config[CONF_AUDIO_PACKET_SIZE])
+        if self.config.get(CONF_AUDIO_CODEC) != "libopus":
+            return configured
+        packet_time = stream_config.get("a_packet_time", 20) or 20
+        if packet_time <= 20:  ## at home (Wi-Fi) HomeKit asks for 20ms, which fits - unchanged
+            return configured
+        bitrate = stream_config.get("a_max_bitrate", 24) or 24
+        return max(configured, min(1316, 12 + 3 * int(bitrate * packet_time / 8)))
+
     async def start_stream(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
         audio_proxy = None
@@ -574,12 +586,16 @@ class Camera(HomeAccessory,  PyhapCamera):
                         ffprobe_audio.get("channels"),
                     )
             _LOGGER.debug(
-                "[%s] HomeKit negotiated: width=%s height=%s v_max_bitrate=%s fps=%s",
+                "[%s] HomeKit negotiated: width=%s height=%s v_max_bitrate=%s fps=%s  audio: rate=%sk bitrate=%sk packet_time=%sms  to %s",
                 self.display_name,
                 stream_config.get("width"),
                 stream_config.get("height"),
                 stream_config.get("v_max_bitrate"),
                 self.config[CONF_MAX_FPS],
+                stream_config.get("a_sample_rate"),
+                stream_config.get("a_max_bitrate"),
+                stream_config.get("a_packet_time"),
+                stream_config.get("address"),
             )
             # ============================================================
             # Resolve copy vs transcode
@@ -774,7 +790,9 @@ class Camera(HomeAccessory,  PyhapCamera):
                     "v_scale": strategy["v_scale"],
                     "a_bufsize": stream_config["a_max_bitrate"] * 4,
                     "a_map": self.config[CONF_AUDIO_MAP],
-                    "a_pkt_size": self.config[CONF_AUDIO_PACKET_SIZE],
+                    # Longer Opus frames (HomeKit asks for 60ms away from home) are bigger than the
+                    # 188 default allows (seen 257 bytes), which stops ffmpeg's audio output.
+                    "a_pkt_size": self._audio_pkt_size(stream_config),
                     "a_encoder": self.config[CONF_AUDIO_CODEC],
                     "a_application": audio_application,
                     "a_frame_duration": audio_frame_duration,

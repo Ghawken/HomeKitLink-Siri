@@ -102,6 +102,7 @@ Open via **Plugins → HomeKitLink Siri → Configure…**
 | **Camera Max Refresh Time** | Maximum seconds between camera image refreshes. Default: 30s. Lower = higher CPU usage. |
 | **Passive Camera Update Image Time** | How often HKLS updates the stored image buffer when the Home app is NOT actively viewing. Prevents stale snapshots (e.g. 1 hour = image is at most 1 hour old when you reopen the app). |
 | **Image Width** | Width of the snapshot image requested from the camera. |
+| **BlueIris Remote Viewing Stream** | Blue Iris stream used away from home (mobile data), sized and limited to what HomeKit asks for. Stream 0 (default), Stream 1, or Off. Checked at plugin start; at home Stream 2 is always used. See [Remote / Mobile Viewing](Camera-Setup#remote--mobile-viewing--blue-iris-v0809). Restart the plugin after changing. |
 
 ---
 

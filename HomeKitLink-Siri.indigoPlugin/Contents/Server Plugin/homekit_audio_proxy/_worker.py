@@ -73,6 +73,7 @@ def run_proxy(
     dest = (dest_addr, dest_port)
     packets_forwarded = 0
     allowed_sender: tuple[str, int] | None = None
+    allowed_rtcp_sender: tuple[str, int] | None = None
     try:
         while True:
             try:
@@ -83,6 +84,22 @@ def run_proxy(
                     break
                 continue
             if len(data) < _MIN_RTP_HEADER_SIZE:
+                continue
+
+            # RTCP (muxed on the same port, RFC 5761): packet types 200-204.
+            # FFmpeg sends RTCP from a different local socket than RTP, so each is
+            # locked to its own first sender (stops other local processes injecting).
+            if 200 <= data[1] <= 204:
+                if allowed_rtcp_sender is None:
+                    allowed_rtcp_sender = sender
+                elif sender != allowed_rtcp_sender:
+                    continue
+                packet = bytearray(data)
+                if data[1] == 200 and len(data) >= 20:
+                    # Sender report: rescale its RTP timestamp to match the RTP packets
+                    ts = _UINT32_BE.unpack_from(data, 16)[0]
+                    _UINT32_BE.pack_into(packet, 16, (ts * target_clock_rate // SRTP_OPUS_CLOCK_RATE) & 0xFFFFFFFF)
+                send_sock.sendto(srtp.encrypt_rtcp(bytes(packet)), dest)
                 continue
 
             # Lock to the first sender (FFmpeg) to prevent other local

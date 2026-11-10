@@ -51,6 +51,12 @@ class SRTPContext:
         self._roc: int = 0
         self._last_seq: int = 0
 
+        # SRTCP keys (RFC 3711 Section 4.3.2, labels 3-5)
+        self._rtcp_key = _derive_srtp_key(master_key, master_salt, 3, 16)
+        self._rtcp_auth_key = _derive_srtp_key(master_key, master_salt, 4, 20)
+        self._rtcp_salt = _derive_srtp_key(master_key, master_salt, 5, 14)
+        self._rtcp_index: int = 0
+
     def encrypt(self, rtp_packet: bytes) -> bytes:
         """Encrypt an RTP packet to produce an SRTP packet."""
         header_len = _MIN_RTP_HEADER_SIZE
@@ -91,3 +97,23 @@ class SRTPContext:
         ]
 
         return srtp_packet + auth_tag
+
+    def encrypt_rtcp(self, rtcp_packet: bytes) -> bytes:
+        """Encrypt an RTCP (compound) packet to produce an SRTCP packet (RFC 3711 Section 3.4)."""
+        index = self._rtcp_index
+        self._rtcp_index = (self._rtcp_index + 1) & 0x7FFFFFFF
+
+        ssrc = _UINT32_BE.unpack_from(rtcp_packet, 4)[0]
+        iv = bytearray(16)
+        _UINT32_BE.pack_into(iv, 4, ssrc)
+        _UINT32_BE.pack_into(iv, 10, index)
+        for i in range(14):
+            iv[i] ^= self._rtcp_salt[i]
+
+        cipher = Cipher(algorithms.AES(self._rtcp_key), modes.CTR(bytes(iv)))
+        encryptor = cipher.encryptor()
+        encrypted = rtcp_packet[:8] + encryptor.update(rtcp_packet[8:]) + encryptor.finalize()
+
+        srtcp_packet = encrypted + _UINT32_BE.pack(0x80000000 | index)  # E flag + SRTCP index
+        auth_tag = hmac.new(self._rtcp_auth_key, srtcp_packet, hashlib.sha1).digest()[:_AUTH_TAG_LENGTH]
+        return srtcp_packet + auth_tag
