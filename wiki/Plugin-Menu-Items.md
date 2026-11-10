@@ -4,7 +4,7 @@
 
 All HKLS tools are available under **Plugins → HomeKitLink Siri** in the Indigo menu bar.
 
-![Menu Items](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/MenuItems_new.png?raw=true)
+![Menu Items](https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/MenuItems1.png?raw=true)
 
 ---
 

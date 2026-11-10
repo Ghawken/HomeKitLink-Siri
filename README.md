@@ -83,7 +83,7 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 <table>
 <tr>
 <td><img src="https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/DeviceConfig1.png?raw=true" alt="Device Config" width="320"/></td>
-<td><img src="https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/MenuItems_new.png?raw=true" alt="Menu Items" width="320"/></td>
+<td><img src="https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/MenuItems1.png?raw=true" alt="Menu Items" width="320"/></td>
 </tr>
 <tr>
 <td align="center"><em>Bridge device configuration</em></td>
