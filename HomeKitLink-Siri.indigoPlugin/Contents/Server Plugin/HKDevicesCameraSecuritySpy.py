@@ -4,15 +4,13 @@ from datetime import timedelta
 import logging
 import os
 import signal
+import time
 import sys
 from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 from homekit_audio_proxy import AudioProxy
 from typing import Any
 from HKutils import pid_is_alive
 from HKutils import SimpleIntervalScheduler
-import time as t
-import datetime
-from typing import Callable
 
 
 from pyhap.camera import (
@@ -21,21 +19,14 @@ from pyhap.camera import (
     Camera as PyhapCamera,
 )
 
-from pyhap.accessory import Accessory, Bridge
 
-from pyhap.const import CATEGORY_CAMERA
 
 from HomeKitDevices import HomeAccessory
 
 from HKConstants import (
-    CHAR_MOTION_DETECTED,
-    CHAR_MUTE,
-    CHAR_PROGRAMMABLE_SWITCH_EVENT,
     CONF_AUDIO_CODEC,
     CONF_AUDIO_MAP,
     CONF_AUDIO_PACKET_SIZE,
-    CONF_LINKED_DOORBELL_SENSOR,
-    CONF_LINKED_MOTION_SENSOR,
     CONF_MAX_FPS,
     CONF_MAX_HEIGHT,
     CONF_MAX_WIDTH,
@@ -58,10 +49,6 @@ from HKConstants import (
     DEFAULT_VIDEO_MAP,
     DEFAULT_VIDEO_PACKET_SIZE,
     DEFAULT_STREAM_SOURCE,
-    SERV_DOORBELL,
-    SERV_MOTION_SENSOR,
-    SERV_SPEAKER,
-    SERV_STATELESS_PROGRAMMABLE_SWITCH,
 )
 
 from HKDevicesCamera import resolve_video_strategy
@@ -85,21 +72,21 @@ VIDEO_OUTPUT_COPY = (
 
 VIDEO_OUTPUT_TRANSCODE = (
     "-map {v_map} -an -sn -dn "
-    "-c:v libx264 "
+    "{v_encoder}"
+    "{v_filter}"
     "{v_profile}"
+    "{v_level_opt}"
     "-bf 0 "
-    "-preset ultrafast "
-    "-tune zerolatency "
+    "{v_encoder_tuning}"
     "-pix_fmt yuv420p "
     "-color_range mpeg "
-    "-g 15 "
-    "-keyint_min 15 "
+    "{v_gop}"
     "-r {fps} "
     "-b:v {v_max_bitrate}k -bufsize {v_bufsize}k -maxrate {v_max_bitrate}k "
     "-payload_type 99 "
     "-ssrc {v_ssrc} -f rtp "
     "-srtp_out_suite AES_CM_128_HMAC_SHA1_80 -srtp_out_params {v_srtp_key} "
-    "srtp://{address}:{v_port}?rtcpport={v_port}&pkt_size={v_pkt_size}"
+    "srtp://{address}:{v_port}?rtcpport={v_port}{v_local_rtcp}&pkt_size={v_pkt_size}"
 )
 
 
@@ -162,6 +149,19 @@ CONFIG_DEFAULTS = {
 }
 
 
+
+def name_motion_service(serv_motion, display_name, config):
+    """Give a camera's motion sensor its own name: the configured name, or
+    '<HomeKit device name> Motion'. Sets Name and ConfiguredName (the Home
+    app uses ConfiguredName for service names on current iOS)."""
+    name = str(config.get("motion_name") or "").strip() or "{} Motion".format(display_name)
+    for char_name in ("Name", "ConfiguredName"):
+        try:
+            serv_motion.configure_char(char_name, value=name)
+        except Exception:
+            pass
+    return name
+
 class SecuritySpyCamera(HomeAccessory, PyhapCamera):
     """Generate a Camera accessory."""
 
@@ -187,6 +187,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             for w, h in RESOLUTIONS
             if w <= max_width and h <= max_height
         ]
+
+        # Portrait cameras (e.g. UniFi doorbells) supply their own size list
+        custom = config.get("custom_resolutions") or config.get("portrait_resolutions")
+        if custom:
+            resolutions = [(w, h, max_fps) for (w, h) in custom]
 
         video_options = {
             "codec": {
@@ -238,8 +243,14 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
 
         if config["useMotionSensor"]:
             _LOGGER.debug("useMotionSensor Enabled, setting up callbacks")
-            serv_motion = self.add_preload_service("MotionSensor")
+            # Naming applies to HKSV cameras too: 0.8.07.22 left it off them on
+            # a theory that turned out to be wrong (HKSV rejections were down to
+            # adding a camera that already had HKSV, not the motion sensor name).
+            serv_motion = self.add_preload_service(
+                "MotionSensor", chars=["Name", "ConfiguredName"] + (["StatusActive"] if config.get("hksv") else []))
             self.char_motion_detected = serv_motion.configure_char("MotionDetected", value=False)
+            name_motion_service(serv_motion, display_name, config)
+            self._serv_motion = serv_motion
 
         if "DoorBell_ID" in config:
             _LOGGER.debug("using DoorBell Setting up..")
@@ -247,6 +258,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             self._char_doorbell_detected_switch = None
             self.doorbellID = int(config["DoorBell_ID"])
             serv_doorbell = self.add_preload_service("Doorbell")
+            self._serv_doorbell = serv_doorbell
 
             self._char_doorbell_detected = serv_doorbell.configure_char(
                 "ProgrammableSwitchEvent",
@@ -265,6 +277,66 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             serv_speaker = self.add_preload_service("Speaker")
             serv_speaker.configure_char("Mute", value=0)
 
+        # Non-doorbell camera with a speaker (two-way audio)
+        if config.get("speaker_service") and "DoorBell_ID" not in config:
+            serv_speaker = self.add_preload_service("Speaker")
+            serv_speaker.configure_char("Mute", value=0)
+
+        # HomeKit Secure Video (stage 1: services + configuration)
+        self.hksv = None
+        if config.get("hksv"):
+            try:
+                from HKSV import HKSVRecording
+                config["hksv_ffmpeg"] = str(self.plugin.ffmpeg_command_line)
+                storage_dir = os.path.join(os.path.dirname(self.plugin.cameraimagePath), "hksv")
+                self.hksv = HKSVRecording(self, config, storage_dir,
+                                          motion_service=getattr(self, "_serv_motion", None),
+                                          doorbell="DoorBell_ID" in config,
+                                          doorbell_service=getattr(self, "_serv_doorbell", None))
+            except Exception:
+                _LOGGER.exception("[%s] Couldn't set up HomeKit Secure Video", self.display_name)
+
+    # ---- availability / HKSV helpers (Indigo additions) -----------------
+    @property
+    def available(self):
+        """False while the source camera reports itself disconnected, so the
+        Home app shows No Response instead of failing to load."""
+        return getattr(self, "_hk_available", True)
+
+    def set_available(self, value):
+        self._hk_available = bool(value)
+
+    def _note_hksv_accepted(self):
+        """HKSV two-phase add: the Home app has used this camera, so HomeKit
+        has accepted it; ask the plugin to switch HKSV on."""
+        if self.config.get("hksv_pending") and not getattr(self, "_hksv_reported", False):
+            self._hksv_reported = True
+            try:
+                self.plugin.hksv_camera_accepted(self.indigodeviceid)
+            except Exception:
+                _LOGGER.debug("hksv_camera_accepted failed", exc_info=True)
+
+    def note_doorbell_press(self):
+        hksv = getattr(self, "hksv", None)
+        if hksv is not None:
+            hksv.last_doorbell_press = time.monotonic()
+
+    def _talkback_config(self):
+        """Two-way audio target for this camera, or None.
+        Built fresh for each stream (it includes the Protect API key, so it is
+        never stored in the camera config or written to the log)."""
+        if not self.config.get("two_way_audio"):
+            return None
+        try:
+            info = self.plugin.unifi_talkback_info(self.indigodeviceid)
+        except Exception:
+            _LOGGER.debug("[%s] Two-way audio: couldn't get talkback details", self.display_name, exc_info=True)
+            return None
+        if info:
+            info["name"] = self.display_name
+            info["echo_suppress"] = bool(getattr(self.plugin, "talk_echo_suppress", True))
+        return info
+
     async def run(self):
         _LOGGER.debug("Run called once for CAMERA MotionSensor, and/or Doorbell, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
@@ -282,6 +354,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         return max(configured, min(1316, 12 + 3 * int(bitrate * packet_time / 8)))
 
     async def start_stream(self, session_info, stream_config):
+        self._note_hksv_accepted()
         """Start a new stream with the given configuration."""
         audio_proxy = None
         stream = None
@@ -376,7 +449,35 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             # ============================================================
             # Enforce minimum bitrate for transcode
             # ============================================================
-            if not strategy["use_copy"]:
+            # Cameras flagged match_homekit_request (UniFi) are sent exactly
+            # what HomeKit asked for: its size and its bitrate, as Homebridge does.
+            match_request = bool(self.config.get("match_homekit_request")) and not strategy["use_copy"]
+            v_filter = ""
+            if match_request:
+                # Scale to the requested HEIGHT only and let ffmpeg pick an even
+                # width that keeps the source's shape (homebridge-unifi-protect's
+                # scale=-2:min(ih,height)). Portrait doorbells stay portrait.
+                req_w = int(stream_config.get("width", 0) or 0)
+                req_h = int(stream_config.get("height", 0) or 0)
+                src_w, src_h = strategy.get("source_resolution", (0, 0))
+                src_h = int(src_h or 0)
+                if self.config.get("fit_mode") == "pad" and req_w > 0 and req_h > 0:
+                    # Portrait cameras: deliver exactly the frame size HomeKit
+                    # asked for, with the portrait picture centred and
+                    # pillarboxed, so the Home app never receives a size it
+                    # didn't request.
+                    v_filter = ("-vf scale={w}:{h}:force_original_aspect_ratio=decrease,"
+                                "pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1 ").format(w=req_w, h=req_h)
+                    strategy["target_resolution"] = (req_w, req_h)
+                elif req_h > 0:
+                    out_h = min(src_h, req_h) if src_h > 0 else req_h
+                    out_h -= out_h % 2
+                    v_filter = "-vf scale=-2:{} ".format(out_h)
+                    if src_w and src_h:
+                        out_w = int(round(int(src_w) * out_h / src_h / 2.0)) * 2
+                        strategy["target_resolution"] = (out_w, out_h)
+
+            if not strategy["use_copy"] and not match_request:
                 min_br = strategy.get("min_bitrate_kbps", 0)
                 actual_br = stream_config.get("v_max_bitrate", 0)
                 if min_br > 0 and actual_br < min_br:
@@ -461,6 +562,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                         srtp_key_b64=stream_config["a_srtp_key"],
                         target_clock_rate=target_clock,
                         python_path=os.path.join(sys.prefix, "bin", "python3"),
+                        talkback=self._talkback_config(),
                     )
                     await audio_proxy.async_start()
                 except Exception:
@@ -516,7 +618,49 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             output_vars.update(
                 {
                     "v_profile": video_profile,
-                    "v_bufsize": stream_config["v_max_bitrate"] * 4,
+                    "v_filter": v_filter,
+                    "v_bufsize": stream_config["v_max_bitrate"] * (2 if match_request else 4),
+                    # Defaults keep the original behaviour for other cameras.
+                    # match_homekit_request cameras (UniFi) get a proper High
+                    # profile encode at the negotiated level with a 2 s GOP, which
+                    # stays under HomeKit's bitrate cap; ultrafast with a 0.5 s GOP
+                    # overshot it by ~40% at 1280x960 and the Home app gave up.
+                    "v_preset": "veryfast" if match_request else "ultrafast",
+                    # Optional Apple VideoToolbox hardware encoder (UniFi only).
+                    # VT emits one slice per frame and keeps under the bitrate cap.
+                    "v_encoder": ("-c:v h264_videotoolbox " if (match_request and getattr(self.plugin, "use_hw_encoding", False))
+                                  else "-c:v libx264 "),
+                    # -tune zerolatency turns on x264 sliced threads, which splits
+                    # every frame into one slice per thread: 5 slices at 640x360,
+                    # 7 at 640x480, 10 at 1024x768 and up on this Mac. Packet
+                    # captures showed the iPhone receiving every packet with zero
+                    # loss but sending a keyframe request (RTCP FIR) in every
+                    # report at 10 slices, i.e. it could not decode them.
+                    # homebridge-unifi-protect never uses zerolatency, so its
+                    # frames are always a single slice. Force one slice per frame.
+                    "v_x264_params": "-x264-params sliced-threads=0:slices=1 " if match_request else "",
+                    "v_encoder_tuning": ("-realtime 1 -prio_speed 1 " if (match_request and getattr(self.plugin, "use_hw_encoding", False))
+                                         else "-preset {} -tune zerolatency {}".format(
+                                             "veryfast" if match_request else "ultrafast",
+                                             "-x264-params sliced-threads=0:slices=1 " if match_request else "")),
+                    # HAP-python tells the iPhone the camera's RTP/RTCP port is the
+                    # same number as the iPhone's. Bind ffmpeg's RTCP socket to that
+                    # port (as Home Assistant's HAP-python camera does) so the
+                    # iPhone's RTCP reports reach ffmpeg and ffmpeg's sender reports
+                    # come from the port the iPhone expects.
+                    # Symmetric RTP: send video FROM the port HAP-python told the
+                    # controller we use (the same number as its own port). The
+                    # iPhone tolerates any source port, but when the Apple TV
+                    # relays a stream (remote viewing, HKSV cameras) it appears
+                    # not to - every relayed stream closed after a few seconds.
+                    # ffmpeg can't bind RTP and RTCP to one port, so RTCP goes
+                    # from the next port up.
+                    "v_local_rtcp": "&localrtpport={}".format(stream_config["v_port"]) if match_request else "",
+                    "v_gop": ("-g {0} -keyint_min {0} ".format(int(stream_config.get("fps", 30) or 30) * 2)
+                              if match_request else "-g 15 -keyint_min 15 "),
+                    "v_level_opt": ("-level:v {} ".format({0: "3.1", 1: "3.2", 2: "4.0"}.get(
+                        int.from_bytes(stream_config.get("v_level", b"\x02"), byteorder="big"), "4.0"))
+                        if match_request else ""),
                     "v_map": self.config[CONF_VIDEO_MAP],
                     "fps": self.config[CONF_MAX_FPS],
                     "v_pkt_size": self.config[CONF_VIDEO_PACKET_SIZE],
@@ -570,6 +714,22 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             )
             if not opened:
                 _LOGGER.error("Failed to open ffmpeg stream")
+                if audio_proxy:
+                    await audio_proxy.async_stop()
+                return False
+
+            # The Home app sometimes stops a stream while it is still starting
+            # (start and stop ~10 ms apart). stop_stream then finds nothing to
+            # stop, so ffmpeg and the audio proxy kept running with no session.
+            if session_info.get("_stop_requested") or session_info["id"] not in self.sessions:
+                _LOGGER.debug("[%s] Stream was stopped while starting - shutting it down", session_info["id"])
+                try:
+                    await stream.close()
+                except Exception:
+                    try:
+                        await stream.kill()
+                    except Exception:
+                        pass
                 if audio_proxy:
                     await audio_proxy.async_stop()
                 return False
@@ -640,8 +800,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             # Decode bytes to string using UTF-8 encoding
             line = line_bytes.decode('utf-8', errors='replace').rstrip()
             if 'Output file does not contain any stream' in line:
-                _LOGGER.info("'Output file does not contain any stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
-                _LOGGER.info("Suggest unpublishing the camera, checking it is gone in the Home app, then republishing with Audio disabled.")
+                if self.config.get(CONF_SUPPORT_AUDIO):
+                    _LOGGER.info("'Output file does not contain any stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
+                    _LOGGER.info("Suggest unpublishing the camera, checking it is gone in the Home app, then republishing with Audio disabled.")
+                else:
+                    _LOGGER.info("[%s] 'Output file does not contain stream': ffmpeg selected no video from the source. The video map (%s) probably points at a non-video stream; run 'Check Camera Stream Compatibility' to see the stream layout.", self.display_name, self.config.get(CONF_VIDEO_MAP))
             elif any(err in line for err in (
                 "Connection refused",
                 "Connection timed out",
@@ -693,10 +856,12 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         """Cleanup a streaming session after stopping."""
         try:
             if self.plugin.debug7:
-                _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
-            self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
-        except:
-            _LOGGER.debug(f"Exception in async stop ffmpeg stream", exc_info=True)
+                _LOGGER.debug("_async_stop_ffmpeg_watch called")
+            logger_task = self.sessions.get(session_id, {}).pop(FFMPEG_LOGGER, None)
+            if logger_task is not None:
+                logger_task.cancel()
+        except Exception:
+            _LOGGER.debug("Exception in async stop ffmpeg stream", exc_info=True)
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
@@ -708,12 +873,14 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
     async def stop_stream(self, session_info: dict[str, Any]) -> None:
         """Stop the stream for the given ``session_id``."""
         if self.plugin.debug7:
-            _LOGGER.debug(f"*** stop_stream called")
+            _LOGGER.debug("*** stop_stream called")
         session_id = session_info["id"]
         if proxy := session_info.pop(AUDIO_PROXY, None):
             await proxy.async_stop()
         if not (stream := session_info.get("stream")):
-            _LOGGER.debug("No stream for session ID %s", session_id)
+            # Still starting: tell start_stream to shut down what it launches
+            session_info["_stop_requested"] = True
+            _LOGGER.debug("No stream for session ID %s (yet) - flagged to stop once started", session_id)
             return
         else:
             if self.plugin.debug7:
@@ -737,7 +904,23 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             except OSError:
                 _LOGGER.debug("[%s] Failed to kill stream", session_id, exc_info=True)
 
+    async def stop(self):
+        """Stop any streams when the accessory is stopped."""
+        hksv = getattr(self, "hksv", None)
+        if hksv is not None:
+            for part in (getattr(hksv, "recorder", None), getattr(hksv, "hds", None)):
+                if part is None:
+                    continue
+                try:
+                    part.stop() if hasattr(part, "stop") else part.close()
+                except Exception:
+                    pass
+        for session_info in self.sessions.values():
+            asyncio.create_task(self.stop_stream(session_info))
+        await super().stop()
+
     def get_snapshot(self, image_size):  # pylint: disable=unused-argument, no-self-use
+        self._note_hksv_accepted()
         try:
             debug_function = False
             if self.plugin.debug7:

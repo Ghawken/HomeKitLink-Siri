@@ -1695,5 +1695,107 @@
          "pr"
       ],
       "UUID": "00000265-0000-1000-8000-0026BB765291"
+   },
+   "EventSnapshotsActive": {
+      "Format": "uint8",
+      "Permissions": [
+         "pr",
+         "pw",
+         "ev"
+      ],
+      "UUID": "00000223-0000-1000-8000-0026BB765291",
+      "ValidValues": {
+         "Disable": 0,
+         "Enable": 1
+      }
+   },
+   "HomeKitCameraActive": {
+      "Format": "uint8",
+      "Permissions": [
+         "pr",
+         "pw",
+         "ev"
+      ],
+      "UUID": "0000021B-0000-1000-8000-0026BB765291",
+      "ValidValues": {
+         "Off": 0,
+         "On": 1
+      }
+   },
+   "PeriodicSnapshotsActive": {
+      "Format": "uint8",
+      "Permissions": [
+         "pr",
+         "pw",
+         "ev"
+      ],
+      "UUID": "00000225-0000-1000-8000-0026BB765291",
+      "ValidValues": {
+         "Disable": 0,
+         "Enable": 1
+      }
+   },
+   "RecordingAudioActive": {
+      "Format": "uint8",
+      "Permissions": [
+         "pr",
+         "pw",
+         "ev",
+         "tw"
+      ],
+      "UUID": "00000226-0000-1000-8000-0026BB765291",
+      "ValidValues": {
+         "Disable": 0,
+         "Enable": 1
+      }
+   },
+   "SelectedCameraRecordingConfiguration": {
+      "Format": "tlv8",
+      "Permissions": [
+         "pr",
+         "pw",
+         "ev"
+      ],
+      "UUID": "00000209-0000-1000-8000-0026BB765291"
+   },
+   "SetupDataStreamTransport": {
+      "Format": "tlv8",
+      "Permissions": [
+         "pr",
+         "pw",
+         "wr"
+      ],
+      "UUID": "00000131-0000-1000-8000-0026BB765291"
+   },
+   "SupportedAudioRecordingConfiguration": {
+      "Format": "tlv8",
+      "Permissions": [
+         "pr",
+         "ev"
+      ],
+      "UUID": "00000207-0000-1000-8000-0026BB765291"
+   },
+   "SupportedCameraRecordingConfiguration": {
+      "Format": "tlv8",
+      "Permissions": [
+         "pr",
+         "ev"
+      ],
+      "UUID": "00000205-0000-1000-8000-0026BB765291"
+   },
+   "SupportedDataStreamTransportConfiguration": {
+      "Format": "tlv8",
+      "Permissions": [
+         "pr"
+      ],
+      "UUID": "00000130-0000-1000-8000-0026BB765291"
+   },
+   "SupportedVideoRecordingConfiguration": {
+      "Format": "tlv8",
+      "Permissions": [
+         "pr",
+         "ev"
+      ],
+      "UUID": "00000206-0000-1000-8000-0026BB765291"
    }
 }

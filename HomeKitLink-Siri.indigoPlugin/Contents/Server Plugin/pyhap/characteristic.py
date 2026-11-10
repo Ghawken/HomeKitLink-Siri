@@ -368,7 +368,18 @@ class Characteristic:
         ):
             hap_rep[HAP_REPR_DESC] = self.display_name
 
-        value = self.get_value()
+        # A getter may deliberately have no value yet (e.g. HKSV selected
+        # recording configuration). In the accessory listing that value is
+        # simply omitted, as HAP-NodeJS does, rather than failing the whole
+        # /accessories request.
+        has_value = True
+        try:
+            value = self.get_value()
+        except CharacteristicError as err:
+            if not getattr(err, "quiet", False):
+                raise
+            has_value = False
+            value = None
         if self.properties[PROP_FORMAT] in HAP_FORMAT_NUMERICS:
             hap_rep.update(
                 {
@@ -385,7 +396,7 @@ class Characteristic:
             max_length = self.properties.get(HAP_REPR_MAX_LEN, DEFAULT_MAX_LENGTH)
             if max_length != DEFAULT_MAX_LENGTH:
                 hap_rep[HAP_REPR_MAX_LEN] = max_length
-        if HAP_PERMISSION_READ in self.properties[PROP_PERMISSIONS]:
+        if HAP_PERMISSION_READ in self.properties[PROP_PERMISSIONS] and has_value:
             hap_rep[HAP_REPR_VALUE] = value
 
         return hap_rep

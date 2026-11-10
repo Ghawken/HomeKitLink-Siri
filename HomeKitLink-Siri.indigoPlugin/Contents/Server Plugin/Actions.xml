@@ -1,5 +1,9 @@
 <?xml version="1.0"?>
 <Actions>
+        <Action id="hklinkProtocolVersion" uiPath="hidden">
+        <Name>Get HomeKitLink External Protocol Version</Name>
+        <CallbackMethod>action_hklinkProtocolVersion</CallbackMethod>
+    </Action>
         <Action id="triggerHomeKitDevice">
         <Name>Notify HomeKit Device</Name>
         <CallbackMethod>action_triggerHomeKitDevice</CallbackMethod>
