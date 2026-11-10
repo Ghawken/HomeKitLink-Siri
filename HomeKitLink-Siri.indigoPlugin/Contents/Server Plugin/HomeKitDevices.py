@@ -3,6 +3,8 @@
 
 import logging
 import math
+import collections
+import datetime
 from typing import Any, cast
 from pyhap.accessory import Accessory, Bridge
 from pyhap.accessory_driver import AccessoryDriver
@@ -60,6 +62,15 @@ class HomeDriver(AccessoryDriver):  # type: ignore[misc]
         super().__init__(**kwargs)
         self.indigodeviceid = indigodeviceid
         self.iid_storage = iid_storage
+        ## Pair-verify history for Troubleshoot 4 (written from the HAP handler)
+        self.verify_failures = collections.deque(maxlen=50)  ## (datetime, client_address, client_uuid, reason)
+        self.verify_successes = {}  ## client_uuid: (datetime, client_address)
+
+    def record_verify_failure(self, client_address, client_uuid, reason):
+        self.verify_failures.append((datetime.datetime.now(), client_address, client_uuid, reason))
+
+    def record_verify_success(self, client_address, client_uuid):
+        self.verify_successes[client_uuid] = (datetime.datetime.now(), client_address)
 
 
 

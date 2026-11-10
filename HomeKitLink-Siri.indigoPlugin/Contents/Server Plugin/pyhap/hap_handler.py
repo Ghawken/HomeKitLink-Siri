@@ -587,8 +587,10 @@ class HAPServerHandler:
                 raw_public_key.hex(),
                 {uuid: key.hex() for uuid, key in self.state.paired_clients.items()},
             )
-            logger.info(f"Home app Client with IP address {self.client_address} appears incompatible with this version of homekit.   It attempted to connect to Bridge {self.accessory_handler.accessory.display_name} and this connection failed to verify. ")
-            logger.info(f"Typically this means this client hasn't been updated to latest OS version, or is incompatible with it.  This needs to be addressed with the Client Home App.  See forum for more details as needed.")
+            logger.info(f"Home app client at {self.client_address} tried to connect to {self.accessory_handler.accessory.display_name} using a pairing this bridge does not recognise (controller {client_uuid}).")
+            logger.info("The bridge's saved pairings and the Home app are out of sync.  Run plugin menu 'Troubleshoot 4 HomeKit Pairing & Security Keys' for details.")
+            if record_failure := getattr(self.accessory_handler, "record_verify_failure", None):
+                record_failure(self.client_address, client_uuid, "not paired with this bridge")
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M4)
             return
 
@@ -597,6 +599,8 @@ class HAPServerHandler:
             verifying_key.verify(dec_tlv_objects[HAP_TLV_TAGS.PROOF], material)
         except InvalidSignature:
             logger.error("%s: Bad signature, abort.", self.client_address)
+            if record_failure := getattr(self.accessory_handler, "record_verify_failure", None):
+                record_failure(self.client_address, client_uuid, "bad signature (controller key mismatch)")
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M4)
             return
 
@@ -618,6 +622,8 @@ class HAPServerHandler:
         self.response.shared_key = self.enc_context["shared_key"]
         self.is_encrypted = True
         self.client_uuid = client_uuid
+        if record_success := getattr(self.accessory_handler, "record_verify_success", None):
+            record_success(self.client_address, client_uuid)
         del self.enc_context
 
     def handle_accessories(self):

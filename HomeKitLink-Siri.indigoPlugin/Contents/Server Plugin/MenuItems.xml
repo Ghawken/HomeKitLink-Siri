@@ -33,6 +33,10 @@
         <Name>ℹ️ Troubleshoot 3 Support mDNS Troubleshooting</Name>
         <CallbackMethod>Menu_mDNS_troubleshoot</CallbackMethod>
     </MenuItem>
+        <MenuItem id="pairingTroubleshoot">
+        <Name>ℹ️ Troubleshoot 4 HomeKit Pairing &amp; Security Keys</Name>
+        <CallbackMethod>Menu_pairing_troubleshoot</CallbackMethod>
+    </MenuItem>
 
     <MenuItem id="sep2"/>
     <MenuItem id="sep3"/>

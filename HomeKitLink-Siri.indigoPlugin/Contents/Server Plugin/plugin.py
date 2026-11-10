@@ -3163,50 +3163,145 @@ class Plugin(indigo.PluginBase):
         self.logger.debug("Show QR Code.  Saving Http page.")
         try:
             if device.states["QRCode"] != None:
-                QRhttp = open("QRCode.html", "w")
-                Qrcodedata = device.states["QRCode"]  ## I know - could be plugin prefs but here it is
-                Qrcodedata = Qrcodedata.replace("<div><h1>HomeKitLink Siri</h1>", "<div><h1>  HomeKitLink Siri</h1>\n<h1> Device: " + str(device.name) + "</h1>\n")
-                Qrcodedata = '''<head><link rel="shortcut icon" href="https://static.indigodomo.com/www/favicon.ico">
-                    <link href="https://static.indigodomo.com/www/bootstrap/css/bootstrap.min.css" rel="stylesheet">
-    <!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
-    <!--[if lt IE 9]>
-      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
-      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
-    <![endif]-->
-
-    <!-- Custom styles for this template -->
-    <link href="https://static.indigodomo.com/www/css/indigodomo.css" rel="stylesheet">
-    <link href="https://static.indigodomo.com/www/font-awesome/css/font-awesome.css" rel="stylesheet">
-    <link href="https://static.indigodomo.com/www/css/social-buttons.css" rel="stylesheet">
-    </head>
-    <body>
-    <div class="background">
-    <!-- START navbar
-    ================================================== -->
-    <div class="navbar-wrapper">
-      <div class="container">
-        <div>
-          <div class="domotics-logo"><img src="https://static.indigodomo.com/www/images/wordmark.png"/></div>
-         ''' + Qrcodedata  + '''
-        </div>
-        </div>
-        </div>       
-                </body>
-                '''
-
-                # update QRcode html page on the fly here - otherwise when name is changed won't update.
-                QRhttp.write(Qrcodedata)
-                filepath = os.path.realpath(QRhttp.name)
+                # rebuild the page on the fly here - otherwise when name is changed won't update.
+                with open("QRCode.html", "w", encoding="utf-8") as QRhttp:
+                    QRhttp.write(self._build_qr_page(device))
+                    filepath = os.path.realpath(QRhttp.name)
                 self.logger.debug("Using path {}".format(filepath))
-                QRhttp.close()
-                self.logger.debug(device.states["QRCode"])
                 self.sleep(0.5)
                 webbrowser.open_new('file://' + filepath)
             else:
                 self.logger.info("No QR Code found as yet.")
-        except AttributeError:
+        except (AttributeError, KeyError):
             self.logger.info("No QR Code found as yet.")
-            pass
+
+    def _build_qr_page(self, device):
+        """Self-contained pairing page: wiki banner + icon (embedded so it works offline),
+        the bridge QR code, setup code, pairing state and steps."""
+        import base64
+        import html
+        import re
+
+        def embed(name, mime):
+            try:
+                with open(os.path.join(self.pluginPath, "..", "Resources", "qrpage", name), "rb") as image_file:
+                    return f"data:{mime};base64," + base64.b64encode(image_file.read()).decode()
+            except OSError:
+                self.logger.debug(f"QR page image {name} not found", exc_info=True)
+                return ""
+
+        qr_html = str(device.states.get("QRCode", ""))
+        qr_match = re.search(r"data:image/png;base64,[A-Za-z0-9+/=]+", qr_html)
+        qr_src = qr_match.group(0) if qr_match else ""
+        pincode = html.escape(str(device.states.get("pincode", "")))
+        name = html.escape(device.name)
+        banner = embed("banner.jpg", "image/jpeg")
+        icon = embed("icon.png", "image/png")
+
+        ## Pairing state from the running driver for this bridge
+        driver = None
+        uniqueID = str(device.pluginProps.get("bridgeUniqueID", ""))
+        for running in list(self.driver_multiple):
+            if running is not None and str(running.indigodeviceid) == uniqueID:
+                driver = running
+        if driver is None:
+            status_class, status_text = "off", "Bridge not running"
+            status_hint = "Start (enable) this bridge device first.  The code below is only valid while the bridge is running."
+        elif driver.state.paired:
+            status_class, status_text = "paired", "Already paired with a Home"
+            status_hint = ("This bridge is already in a Home and cannot be added again as it is.  To re-add it, first remove it in the Home app "
+                           "(or use plugin menu Reset Accessory / Bridge), then scan again.")
+        else:
+            status_class, status_text = "ready", "Ready to add"
+            status_hint = "This bridge is waiting to be added to the Home app."
+
+        banner_html = f'<img class="banner" src="{banner}" alt="HomeKitLink Siri: bring Indigo devices into HomeKit">' if banner else ""
+        icon_html = f'<img src="{icon}" alt="">' if icon else ""
+        qr_block = f'<img class="qr" src="{qr_src}" alt="HomeKit setup QR code">' if qr_src else '<div class="qr missing">QR code not available yet</div>'
+
+        return f'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{name} · HomeKitLink Siri</title>
+<link rel="icon" href="{icon}">
+<style>
+  :root {{
+    color-scheme: dark;
+    --bg: #07061a; --card: rgba(255,255,255,0.045); --line: rgba(150,120,255,0.28);
+    --text: #f3f1ff; --muted: #aaa4cc; --blue: #3fa9ff; --violet: #b14cff;
+    --ok: #3ddc97; --warn: #ffb547; --off: #8a86a6;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0; padding: 24px 16px 40px; color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 15% -10%, rgba(63,169,255,0.18), transparent 60%),
+                radial-gradient(900px 500px at 100% 0%, rgba(177,76,255,0.20), transparent 60%), var(--bg);
+    min-height: 100vh;
+  }}
+  .wrap {{ max-width: 960px; margin: 0 auto; }}
+  .banner {{ width: 100%; aspect-ratio: 1774 / 428; object-fit: cover; object-position: top center;
+            border-radius: 16px; border: 1px solid var(--line); display: block;
+            box-shadow: 0 0 40px rgba(120,80,255,0.25); }}
+  .rule {{ height: 2px; margin: 22px 0; border: 0;
+          background: linear-gradient(90deg, transparent, var(--blue), var(--violet), transparent); }}
+  .card {{ display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 32px; align-items: start;
+          background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 28px; }}
+  .qrbox {{ background: #fff; border-radius: 18px; padding: 14px; box-shadow: 0 0 0 1px var(--line), 0 0 36px rgba(63,169,255,0.25); }}
+  .qr {{ width: 100%; height: auto; display: block; image-rendering: pixelated; }}
+  .qr.missing {{ aspect-ratio: 1; display: grid; place-items: center; color: #555; font-weight: 600; }}
+  .head {{ display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }}
+  .head img {{ width: 52px; height: 52px; }}
+  .eyebrow {{ letter-spacing: 0.22em; text-transform: uppercase; font-size: 12px; color: var(--muted); }}
+  h1 {{ margin: 0; font-size: 26px; line-height: 1.2; font-weight: 700; }}
+  .status {{ display: inline-flex; align-items: center; gap: 8px; margin: 14px 0 4px; padding: 6px 12px;
+            border-radius: 999px; font-weight: 600; font-size: 13px; border: 1px solid currentColor; }}
+  .status::before {{ content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }}
+  .status.ready {{ color: var(--ok); }} .status.paired {{ color: var(--warn); }} .status.off {{ color: var(--off); }}
+  .hint {{ color: var(--muted); margin: 4px 0 18px; }}
+  .code {{ display: inline-block; margin: 2px 0 20px; padding: 10px 18px; border-radius: 12px; background: #fff; color: #000;
+          font: 700 28px/1 "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.08em; }}
+  .label {{ font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }}
+  ol {{ margin: 0; padding-left: 0; list-style: none; counter-reset: step; }}
+  ol li {{ counter-increment: step; position: relative; padding: 0 0 12px 40px; }}
+  ol li::before {{ content: counter(step); position: absolute; left: 0; top: -1px; width: 26px; height: 26px; border-radius: 50%;
+                  display: grid; place-items: center; font-size: 13px; font-weight: 700;
+                  background: linear-gradient(135deg, var(--blue), var(--violet)); }}
+  b {{ color: #fff; }}
+  .note {{ margin-top: 22px; color: var(--muted); font-size: 13px; text-align: center; }}
+  @media (max-width: 720px) {{ .card {{ grid-template-columns: 1fr; padding: 20px; }} .qrbox {{ max-width: 340px; margin: 0 auto; }} }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  {banner_html}
+  <hr class="rule">
+  <div class="card">
+    <div class="qrbox">{qr_block}</div>
+    <div>
+      <div class="head">
+        {icon_html}
+        <div><div class="eyebrow">HomeKitLink Siri Bridge</div><h1>{name}</h1></div>
+      </div>
+      <div class="status {status_class}">{status_text}</div>
+      <p class="hint">{status_hint}</p>
+      <div class="label">HomeKit setup code</div>
+      <div class="code">{pincode or "—"}</div>
+      <ol>
+        <li>Open the <b>Home</b> app on your iPhone or iPad.</li>
+        <li>Tap <b>+</b> (top right) → <b>Add Accessory</b>.</li>
+        <li>Scan this QR code, or tap <b>More options…</b> and enter the setup code.</li>
+        <li>Follow the prompts to name the bridge and assign rooms.  Your published Indigo devices will appear.</li>
+      </ol>
+    </div>
+  </div>
+  <p class="note">The setup code is created when the plugin starts and changes after each restart.  Reopen this page (Show QR Code) after restarting the plugin.</p>
+</div>
+</body>
+</html>
+'''
 
     def toggleDebugEnabled(self):
         """
@@ -4879,6 +4974,203 @@ class Plugin(indigo.PluginBase):
     ########################################
     ## mDNS Troubleshooting
     ########################################
+    def Menu_pairing_troubleshoot(self, *args, **kwargs):
+        """Troubleshoot 4: report HomeKit pairing / security key state for every bridge.
+        Compares the running driver with the saved busy_home_<id>.state file, lists the Home
+        controllers paired with each bridge, live connections and recent pair-verify failures.
+        Never logs private keys - public keys and controller ids are shortened."""
+        try:
+            import json
+            import datetime
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric import ed25519
+
+            def short(value, length=8):
+                text = str(value)
+                return text[:length] + "…" if len(text) > length else text
+
+            def raw_public(public_key):
+                return public_key.public_bytes(encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw)
+
+            def fmt_time(when):
+                return when.strftime("%Y-%m-%d %H:%M:%S") if when else "never (since plugin start)"
+
+            def is_admin(props):
+                try:
+                    return bool(int(props.get("permissions", 0)) & 0x01)
+                except (TypeError, ValueError, AttributeError):
+                    return False
+
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(u"{0:=^190}".format(" HomeKit Pairing & Security Keys Troubleshooting "))
+            self.logger.info(u"{0:=^190}".format(""))
+            self.logger.info(f"  Plugin version:   {self.pluginVersion}")
+            self.logger.info(f"  macOS version:    {platform.mac_ver()[0] or platform.platform()}")
+            self.logger.info(f"  State directory:  {self.pluginprefDirectory}")
+            if os.access(self.pluginprefDirectory, os.W_OK):
+                self.logger.info("  ✓ State directory is writable (pairings can be saved).")
+            else:
+                self.logger.error("  ✗ State directory is NOT writable.  New pairings and keys cannot be saved and will be lost on restart.")
+            self.logger.info("  Note: the pincode / QR setup code is regenerated each time the plugin starts.  When adding a bridge use the code currently shown on the bridge device.")
+
+            drivers_by_id = {str(driver.indigodeviceid): driver for driver in list(self.driver_multiple) if driver is not None}
+            bridge_ids_seen = set()
+            mac_owners = {}  ## mac: [bridge ids] - from state files, to detect copied state files
+            any_problem = False
+
+            for device in indigo.devices.iter("self"):
+                if device.deviceTypeId != "homeKitBridgeDevice":
+                    continue
+                uniqueID = str(device.pluginProps.get("bridgeUniqueID", ""))
+                bridge_ids_seen.add(uniqueID)
+                problems = []
+
+                self.logger.info(u"{0:=^130}".format(f" Bridge: {device.name} "))
+                self.logger.info(f"  Indigo ID: {device.id}   Bridge ID: {uniqueID}   Enabled: {device.enabled}   Status: {device.states.get('Status', '')}")
+
+                ## ── Saved state file ──
+                state_file = os.path.join(self.pluginprefDirectory, f"busy_home_{uniqueID}.state")
+                file_state = None
+                file_keys_ok = False
+                if not os.path.exists(state_file):
+                    self.logger.warning(f"  State file: missing ({state_file})")
+                    if device.enabled:
+                        problems.append("State file is missing.  If this bridge was already in the Home app, its keys have been lost and Home will not be able to connect.")
+                else:
+                    stat = os.stat(state_file)
+                    self.logger.info(f"  State file: {os.path.basename(state_file)}   size {stat.st_size} bytes   last saved {fmt_time(datetime.datetime.fromtimestamp(stat.st_mtime))}")
+                    try:
+                        with open(state_file, "r", encoding="utf8") as file_handle:
+                            file_state = json.load(file_handle)
+                    except Exception as error:
+                        problems.append(f"State file cannot be read ({error}).  It is corrupt: remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
+                if file_state is not None:
+                    file_mac = file_state.get("mac", "")
+                    mac_owners.setdefault(file_mac, []).append(uniqueID)
+                    file_clients = file_state.get("paired_clients", {}) or {}
+                    if "client_properties" in file_state:
+                        file_props = file_state.get("client_properties") or {}
+                        file_admins = sum(1 for client in file_clients if is_admin(file_props.get(client, {})))
+                    else:
+                        file_admins = len(file_clients)  ## older state files: pyhap treats every pairing as admin
+                    self.logger.info(f"  Saved:   MAC {file_mac}   config version {file_state.get('config_version')}   paired controllers {len(file_clients)} ({file_admins} admin)")
+                    try:
+                        private_key = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(file_state["private_key"]))
+                        derived_public = raw_public(private_key.public_key()).hex()
+                        if derived_public == file_state.get("public_key"):
+                            file_keys_ok = True
+                            self.logger.info(f"  ✓ Saved key pair is consistent (bridge public key {short(derived_public, 16)})")
+                        else:
+                            problems.append("Saved private and public keys do not match.  The state file is corrupt: remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
+                    except Exception as error:
+                        problems.append(f"Saved bridge keys are invalid ({error}).  The state file is corrupt: remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
+                    for client, key in file_clients.items():
+                        try:
+                            if len(bytes.fromhex(key)) != 32:
+                                problems.append(f"Saved key for controller {short(client)} has the wrong length.")
+                        except (TypeError, ValueError):
+                            problems.append(f"Saved key for controller {short(client)} is not valid hex.")
+                    if file_clients and not file_admins:
+                        problems.append("Saved pairings have no admin controller.  Home cannot manage this bridge.")
+
+                ## ── Running driver ──
+                driver = drivers_by_id.get(uniqueID)
+                if driver is None:
+                    self.logger.info("  Running: no driver running for this bridge (bridge disabled or failed to start).")
+                else:
+                    state = driver.state
+                    paired_clients = dict(state.paired_clients)
+                    admins = sum(1 for client in paired_clients if state.is_admin(client))
+                    running_public = raw_public(state.public_key).hex()
+                    self.logger.info(f"  Running: MAC {state.mac}   port {state.port}   address {state.address}   config version {state.config_version}")
+                    if state.paired:
+                        self.logger.info(f"  Running: PAIRED with {len(paired_clients)} controller(s) ({admins} admin).  Advertising sf=0 (not available to add).")
+                    else:
+                        self.logger.warning("  Running: NOT PAIRED.  Advertising sf=1 (available to add with the pincode / QR code).")
+                        problems.append("Bridge is not paired.  If it still appears in the Home app, Home's copy is stale: remove the bridge from the Home app, then add it again with the current pincode / QR code.")
+                    if paired_clients and not admins:
+                        problems.append("Running pairings have no admin controller.  Home cannot manage this bridge.")
+
+                    if file_state is not None:
+                        out_of_sync = []
+                        if file_state.get("mac") != state.mac:
+                            out_of_sync.append("MAC")
+                        if file_keys_ok and file_state.get("public_key") != running_public:
+                            out_of_sync.append("bridge keys")
+                        if set(file_state.get("paired_clients", {}) or {}) != {str(client) for client in paired_clients}:
+                            out_of_sync.append("paired controllers")
+                        if out_of_sync:
+                            problems.append(f"Running bridge and saved state file differ ({', '.join(out_of_sync)}).  Changes are not being saved, so they will be lost when the plugin restarts.")
+                        else:
+                            self.logger.info("  ✓ Running bridge matches the saved state file.")
+
+                    ## Paired controllers
+                    connections = list(driver.http_server.connections.values())
+                    connected_uuids = {getattr(proto.handler, "client_uuid", None) for proto in connections if proto.handler and proto.handler.is_encrypted}
+                    successes = dict(getattr(driver, "verify_successes", {}))
+                    if paired_clients:
+                        self.logger.info(u"{0:-^130}".format(" Paired Home Controllers "))
+                        for client, key in paired_clients.items():
+                            last = successes.get(client)
+                            self.logger.info(
+                                f"    Controller {short(client)}   admin: {'yes' if state.is_admin(client) else 'no '}   key {short(key.hex(), 16)}   "
+                                f"connected now: {'yes' if client in connected_uuids else 'no '}   last verified: {fmt_time(last[0]) if last else fmt_time(None)}{'  from ' + str(last[1][0]) if last else ''}"
+                            )
+
+                    ## Live connections
+                    self.logger.info(u"{0:-^130}".format(f" Live Connections ({len(connections)}) "))
+                    for proto in connections:
+                        handler = proto.handler
+                        peer = proto.peername[0] if proto.peername else "?"
+                        if handler and handler.is_encrypted:
+                            known = handler.client_uuid in paired_clients
+                            self.logger.info(f"    {peer}   verified as controller {short(handler.client_uuid)}{'' if known else '   (no longer paired!)'}")
+                        else:
+                            self.logger.info(f"    {peer}   connected, not verified (pairing/verify in progress or failed)")
+
+                    ## Recent failures
+                    failures = list(getattr(driver, "verify_failures", []))
+                    if failures:
+                        self.logger.info(u"{0:-^130}".format(f" Pair-Verify Failures since plugin start ({len(failures)}, newest last) "))
+                        for when, address, client, reason in failures[-15:]:
+                            peer = address[0] if isinstance(address, tuple) else address
+                            self.logger.warning(f"    {fmt_time(when)}   {peer}   controller {short(client)}   {reason}")
+                        bad_ips = sorted({(address[0] if isinstance(address, tuple) else str(address)) for _, address, _, reason in failures if reason.startswith("not paired")})
+                        if bad_ips:
+                            problems.append(
+                                f"Home controller(s) at {', '.join(bad_ips)} are using a pairing this bridge does not have.  Usually the bridge was reset, or its state file "
+                                "was deleted or restored, while it was still in the Home app; or one Home hub / device holds a stale pairing.  If other controllers "
+                                "verify fine, restart that Home hub / device.  If none verify, remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again."
+                            )
+                        if any(reason.startswith("bad signature") for _, _, _, reason in failures):
+                            problems.append("A controller's key no longer matches the one saved for it.  Remove the bridge from the Home app, use 'Reset Accessory / Bridge', then add it again.")
+                    else:
+                        self.logger.info("  ✓ No pair-verify failures since plugin start.")
+
+                ## Assessment
+                if problems:
+                    any_problem = True
+                    for problem in problems:
+                        self.logger.warning(f"  ✗ {problem}")
+                else:
+                    self.logger.info("  ✓ No pairing or key problems found for this bridge.")
+
+            ## ── Across all bridges ──
+            self.logger.info(u"{0:=^130}".format(" All Bridges "))
+            for mac, owners in mac_owners.items():
+                if len(owners) > 1:
+                    any_problem = True
+                    self.logger.warning(f"  ✗ Bridges {', '.join(owners)} share MAC {mac}.  A state file has been copied between bridges; Home cannot tell them apart.  Reset all but one of them.")
+            for file in sorted(glob(os.path.join(self.pluginprefDirectory, "busy_home_*.state"))):
+                file_id = os.path.basename(file)[len("busy_home_"):-len(".state")]
+                if file_id not in bridge_ids_seen:
+                    self.logger.info(f"  Leftover state file with no bridge device: {os.path.basename(file)}  (can be removed with 'Delete residual States Files')")
+            if not any_problem:
+                self.logger.info("  ✓ No pairing or security key problems found.  If Home still shows 'No Response', run Troubleshoot 2 and 3 (network / mDNS).")
+            self.logger.info(u"{0:=^190}".format(" HomeKit Pairing & Security Keys Troubleshooting Complete "))
+        except Exception:
+            self.logger.exception("Error in Pairing / Security Keys troubleshooting")
+
     def Menu_mDNS_troubleshoot(self, *args, **kwargs):
         """Standalone mDNS troubleshooting function callable from the plugin menu.
         Runs through a series of diagnostic checks and logs the results."""

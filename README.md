@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.06** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.07** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -64,12 +64,13 @@ The complete documentation is in the **[Wiki](https://github.com/Ghawken/HomeKit
 
 ## ⚠️ Having Issues? Run These First
 
-Before posting on the forum, run the three built-in diagnostic tools:
+Before posting on the forum, run the built-in diagnostic tools:
 
 **Plugins → HomeKitLink Siri →**
 1. **ℹ️ Troubleshoot 1 — Support Information For Forum Posting**
-2. **ℹ️ Troubleshoot 2 — Network Trouble Shooting**
+2. **ℹ️ Troubleshoot 2 — Network Troubleshooting**
 3. **ℹ️ Troubleshoot 3 — Support mDNS Troubleshooting**
+4. **ℹ️ Troubleshoot 4 — HomeKit Pairing & Security Keys** (bridge won't add, "No Response", or pairing / security key errors)
 
 Copy the Indigo log output and include it in your forum post. These tools diagnose the vast majority of connectivity and discovery issues.
 
@@ -120,7 +121,12 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.06 — Latest
+### 0.8.07 — Latest
+- **New menu item: Troubleshoot 4 HomeKit Pairing & Security Keys.** Per bridge: saved vs running keys and pairings, paired Home controllers (admin, last verified, connected), live connections, recent pair-verify failures, copied/corrupt state files, with a plain-English fix
+- **Clearer log message** when a Home controller connects with a pairing the bridge doesn't recognise (no longer blames the client's OS version)
+- **Redesigned Show QR Code page:** banner, QR code, large setup code, pairing status (ready / already paired / not running) and step-by-step instructions; works offline
+
+### 0.8.06
 - **Startup:** Removed stray `scipy` import that could stop the plugin loading on systems without scipy
 - **Sensors:** Battery level / low battery now update live; CO sensors with batteries now publish correctly
 - **Thermostats:** Setpoint changes no longer overwrite the wrong target in Heat/Cool mode; Program modes supported; Auto thresholds apply when mode and thresholds change together
