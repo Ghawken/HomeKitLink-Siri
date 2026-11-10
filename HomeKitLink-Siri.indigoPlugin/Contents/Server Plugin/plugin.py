@@ -4962,11 +4962,55 @@ class Plugin(indigo.PluginBase):
                     cam["ffprobe_audio"] = {"present": False, "enabled": False}
                     log("[%s]   No audio stream (audio disabled — OK).", cam_name)
 
+            self._probe_remote_stream(cam, cam_name, ffprobe_bin, log)
+
         if not debug_only:
             log("=" * 100)
             log("Camera Stream Check Complete")
             log("=" * 100)
 
+    def _probe_remote_stream(self, cam, cam_name, ffprobe_bin, log):
+        """BlueIris: check the stream chosen for remote / low-bandwidth viewing really resizes and
+        holds a low bitrate (&h= and &kbps=).  A 'Direct-to-wire' or quality-based encoder profile
+        ignores &kbps= (seen: 640x360 at 1-2.5 Mbps when 132k was asked for), so it can't be used.
+        Sets cam["remote_stream"] to the stream number to use, or None."""
+        import json
+        import subprocess
+
+        cam["remote_stream"] = None
+        stream_source = cam.get("stream_source", "")
+        choice = str(self.pluginPrefs.get("bi_remote_stream", "0"))
+        if "&stream=2" not in stream_source or choice not in ("0", "1"):
+            return
+        test_kbps, test_secs = 132, 6
+        test_source = stream_source.replace("&stream=2", f"&stream={choice}") + f"&h=360&kbps={test_kbps}"
+        ffmpeg_bin = os.path.join(os.path.dirname(ffprobe_bin), "ffmpeg")
+        fix = (f"In BlueIris Settings > Web server > Advanced > Encoding, set Stream {choice} to H.264, untick 'Direct-to-wire' "
+               "and target bitrate (not quality), or choose another stream in Plugin Config.  Remote / mobile viewing will use Stream 2.")
+        try:
+            result = subprocess.run([ffprobe_bin, "-rtsp_transport", "tcp", "-v", "error", "-select_streams", "v:0",
+                                     "-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "json", "-i", test_source],
+                                    capture_output=True, timeout=15)
+            video = (json.loads(result.stdout.decode(errors="replace")).get("streams") or [{}])[0]
+            codec, height = video.get("codec_name"), int(video.get("height", 0) or 0)
+            if not (codec == "h264" and video.get("pix_fmt") == "yuv420p" and 0 < height <= 400):
+                self.logger.warning("[%s] Remote viewing: BlueIris Stream %s did not resize (asked for 360 high, got %sx%s %s).  %s",
+                                    cam_name, choice, video.get("width"), height, codec, fix)
+                return
+            sample = subprocess.run([ffmpeg_bin, "-v", "error", "-rtsp_transport", "tcp", "-i", test_source, "-t", str(test_secs),
+                                     "-map", "0:v:0", "-c", "copy", "-f", "h264", "-"], capture_output=True, timeout=test_secs + 15)
+            measured_kbps = len(sample.stdout) * 8 // (test_secs * 1000)
+        except Exception as error:
+            self.logger.warning("[%s] Remote viewing: could not check BlueIris Stream %s (%s).  Remote / mobile viewing will use Stream 2.",
+                                cam_name, choice, error)
+            return
+        if 0 < measured_kbps <= test_kbps * 3:
+            cam["remote_stream"] = choice
+            log("[%s]   Remote viewing: ✓ BlueIris Stream %s resizes and limits bitrate (%sx%s, %sk when %sk asked for).",
+                cam_name, choice, video.get("width"), height, measured_kbps, test_kbps)
+        else:
+            self.logger.warning("[%s] Remote viewing: BlueIris Stream %s ignores the bitrate HomeKit asks for (%sk when %sk asked for).  %s",
+                                cam_name, choice, measured_kbps, test_kbps, fix)
 
     ########################################
     ## mDNS Troubleshooting

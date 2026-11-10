@@ -596,6 +596,33 @@ class Camera(HomeAccessory,  PyhapCamera):
             # Log warnings from strategy
             for w in strategy["warnings"]:
                 _LOGGER.warning("[%s] %s", self.display_name, w)
+
+            # ============================================================
+            # Remote / low-bandwidth viewing (BlueIris)
+            # ============================================================
+            # Stream 2 is often 'Direct-to-wire' (camera stream passed through), which ignores
+            # &kbps= (e.g. 4K at 25 Mbps).  Away from home HomeKit asks for ~640x360 at
+            # ~132k, which that can never fit.  A re-encoding BlueIris stream honours &kbps=
+            # and &h=, so BlueIris does the scaling and we copy it straight through.
+            # remote_stream is set by the startup check (_probe_remote_stream) only if it resizes.
+            remote_stream = self.config.get("remote_stream")
+            req_width = stream_config.get("width", 0) or 0
+            req_height = stream_config.get("height", 0) or 0
+            req_bitrate = stream_config.get("v_max_bitrate", 0) or 0
+            low_bandwidth = (0 < req_width < 1280) or (0 < req_bitrate < 299)
+            if low_bandwidth and remote_stream and input_source and "&stream=2" in input_source:
+                input_source = input_source.replace("&stream=2", "&stream=" + str(remote_stream))
+                if req_height > 0:
+                    input_source = input_source + "&h=" + str(req_height)
+                strategy["use_copy"] = True
+                strategy["input_extra"] = ""
+                strategy["source_resolution"] = (req_width, req_height)
+                strategy["source_codec"] = "BlueIris Stream " + str(remote_stream)
+                _LOGGER.info(
+                    "[%s] Remote / low-bandwidth request (%sx%s @ %sk): using BlueIris Stream %s (re-encoded by BlueIris)",
+                    self.display_name, req_width, req_height, req_bitrate, remote_stream,
+                )
+
             # ============================================================
             # Enforce minimum bitrate for transcode  <-- HERE
             # ============================================================

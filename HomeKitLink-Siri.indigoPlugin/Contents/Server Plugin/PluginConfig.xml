@@ -116,6 +116,21 @@ We can't speed up requests, but we can slow them down if needed. Defaults to 30 
     </Field>
     <Field id="separater24" type="separator" alwaysUseInDialogHeightCalc="true"/>
 
+    <Field id="bi_remote_stream" type="menu" defaultValue="0"
+           tooltip="Away from home HomeKit asks for a small, low bitrate stream. Stream 2 is often Direct-to-wire and ignores this, so a re-encoding BlueIris stream is used instead." alwaysUseInDialogHeightCalc="true">
+        <Label>BlueIris Remote Viewing Stream:</Label>
+        <List>
+            <Option value="0">Stream 0 (default)</Option>
+            <Option value="1">Stream 1</Option>
+            <Option value="off">Off (always use Stream 2)</Option>
+        </List>
+    </Field>
+    <Field id="label_bi_remote" type="label" fontSize="small" alwaysUseInDialogHeightCalc="true">
+        <Label>At home (Wi-Fi) cameras use BlueIris Stream 2 at full quality.  Away from home (mobile) the stream chosen here is used, sized and limited to what HomeKit asks for.  It must be H.264 with 'Direct-to-wire' unticked (BlueIris Settings > Web server > Advanced > Encoding).  It is checked when the plugin starts; if it does not resize, Stream 2 is used and a warning is logged.  Restart the plugin after changing.
+        </Label>
+    </Field>
+    <Field id="separater24bi" type="separator" alwaysUseInDialogHeightCalc="true"/>
+
     <Field id="cameraupdate"
            type="textfield"
            tooltip="Passive Camera Update time (minutes)" defaultValue="60"  alwaysUseInDialogHeightCalc="true">
