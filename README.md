@@ -37,6 +37,8 @@ HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exp
 4. Open the iOS Home app → Add Accessory → scan the QR code
 5. Done — control with Siri immediately
 
+<p align="center"><img src="https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/HomeKit.png?raw=true" alt="HomeKitLink Siri pairing page: QR code, setup code and pairing status" width="640"/><br/><em>Show QR Code: scan with the Home app, or enter the setup code</em></p>
+
 → **[Full Quick Start Guide](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Quick-Start)**
 
 ---

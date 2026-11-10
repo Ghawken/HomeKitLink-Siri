@@ -42,14 +42,14 @@ Repeat for as many devices as you like (up to 95 per bridge), then click **Save*
 Once the bridge is running:
 
 1. In the bridge config dialog, click **Show QR Code**
-2. A web page opens with a pairing QR code
+2. A web page opens with the pairing QR code, the HomeKit setup code, and whether the bridge is ready to add or already paired
 3. On your iPhone/iPad, open the **Home** app
 4. Tap **+** (top right) → **Add Accessory**
 5. Scan the QR code
 6. Follow the Home app prompts to name the bridge and assign rooms
 7. Your devices will appear — assign them to rooms as desired
 
-![HomeKit Pairing](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/HomeKit.png?raw=true)
+![HomeKit Pairing](https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/HomeKit.png?raw=true)
 
 ---
 
