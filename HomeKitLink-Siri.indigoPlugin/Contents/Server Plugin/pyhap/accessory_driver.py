@@ -72,6 +72,13 @@ LEADING_TRAILING_SPACE_DASH = re.compile(r"^[ -]+|[ -]+$")
 DASH_REGEX = re.compile(r"[-]+")
 
 
+## upstream #515: consecutive failed pair-setup proofs before pair-setup is locked, and for how long
+MAX_FAILED_PAIRING_ATTEMPTS = 5
+PAIRING_LOCKOUT_SECONDS = 60
+## upstream #518: prepared (timed) writes are short-lived (HomeKit uses ~10 s TTLs)
+MAX_PREPARED_WRITES_PER_CLIENT = 16
+MAX_PREPARED_WRITE_TTL_SECONDS = 30.0
+
 def _wrap_char_setter(char, value, client_addr):
     """Process an characteristic setter callback trapping and logging all exceptions."""
     try:
@@ -310,6 +317,9 @@ class AccessoryDriver:
 
         self.mdns_service_info = None
         self.srp_verifier = None
+        ## upstream #515: pair-setup rate limiting (each failed proof is a setup-code guess)
+        self._failed_pairing_attempts = 0
+        self._pairing_lockout_until = 0.0
 
         address = address or util.get_local_address()
         advertised_address = advertised_address or address
@@ -675,9 +685,8 @@ class AccessoryDriver:
 
         Must be run in the event loop.
         """
-        loop = asyncio.get_event_loop()
         logger.debug("Scheduling write of accessory state to disk")
-        util.async_create_background_task(loop.run_in_executor(None, self.persist))
+        util.async_create_background_task(self.loop.run_in_executor(None, self.persist))  ## upstream #525
 
     def persist(self):
         """Saves the state of the accessory.
@@ -736,11 +745,32 @@ class AccessoryDriver:
             client_username_bytes,
             client_permissions,
         )
+        ## A successful pairing clears the rate limiter (upstream #515)
+        self._failed_pairing_attempts = 0
+        self._pairing_lockout_until = 0.0
         self.state.add_paired_client(
             client_username_bytes, client_public, client_permissions
         )
         self.async_persist()
         return True
+
+    @callback
+    def register_failed_pairing_attempt(self):
+        """Count a failed pair-setup proof; lock pair-setup out after too many (upstream #515)."""
+        self._failed_pairing_attempts += 1
+        if self._failed_pairing_attempts >= MAX_FAILED_PAIRING_ATTEMPTS:
+            self._pairing_lockout_until = time.monotonic() + PAIRING_LOCKOUT_SECONDS
+            self._failed_pairing_attempts = 0
+            logger.warning(
+                "Pair-setup locked out for %s seconds after %s failed attempts (wrong setup code?)",
+                PAIRING_LOCKOUT_SECONDS,
+                MAX_FAILED_PAIRING_ATTEMPTS,
+            )
+
+    @property
+    def pairing_locked_out(self):
+        """Whether pair-setup is currently locked out due to failed attempts."""
+        return time.monotonic() < self._pairing_lockout_until
 
     @callback
     def unpair(self, client_uuid):
@@ -1049,10 +1079,15 @@ class AccessoryDriver:
         try:
             ttl = prepare_query[HAP_REPR_TTL]
             pid = prepare_query[HAP_REPR_PID]
-            self.prepared_writes.setdefault(client_addr, {})[pid] = time.time() + (
-                ttl / 1000
-            )
-        except (KeyError, ValueError):
+            ## upstream #518: prune expired entries, cap pending writes and TTL per client
+            now = time.time()
+            pending = self.prepared_writes.setdefault(client_addr, {})
+            for stale_pid in [p for p, expires_at in pending.items() if expires_at <= now]:
+                del pending[stale_pid]
+            if len(pending) >= MAX_PREPARED_WRITES_PER_CLIENT:
+                del pending[min(pending, key=pending.get)]
+            pending[pid] = now + min(ttl / 1000, MAX_PREPARED_WRITE_TTL_SECONDS)
+        except (KeyError, TypeError, ValueError):
             return {HAP_REPR_STATUS: HAP_SERVER_STATUS.INVALID_VALUE_IN_REQUEST}
 
         return {HAP_REPR_STATUS: HAP_SERVER_STATUS.SUCCESS}

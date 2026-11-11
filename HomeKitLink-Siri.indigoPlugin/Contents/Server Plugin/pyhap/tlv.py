@@ -33,7 +33,8 @@ def encode(*args, to_base64=False):
             for y in range(0, total_length // 255):
                 encoded = encoded + tag + b"\xFF" + data[y * 255 : (y + 1) * 255]
             remaining = total_length % 255
-            encoded = encoded + tag + struct.pack("B", remaining) + data[-remaining:]
+            if remaining:  ## upstream #533: an exact multiple of 255 added a bogus extra record
+                encoded = encoded + tag + struct.pack("B", remaining) + data[-remaining:]
 
         pieces.append(encoded)
 
@@ -54,19 +55,20 @@ def decode(data: bytes, from_base64: bool = False) -> Dict[bytes, Any]:
     if from_base64:
         data = util.base64_to_bytes(data)
 
+    ## upstream #517 (fail loudly on truncated input) and #521 (join fragments once)
     objects = {}
     current = 0
     while current < len(data):
+        if current + 2 > len(data):
+            raise ValueError(f"Truncated TLV record at offset {current}")
         # The following hack is because bytes[x] is an int
         # and we want to keep the tag as a byte.
         tag = data[current : current + 1]
         length = data[current + 1]
-        value = data[current + 2 : current + 2 + length]
-        if tag in objects:
-            objects[tag] = objects[tag] + value
-        else:
-            objects[tag] = value
+        end = current + 2 + length
+        if end > len(data):
+            raise ValueError(f"TLV value truncated at offset {current}")
+        objects.setdefault(tag, []).append(data[current + 2 : end])
+        current = end
 
-        current = current + 2 + length
-
-    return objects
+    return {tag: b"".join(chunks) for tag, chunks in objects.items()}

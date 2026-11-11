@@ -76,6 +76,8 @@ def long_to_bytes(n):
     :return: ``long int`` in ``bytes`` format.
     :rtype: bytes
     """
+    if isinstance(n, int) and n >= 0:  ## upstream #505: fast path
+        return n.to_bytes((n.bit_length() + 7) >> 3, "big")
     byteList = []
     x = 0
     off = 0
@@ -149,7 +151,7 @@ async def event_wait(event, timeout):
     :rtype: bool
     """
     try:
-        async with async_timeout.timeout(timeout):
+        async with async_timeout(timeout):
             await event.wait()
     except asyncio.TimeoutError:
         pass

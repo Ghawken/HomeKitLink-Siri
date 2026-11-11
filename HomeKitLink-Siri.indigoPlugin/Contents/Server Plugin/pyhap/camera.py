@@ -227,6 +227,26 @@ FFMPEG_CMD = (
 logger = logging.getLogger("Plugin.HomeKit_pyHap")
 
 
+
+def parse_setup_address(value, is_ipv6):
+    """Return the controller address of a Setup Endpoints write (upstream #543).
+
+    The address must be an IP address of the announced version, without an IPv6 scope ID.
+
+    :raises ValueError: If the address is anything else.
+    """
+    try:
+        address = value.decode("utf-8")
+        parsed = ipaddress.ip_address(address)
+    except ValueError as ex:
+        raise ValueError(f"invalid address {value!r}") from ex
+    if isinstance(parsed, ipaddress.IPv6Address) and parsed.scope_id is not None:
+        raise ValueError(f"address {address!r} has a scope ID")
+    if parsed.version != (6 if is_ipv6 else 4):
+        raise ValueError(f"address {address!r} does not match its IP version")
+    return parsed
+
+
 class Camera( Accessory):
     """An Accessory that can negotiated camera stream settings with iOS and start a
     stream.
@@ -670,30 +690,42 @@ class Camera( Accessory):
         objs = tlv.decode(value, from_base64=True)
         session_id = UUID(bytes=objs[SETUP_TYPES['SESSION_ID']])
 
-        # Extract address info
-        address_tlv = objs[SETUP_TYPES['ADDRESS']]
-        address_info_objs = tlv.decode(address_tlv)
-        is_ipv6 = struct.unpack('?',
-            address_info_objs[SETUP_ADDR_INFO['ADDRESS_VER']])[0]
-        address = address_info_objs[SETUP_ADDR_INFO['ADDRESS']].decode('utf8')
-        target_video_port = struct.unpack(
-            '<H', address_info_objs[SETUP_ADDR_INFO['VIDEO_RTP_PORT']])[0]
-        target_audio_port = struct.unpack(
-            '<H', address_info_objs[SETUP_ADDR_INFO['AUDIO_RTP_PORT']])[0]
+        try:
+            # Extract address info
+            address_tlv = objs[SETUP_TYPES['ADDRESS']]
+            address_info_objs = tlv.decode(address_tlv)
+            is_ipv6 = struct.unpack('?',
+                address_info_objs[SETUP_ADDR_INFO['ADDRESS_VER']])[0]
+            ## upstream #543: the address goes into ffmpeg command lines - it must be a plain IP address
+            address = str(parse_setup_address(bytes(address_info_objs[SETUP_ADDR_INFO['ADDRESS']]), is_ipv6))
+            target_video_port = struct.unpack(
+                '<H', address_info_objs[SETUP_ADDR_INFO['VIDEO_RTP_PORT']])[0]
+            target_audio_port = struct.unpack(
+                '<H', address_info_objs[SETUP_ADDR_INFO['AUDIO_RTP_PORT']])[0]
 
-        # Video SRTP Params
-        video_srtp_tlv = objs[SETUP_TYPES['VIDEO_SRTP_PARAM']]
-        video_info_objs = tlv.decode(video_srtp_tlv)
-        video_crypto_suite = video_info_objs[SETUP_SRTP_PARAM['CRYPTO']][0]
-        video_master_key = video_info_objs[SETUP_SRTP_PARAM['MASTER_KEY']]
-        video_master_salt = video_info_objs[SETUP_SRTP_PARAM['MASTER_SALT']]
+            # Video SRTP Params
+            video_srtp_tlv = objs[SETUP_TYPES['VIDEO_SRTP_PARAM']]
+            video_info_objs = tlv.decode(video_srtp_tlv)
+            video_crypto_suite = video_info_objs[SETUP_SRTP_PARAM['CRYPTO']][0]
+            video_master_key = video_info_objs[SETUP_SRTP_PARAM['MASTER_KEY']]
+            video_master_salt = video_info_objs[SETUP_SRTP_PARAM['MASTER_SALT']]
 
-        # Audio SRTP Params
-        audio_srtp_tlv = objs[SETUP_TYPES['AUDIO_SRTP_PARAM']]
-        audio_info_objs = tlv.decode(audio_srtp_tlv)
-        audio_crypto_suite = audio_info_objs[SETUP_SRTP_PARAM['CRYPTO']][0]
-        audio_master_key = audio_info_objs[SETUP_SRTP_PARAM['MASTER_KEY']]
-        audio_master_salt = audio_info_objs[SETUP_SRTP_PARAM['MASTER_SALT']]
+            # Audio SRTP Params
+            audio_srtp_tlv = objs[SETUP_TYPES['AUDIO_SRTP_PARAM']]
+            audio_info_objs = tlv.decode(audio_srtp_tlv)
+            audio_crypto_suite = audio_info_objs[SETUP_SRTP_PARAM['CRYPTO']][0]
+            audio_master_key = audio_info_objs[SETUP_SRTP_PARAM['MASTER_KEY']]
+            audio_master_salt = audio_info_objs[SETUP_SRTP_PARAM['MASTER_SALT']]
+        except (IndexError, KeyError, ValueError, struct.error) as ex:
+            logger.warning("[%s] Refusing the stream endpoints: %s", session_id, ex)
+            self._management[stream_idx].get_characteristic("SetupEndpoints").set_value(
+                tlv.encode(
+                    SETUP_TYPES['SESSION_ID'], session_id.bytes,
+                    SETUP_TYPES['STATUS'], SETUP_STATUS['ERROR'],
+                    to_base64=True,
+                )
+            )
+            return
 
         logger.debug(
             'Received endpoint configuration:'
@@ -867,7 +899,7 @@ class Camera( Accessory):
             logger.info('[%s] Stopping stream.', session_id)
             try:
                 ffmpeg_process.terminate()
-                async with async_timeout.timeout(2.0):
+                async with async_timeout(2.0):
                     _, stderr = await ffmpeg_process.communicate()
                 logger.debug('Stream command stderr: %s', stderr)
             except asyncio.TimeoutError:

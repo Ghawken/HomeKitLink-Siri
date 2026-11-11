@@ -155,7 +155,6 @@ class HAPServerHandler:
 
         self.path: Optional[str] = None
         self.command: Optional[str] = None
-        self.headers: Optional[Dict[str, str]] = None
         self.request_body: Optional[bytes] = None
         self.parsed_url: Optional[ParseResult] = None
 
@@ -221,7 +220,6 @@ class HAPServerHandler:
         """Dispatch the request to the appropriate handler method."""
         self.path = request.target.decode()
         self.command = request.method.decode()
-        self.headers = {k.decode(): v.decode() for k, v in request.headers}
         self.request_body = body
         self.parsed_url = urlparse(self.path)
         response = HAPResponse()
@@ -232,7 +230,7 @@ class HAPServerHandler:
             self.client_address,
             self.command,
             self.path,
-            self.headers,
+            request.headers,  ## upstream #524: no per-request header dict
         )
 
         path = self.parsed_url.path
@@ -275,6 +273,17 @@ class HAPServerHandler:
 
     def handle_pairing(self):
         """Handles arbitrary step of the pairing process."""
+        if self.accessory_handler.pairing_locked_out:
+            ## upstream #515: too many wrong setup codes recently - answer BUSY
+            self._send_tlv_pairing_response(
+                tlv.encode(
+                    HAP_TLV_TAGS.SEQUENCE_NUM,
+                    HAP_TLV_STATES.M2,
+                    HAP_TLV_TAGS.ERROR_CODE,
+                    HAP_TLV_ERRORS.BUSY,
+                )
+            )
+            return
         if self.state.paired:
             self._send_tlv_pairing_response(
                 tlv.encode(
@@ -327,11 +336,18 @@ class HAPServerHandler:
         A = tlv_objects[HAP_TLV_TAGS.PUBLIC_KEY]
         M = tlv_objects[HAP_TLV_TAGS.PASSWORD_PROOF]
         verifier = self.accessory_handler.srp_verifier
-        verifier.set_A(A)
+        try:
+            verifier.set_A(A)
+        except ValueError:
+            ## upstream #512/#517: reject an invalid client key instead of a generic 500
+            logger.warning("%s: Rejected invalid SRP A value during pairing [2/5]", self.client_address)
+            self._send_authentication_error_tlv_response(HAP_TLV_STATES.M4)
+            return
 
         hamk = verifier.verify(M)
 
         if hamk is None:  # Probably the provided pincode was wrong.
+            self.accessory_handler.register_failed_pairing_attempt()  ## upstream #515
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M4)
             return
 
@@ -361,13 +377,15 @@ class HAPServerHandler:
         cipher = ChaCha20Poly1305(hkdf_enc_key)
         try:
             decrypted_data = cipher.decrypt(
-                self.PAIRING_3_NONCE, bytes(encrypted_data), b""
+                self.PAIRING_3_NONCE,
+                encrypted_data if isinstance(encrypted_data, bytes) else bytes(encrypted_data),  ## upstream #505
+                b"",
             )
         except InvalidTag:
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M6)
             return
 
-        dec_tlv_objects = tlv.decode(bytes(decrypted_data))
+        dec_tlv_objects = tlv.decode(decrypted_data)
         client_username_bytes = dec_tlv_objects[HAP_TLV_TAGS.USERNAME]
         client_ltpk = dec_tlv_objects[HAP_TLV_TAGS.PUBLIC_KEY]
         client_proof = dec_tlv_objects[HAP_TLV_TAGS.PROOF]
@@ -566,7 +584,7 @@ class HAPServerHandler:
             self._send_authentication_error_tlv_response(HAP_TLV_STATES.M4)
             return
 
-        dec_tlv_objects = tlv.decode(bytes(decrypted_data))
+        dec_tlv_objects = tlv.decode(decrypted_data)
         client_username = dec_tlv_objects[HAP_TLV_TAGS.USERNAME]
         public_key: x25519.X25519PublicKey = self.enc_context["public_key"]
         raw_public_key = public_key.public_bytes(
@@ -670,7 +688,7 @@ class HAPServerHandler:
             self.send_response(HTTPStatus.UNAUTHORIZED)
             return
 
-        requested_chars = from_hap_json(self.request_body.decode("utf-8"))
+        requested_chars = from_hap_json(self.request_body)
         logger.debug(
             "%s: Set characteristics content: %s", self.client_address, requested_chars
         )
@@ -695,7 +713,7 @@ class HAPServerHandler:
             self.send_response(HTTPStatus.UNAUTHORIZED)
             return
 
-        request = from_hap_json(self.request_body.decode("utf-8"))
+        request = from_hap_json(self.request_body)
         logger.debug("%s: prepare content: %s", self.client_address, request)
 
         response = self.accessory_handler.prepare(request, self.client_address)
@@ -823,7 +841,11 @@ class HAPServerHandler:
 
     def handle_resource(self):
         """Get a snapshot from the camera."""
-        data = from_hap_json(self.request_body.decode("utf-8"))
+        if not self.is_encrypted:
+            ## upstream #513: snapshots need a pair-verified session, otherwise any LAN peer can read them
+            raise UnprivilegedRequestException
+
+        data = from_hap_json(self.request_body)
 
         if self.accessory_handler.accessory.category == CATEGORY_BRIDGE:
             accessory = self.accessory_handler.accessory.accessories.get(data["aid"])
@@ -836,7 +858,7 @@ class HAPServerHandler:
         else:
             accessory = self.accessory_handler.accessory
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()  ## upstream #525
         if hasattr(accessory, "async_get_snapshot"):
             coro = accessory.async_get_snapshot(data)
         elif hasattr(accessory, "get_snapshot"):

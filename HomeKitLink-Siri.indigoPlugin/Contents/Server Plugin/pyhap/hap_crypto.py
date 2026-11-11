@@ -1,6 +1,5 @@
 '''This module partially implements crypto for HAP.'''
 import logging
-import struct
 from functools import partial
 from typing import List
 from struct import Struct
@@ -14,7 +13,8 @@ logger = logging.getLogger(__name__)
 CRYPTO_BACKEND = default_backend()
 
 PACK_NONCE = partial(Struct("<LQ").pack, 0)
-PACK_LENGTH = Struct("H").pack
+PACK_LENGTH = Struct("<H").pack
+UNPACK_LENGTH = Struct("<H").unpack
 
 
 class HAP_CRYPTO:
@@ -78,41 +78,42 @@ class HAPCrypto:
         The received full cipher blocks are decrypted and returned and partial cipher
         blocks are buffered locally.
         """
-        result = b""
+        ## upstream #522: collect blocks in a list and join once (``+=`` is quadratic)
         crypt_in_buffer = self._crypt_in_buffer
         length_length = self.LENGTH_LENGTH
         tag_length = HAP_CRYPTO.TAG_LENGTH
+        result = []
 
         while len(crypt_in_buffer) > self.MIN_BLOCK_LENGTH:
             block_length_bytes = crypt_in_buffer[:length_length]
-            block_size = struct.unpack("H", block_length_bytes)[0]
-            block_size_with_length = length_length + block_size + tag_length
-
-            if len(crypt_in_buffer) < block_size_with_length:
-                logger.debug("Incoming buffer does not have the full block")
-                return result
-
-            # Trim off the length
-            del crypt_in_buffer[:length_length]
-
+            block_size = UNPACK_LENGTH(block_length_bytes)[0]
             data_size = block_size + tag_length
+
+            if len(crypt_in_buffer) < length_length + data_size:
+                logger.debug("Incoming buffer does not have the full block")
+                break
+
             nonce = PACK_NONCE(self._in_count)
 
-            result += self._in_cipher.decrypt(
-                nonce,
-                bytes(crypt_in_buffer[:data_size]),
-                bytes(block_length_bytes),
+            result.append(
+                self._in_cipher.decrypt(
+                    nonce,
+                    bytes(crypt_in_buffer[length_length : length_length + data_size]),
+                    bytes(block_length_bytes),
+                )
             )
 
             self._in_count += 1
 
-            # Now trim out the decrypted data
-            del crypt_in_buffer[:data_size]
+            # Now trim off the length prefix and the decrypted data in one memmove
+            del crypt_in_buffer[: length_length + data_size]
 
-        return result
+        if not result:
+            return b""
+        return b"".join(result)
 
-    def encrypt(self, data: bytes) -> bytes:
-        """Encrypt and send the return bytes."""
+    def encrypt(self, data: bytes) -> List[bytes]:
+        """Encrypt and return the blocks (written with transport.writelines, upstream #476)."""
         result: List[bytes] = []
         offset = 0
         total = len(data)
@@ -126,7 +127,4 @@ class HAPCrypto:
             offset += length
             self._out_count += 1
 
-        # Join the result once instead of concatenating each time
-        # as this is much faster than generating an new immutable
-        # byte string each time.
-        return b"".join(result)
+        return result

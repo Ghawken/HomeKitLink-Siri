@@ -90,7 +90,15 @@ class Server:
         return self._digest(hGroup + hU + self.s + self.Ab + self.Bb + self.Kb)
 
     def set_A(self, bytes_A):
-        self.A = bytes_to_long(bytes_A)
+        ## upstream #517: A must be one group element; oversized values only burn CPU
+        if len(bytes_A) > self.N_len // 8:
+            raise ValueError(f"Client public key A longer than {self.N_len // 8} bytes")
+        A = bytes_to_long(bytes_A)
+        ## upstream #512 (RFC 5054 2.5.1.3): with A % N == 0 the session key is public,
+        ## letting anyone complete pair-setup without the setup code
+        if A % self.N == 0:
+            raise ValueError("Invalid client public key A: A mod N == 0")
+        self.A = A
         self.Ab = bytes_A
         self.S = self._derive_premaster_secret()
         self.Sb = long_to_bytes(self.S)

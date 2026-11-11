@@ -6,6 +6,17 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.14 — 2026-11-11
+
+### 🔒 HomeKit library updates
+Fixes and hardening brought in from the current HAP-python library:
+- **Pairing:** an unpaired bridge can no longer be paired without the setup code by a specially crafted request; malformed pairing data is rejected; after 5 wrong setup codes, pairing pauses for 60 seconds
+- **Cameras:** snapshots are only sent to paired Home devices; the stream address from the Home app is checked before it's used
+- **Fixed:** camera or pairing data of certain lengths could be corrupted; a closed connection was treated as an error; oversized requests are refused
+- **Faster:** less copying when sending and receiving HomeKit data
+
+---
+
 ## 0.8.13 — 2026-11-11
 
 ### 📷 UniFi Protect logging

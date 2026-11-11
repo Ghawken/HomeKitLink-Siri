@@ -29,6 +29,9 @@ IDLE_CONNECTION_TIMEOUT_SECONDS = 90 * 60 * 60
 
 EVENT_COALESCE_TIME_WINDOW = 0.5
 
+## upstream #514: HAP request bodies are a few KiB at most; a peer streaming a huge body is dropped
+MAX_REQUEST_BODY_SIZE = 2**20
+
 
 class HAPServerProtocol(asyncio.Protocol):
     """A asyncio.Protocol implementing the HAP protocol."""
@@ -43,7 +46,8 @@ class HAPServerProtocol(asyncio.Protocol):
         self.transport = None
 
         self.request = None
-        self.request_body = None
+        self.request_body = []
+        self._request_body_size = 0
         self.response = None
 
         self.last_activity = None
@@ -94,7 +98,7 @@ class HAPServerProtocol(asyncio.Protocol):
                 self.handler.client_uuid,
                 data,
             )
-            self.transport.write(result)
+            self.transport.writelines(result)  ## upstream #476: zero-copy write of the encrypted blocks
         else:
             logger.debug(
                 "%s (%s): Send unencrypted: %s",
@@ -231,27 +235,43 @@ class HAPServerProtocol(asyncio.Protocol):
         logger.debug(
             "%s (%s): h11 Event: %s", self.peername, self.handler.client_uuid, event
         )
-        if event in (h11.NEED_DATA, h11.ConnectionClosed):
+        if event is h11.NEED_DATA:
             return False
 
         if event is h11.PAUSED:
             self.conn.start_next_cycle()
             return True
 
+        ## upstream #467: ConnectionClosed is an instance, so the old "event in (...)" never matched it
+        if isinstance(event, h11.ConnectionClosed):
+            return False
+
         if isinstance(event, h11.Request):
             self.request = event
-            self.request_body = b""
+            self.request_body = []
+            self._request_body_size = 0
             return True
 
         if isinstance(event, h11.Data):
-            self.request_body += event.data
+            self.request_body.append(event.data)
+            self._request_body_size += len(event.data)
+            if self._request_body_size > MAX_REQUEST_BODY_SIZE:
+                logger.warning(
+                    "%s (%s): Request body exceeds %d bytes, closing connection",
+                    self.peername,
+                    self.handler.client_uuid,
+                    MAX_REQUEST_BODY_SIZE,
+                )
+                self.close()
+                return False
             return True
 
         if isinstance(event, h11.EndOfMessage):
-            response = self.handler.dispatch(self.request, bytes(self.request_body))
+            response = self.handler.dispatch(self.request, b"".join(self.request_body))
             self._process_response(response)
             self.request = None
-            self.request_body = None
+            self.request_body = []
+            self._request_body_size = 0
             return True
 
         return self._handle_invalid_conn_state(f"Unexpected event: {event}")
