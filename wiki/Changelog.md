@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.16 — 2026-11-11
+
+### 📷 Camera snapshots
+- Fixed camera tiles showing the default images for several minutes after the plugin starts. The startup camera stream check now runs on its own, so snapshots are fetched straight away
+- Shorter mDNS start-up debug line per bridge
+
+---
+
 ## 0.8.15 — 2026-11-11
 
 ### 🏠 HomeKit library updates (part 2)

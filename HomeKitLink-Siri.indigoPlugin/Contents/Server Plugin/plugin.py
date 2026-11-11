@@ -1154,8 +1154,10 @@ class Plugin(indigo.PluginBase):
                 if self.debug7:
                     self.logger.debug("Startup Refresh Snapshots images to Default for Camera: {}".format(path))
 
-            # Probe all camera streams in background (debug-level output)
-            self._run_ffprobe(debug_only=True)
+            # Probe all camera streams in their own background thread (debug-level output).
+            # It takes ~15s+ per camera, and run here it held up every snapshot fetch, so the
+            # Home app only got the default images until it finished.
+            threading.Thread(target=self._run_ffprobe, kwargs={"debug_only": True}, daemon=True, name="HKLS-ffprobe").start()
             session = requests.Session()
             cameracheck = {}
             while True:
@@ -1408,12 +1410,9 @@ class Plugin(indigo.PluginBase):
             # derive from ip_version selection (like HA's _DEFAULT_BIND pattern).
             effective_listen_address = self.HAPServeripaddress if self.HAPServeripaddress else self.default_listen_address
             self.logger.debug(
-                f"\nmDNS: Starting Driver"
-                f"\n  interface_choice(ip_version) = {self.select_ip_version}"
-                f"\n  listen_address               = {effective_listen_address}"
-                f"\n  address (HAP server)          = {self.HAPServeripaddress}"
-                f"\n  advertised_address            = {self.HAPAdvertised_ipaddress}"
-                f"\n  zeroconf_interfaces           = {self.select_interfaces}"
+                f"mDNS: Starting driver for bridge {uniqueID} on port {nextport}: ip_version={self.select_ip_version} "
+                f"listen={effective_listen_address} HAP address={self.HAPServeripaddress} "
+                f"advertised={self.HAPAdvertised_ipaddress} interfaces={self.select_interfaces}"
             )
             #self.driver_multiple.append(HomeDriver(indigodeviceid=str(uniqueID),iid_storage=self.plugin_iidstorage, port=int(nextport), persist_file=persist_file_location, zeroconf_server=f"HomeKitLinkSiri-{uniqueID}-hap.local" , interface_choice=self.select_ip_version, zeroconf_interfaces=self.select_interfaces, address=self.HAPServeripaddress, advertised_address=self.HAPAdvertised_ipaddress))
             self.driver_multiple.append(
