@@ -6,6 +6,18 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.11 — 2026-11-11
+
+### 🛠️ Fixes (thanks to Durosity, PR #42)
+- Garage doors: start-up target state is now always open or closed
+- Cameras: a stream stopped by the Home app while still starting no longer leaves ffmpeg and the audio running
+- No more errors when the Home app asks for an accessory that was just unpublished
+- Unpublishing a device is more reliable
+- Clearer log message when a camera stream has no video
+- Removed unused code
+
+---
+
 ## 0.8.10 — 2026-11-10
 
 ### 📷 Blue Iris remote / mobile camera viewing

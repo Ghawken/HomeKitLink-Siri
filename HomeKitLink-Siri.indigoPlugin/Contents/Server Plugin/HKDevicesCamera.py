@@ -842,6 +842,21 @@ class Camera(HomeAccessory,  PyhapCamera):
                     await audio_proxy.async_stop()
                 return False
 
+            ## The Home app sometimes stops a stream while it is still starting (start and stop ms apart).
+            ## stop_stream then finds nothing to stop, so ffmpeg and the audio proxy kept running with no session.
+            if session_info.get("_stop_requested") or session_info["id"] not in self.sessions:
+                _LOGGER.debug("[%s] Stream was stopped while starting - shutting it down", session_info["id"])
+                try:
+                    await stream.close()
+                except Exception:
+                    try:
+                        await stream.kill()
+                    except Exception:
+                        pass
+                if audio_proxy:
+                    await audio_proxy.async_stop()
+                return False
+
             _LOGGER.info(
                 "[%s] Started video stream process - PID %d",
                 session_info["id"],
@@ -1203,8 +1218,11 @@ class Camera(HomeAccessory,  PyhapCamera):
             # Decode bytes to string using UTF-8 encoding
             line = line_bytes.decode('utf-8', errors='replace').rstrip()
             if 'Output file does not contain any stream' in line:
-                _LOGGER.info("'Output file does not contain any stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
-                _LOGGER.info("Suggest unpublishing the camera, checking it is gone in the Home app, then republishing with Audio disabled.")
+                if self.config.get(CONF_SUPPORT_AUDIO):
+                    _LOGGER.info("'Output file does not contain any stream' error noted for video stream playback. Often this means the stream does not have Audio and audio has been enabled.")
+                    _LOGGER.info("Suggest unpublishing the camera, checking it is gone in the Home app, then republishing with Audio disabled.")
+                else:
+                    _LOGGER.info("[%s] 'Output file does not contain any stream': ffmpeg selected no video from the source. The video map (%s) probably points at a non-video stream; run 'Check Camera Stream Compatibility' to see the stream layout.", self.display_name, self.config.get(CONF_VIDEO_MAP))
             elif any(err in line for err in (
                 "Connection refused",
                 "Connection timed out",
@@ -1258,9 +1276,11 @@ class Camera(HomeAccessory,  PyhapCamera):
         try:
             if self.plugin.debug7:
                 _LOGGER.debug(f"_async_stop_ffmpeg_watch called")
-            self.sessions[session_id].pop(FFMPEG_LOGGER).cancel()
-        except:
-            _LOGGER.debug(f"Exception in async stop ffmpeg stream", exc_info=True)
+            logger_task = self.sessions.get(session_id, {}).pop(FFMPEG_LOGGER, None)
+            if logger_task is not None:
+                logger_task.cancel()
+        except Exception:
+            _LOGGER.debug("Exception in async stop ffmpeg stream", exc_info=True)
 
     async def reconfigure_stream(self, session_info, stream_config):
         """Reconfigure the stream so that it uses the given ``stream_config``."""
@@ -1407,7 +1427,9 @@ class Camera(HomeAccessory,  PyhapCamera):
         if proxy := session_info.pop(AUDIO_PROXY, None):
             await proxy.async_stop()
         if not (stream := session_info.get("stream")):
-            _LOGGER.debug("No stream for session ID %s", session_id)
+            ## Still starting: tell start_stream to shut down what it launches
+            session_info["_stop_requested"] = True
+            _LOGGER.debug("No stream for session ID %s (yet) - flagged to stop once started", session_id)
             return
         else:
             if self.plugin.debug7:

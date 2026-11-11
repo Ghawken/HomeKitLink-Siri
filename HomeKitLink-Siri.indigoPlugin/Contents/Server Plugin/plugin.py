@@ -1775,7 +1775,7 @@ class Plugin(indigo.PluginBase):
             if deleted_device.id in self.device_list:
                 ## this is list of all wished to published devices, event those off/not currently enabled for example.
                 ## this list is created on startup - but delete here
-                self.device_list.remove(deleted_device.id)
+                self.device_list.discard(deleted_device.id)
                 self.logger.debug("Device: {}, just deleted, was published and within HomeKit, will likely need appropriate Bridge Restarted.".format(deleted_device.name))
         except:
             self.logger.debug("Caught Exception in Delete Device", exc_info=True)
@@ -4001,7 +4001,7 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_inverseSelector"] = ""
                 device_props["HomeKit_audioSelector"] = ""
                 try:
-                    self.device_list.remove(device.id)  ## not good to just remove here and internal list no longer deleted.
+                    self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
                     if checkindex != None:
                         self.logger.info("Deleting item:{}".format(self.device_list_internal[checkindex]))
@@ -4585,10 +4585,6 @@ class Plugin(indigo.PluginBase):
             if self.debug6:
                 self.logger.debug("{}".format(self.bridge_multiple[num].accessories))
             self.logger.info("{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in self.bridge_multiple[num].accessories.items()) + "}")
-
-    def Menu_reset_pairing(self, *args, **kwargs):
-        self.logger.debug("reset Paired Clients called...")
-        self.logger.info("{}".format())
 
     def Menu_show_runningids(self, *args, **kwargs):
         self.logger.debug("Show Running Ids called...")

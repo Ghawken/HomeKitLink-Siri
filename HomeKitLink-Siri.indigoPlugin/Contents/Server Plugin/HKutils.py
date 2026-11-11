@@ -2,7 +2,6 @@ from typing import Any
 import math
 import colorsys
 import socket
-import ujson
 import os
 import asyncio
 from typing import Callable, Optional
@@ -224,10 +223,6 @@ def density_to_air_quality_pm25(density: float) -> int:
 def color_temperature_to_hs(color_temperature_kelvin: float) -> tuple[float, float]:
     """Return an hs color from a color temperature in Kelvin."""
     return color_RGB_to_hs(*color_temperature_to_rgb(color_temperature_kelvin))
-
-def color_RGB_to_hs(iR: float, iG: float, iB: float) -> tuple[float, float]:
-    """Convert an rgb color to its hs representation."""
-    return color_RGB_to_hsv(iR, iG, iB)[:2]
 
 def color_RGB_to_hs(iR: float, iG: float, iB: float) -> tuple[float, float]:
     """Convert an rgb color to its hs representation."""

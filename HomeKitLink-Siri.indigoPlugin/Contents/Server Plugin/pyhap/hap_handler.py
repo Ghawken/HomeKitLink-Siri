@@ -828,7 +828,11 @@ class HAPServerHandler:
         if self.accessory_handler.accessory.category == CATEGORY_BRIDGE:
             accessory = self.accessory_handler.accessory.accessories.get(data["aid"])
             if not accessory:
-                raise ValueError(f"Accessory with aid == {data['aid']} not found")
+                ## Usually a snapshot request for an accessory just unpublished - reply 404 quietly
+                logger.debug("%s: snapshot requested for unknown aid %s", self.client_address, data.get("aid"))
+                self.send_response(HTTPStatus.NOT_FOUND)
+                self.end_response(b"")
+                return
         else:
             accessory = self.accessory_handler.accessory
 

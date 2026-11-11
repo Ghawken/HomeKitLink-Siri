@@ -580,7 +580,7 @@ class Camera( Accessory):
                 '[%s] Failed to start/reconfigure stream, deleting session.',
                 session_id
             )
-            del self.sessions[session_id]
+            self.sessions.pop(session_id, None)  ## may already be gone if HomeKit stopped it while starting
             self._streaming_status[stream_idx] = STREAMING_STATUS['AVAILABLE']
 
     def _get_streaming_status(self, stream_idx):

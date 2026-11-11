@@ -1950,7 +1950,11 @@ class GarageDoor(HomeAccessory):
         # add state from start and set.
         currentstate = self.get_state()
         if currentstate is not None:
-            self.char_target_state.set_value(currentstate)
+            ## CurrentDoorState is 0-4 (open, closed, opening, closing, stopped), TargetDoorState only 0/1
+            try:
+                self.char_target_state.set_value((0, 1, 0, 1, 0)[int(currentstate)])
+            except (ValueError, TypeError, IndexError):
+                pass
             self.char_current_state.set_value(currentstate)
 
         serv_garage_door.setter_callback = self._set_chars  ## Setter for everything

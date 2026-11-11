@@ -862,7 +862,11 @@ class AccessoryDriver:
                     available = acc.available
                     char = acc.iid_manager.get_obj(iid)
 
-                if available:
+                if char is None:
+                    ## Home app asking for an IID this accessory no longer has (stale cache)
+                    logger.debug("%s: read for unknown characteristic %s", self.accessory.display_name, (aid, iid))
+                    rep[HAP_REPR_STATUS] = HAP_SERVER_STATUS.RESOURCE_DOES_NOT_EXIST
+                elif available:
                     rep[HAP_REPR_VALUE] = char.get_value()
                     rep[HAP_REPR_STATUS] = HAP_SERVER_STATUS.SUCCESS
 
@@ -951,11 +955,23 @@ class AccessoryDriver:
             else:
                 acc = self.accessory.accessories.get(aid)
 
+            if acc is None:
+                ## Write for an accessory no longer on this bridge (e.g. just unpublished)
+                logger.debug("%s: write for unknown aid %s", client_addr, aid)
+                had_error = True
+                for iid in new_iid_values:
+                    setter_results[aid][iid] = HAP_SERVER_STATUS.RESOURCE_DOES_NOT_EXIST
+                continue
+
             updates_by_service = {}
             char_to_iid = {}
             for iid, value in new_iid_values.items():
                 # Characteristic level setter callbacks
                 char = acc.get_characteristic(aid, iid)
+                if char is None:
+                    had_error = True
+                    setter_results[aid][iid] = HAP_SERVER_STATUS.RESOURCE_DOES_NOT_EXIST
+                    continue
 
                 set_result, set_result_value = _wrap_char_setter(char, value, client_addr)
                 if set_result != HAP_SERVER_STATUS.SUCCESS:
