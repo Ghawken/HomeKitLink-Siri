@@ -17,6 +17,7 @@
 				    <Option value="sensor">Indigo Sensor Devices</Option>
 				    <Option value="BI_camera">Blue Iris Camera</Option>
 				 	<Option value="SS_camera">Security Spy Camera</Option>
+				 	<Option value="UP_camera">UniFi Protect Camera</Option>
                 </List>
 				  <CallbackMethod>menuChanged</CallbackMethod>
 			</Field>
@@ -84,11 +85,11 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If a sim
 			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor" alwaysUseInDialogHeightCalc="true">
 				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
-			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camera motion." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camera motion." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label/>
 				<Description>Motion Sensor Enabled</Description>
 			</Field>
-			<Field id="motionEnabledlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera" alwaysUseInDialogHeightCalc="true">
+			<Field id="motionEnabledlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera" alwaysUseInDialogHeightCalc="true">
 				<Label>Enabled = use camera motion reports to trigger in HomeKit.
 Uncheck no motion sensor except through Action Group trigger.</Label>
 			</Field>
@@ -96,20 +97,28 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 				<Label/>
 				<Description>Enable to Invert Controls</Description>
 			</Field>
-			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will enable audio." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" >
+			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will enable audio." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera,UniFiProtectCamera" >
 				<Label/>
 				<Description>Support Audio</Description>
 			</Field>
-			<Field id="savelabelAudio" type="label" fontColor="orange" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera" alwaysUseInDialogHeightCalc="true">
+			<Field id="savelabelAudio" type="label" fontColor="orange" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera,UniFiProtectCamera" alwaysUseInDialogHeightCalc="true">
 				<Label>Audio: This may break the playback of Stream.</Label>
 			</Field>
 
-			<Field id="doorbellId" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+			<Field id="doorbellId" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>DoorBell Linked:</Label>
 				<List class="self" method="doorbell_list_generator" dynamicReload="true" />
 			</Field>
-			<Field id="doorBellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true"  visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera">
+			<Field id="doorBellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true"  visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>Device to make a DoorBell with this camera.</Label>
+			</Field>
+			<Field id="unifiStreamURL" type="textfield" defaultValue="" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
+				<Label>Stream URL:</Label>
+			</Field>
+			<Field id="unifiStreamURLLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
+				<Label>UniFi plugin (Durosity): leave blank - uses the camera's RTSP streams (run its 'Enable RTSP Streaming' action, High and Low).
+uniFiAP plugin (kw123): paste the RTSPS URL from Protect (camera > Settings > Advanced > RTSP, High).
+A UniFi doorbell is set up as a doorbell automatically.</Label>
 			</Field>
 			<Field id="deviceSensor" type="menu" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="showALL" visibleBindingValue="true">
 				<Label>Device State:</Label>

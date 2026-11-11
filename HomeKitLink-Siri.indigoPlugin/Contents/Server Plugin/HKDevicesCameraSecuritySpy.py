@@ -165,6 +165,8 @@ CONFIG_DEFAULTS = {
 class SecuritySpyCamera(HomeAccessory, PyhapCamera):
     """Generate a Camera accessory."""
 
+    SNAPSHOT_NAME_KEY = "SS_name"  ## config key of the snapshot file name (UniFi uses UP_name)
+
     def __init__(self, driver, plugin, indigodeviceid, display_name, aid, config, *args, **kwargs):
         """Initialize a Camera accessory object."""
 
@@ -281,6 +283,10 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         bitrate = stream_config.get("a_max_bitrate", 24) or 24
         return max(configured, min(1316, 12 + 3 * int(bitrate * packet_time / 8)))
 
+    def _select_source(self, stream_config):
+        """Stream URL, its ffprobe result and video codec setting for this request (UniFi overrides)."""
+        return self.config.get(CONF_STREAM_SOURCE), self.config.get("ffprobe_video"), self.config[CONF_VIDEO_CODEC]
+
     async def start_stream(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
         audio_proxy = None
@@ -294,8 +300,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                 )
 
             self.base_config = stream_config
-            input_source = self.config.get(CONF_STREAM_SOURCE)
-            ffprobe_video = self.config.get("ffprobe_video")
+            input_source, ffprobe_video, video_codec_cfg = self._select_source(stream_config)
             ffprobe_audio = self.config.get("ffprobe_audio")
 
             # --- Log ffprobe results if available ---
@@ -362,7 +367,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             # ============================================================
             strategy = resolve_video_strategy(
                 ffprobe_video=ffprobe_video,
-                video_codec_cfg=self.config[CONF_VIDEO_CODEC],
+                video_codec_cfg=video_codec_cfg,
                 stream_width=stream_config.get("width", 0),
                 stream_height=stream_config.get("height", 0),
                 max_width=self.config[CONF_MAX_WIDTH],
@@ -764,8 +769,8 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             debug_function = False
             if self.plugin.debug7:
                 debug_function = True
-            if "SS_name" in self.config:
-                camname = self.config["SS_name"]
+            if self.SNAPSHOT_NAME_KEY in self.config:
+                camname = self.config[self.SNAPSHOT_NAME_KEY]
                 if "image-width" in image_size:
                     width = image_size["image-width"]
                 else:

@@ -2,7 +2,7 @@
 
 # Camera Setup
 
-HKLS supports live camera streams from **Blue Iris** and **SecuritySpy** directly in the Apple Home app — including live video, Opus audio, doorbell notifications, and motion detection.
+HKLS supports live camera streams from **Blue Iris**, **SecuritySpy** and **UniFi Protect** directly in the Apple Home app — including live video, Opus audio, doorbell notifications, and motion detection.
 
 ---
 
@@ -12,6 +12,7 @@ HKLS supports live camera streams from **Blue Iris** and **SecuritySpy** directl
 |---|---|---|---|---|---|
 | **Blue Iris** | Blue Iris Indigo plugin | ✅ | ✅ Opus | ✅ | ✅ |
 | **SecuritySpy** | FlyingDiver SecuritySpy plugin | ✅ | ✅ Opus | ✅ | ✅ |
+| **UniFi Protect** (v0.8.12+) | Durosity UniFi plugin, or kw123 uniFiAP plugin | ✅ | ✅ Opus | ✅ | ✅ |
 | Other cameras | — | ⚠️ Limited | ❌ | ❌ | ❌ |
 
 > **Other cameras** are not officially supported. For unsupported camera systems, consider running a separate [Homebridge](https://homebridge.io/) instance with an appropriate camera plugin.
@@ -28,6 +29,9 @@ HKLS supports live camera streams from **Blue Iris** and **SecuritySpy** directl
 ### SecuritySpy
 1. Install **FlyingDiver's SecuritySpy** Indigo plugin
 2. Configure SecuritySpy cameras to have RTSP access
+
+### UniFi Protect
+Either plugin works — see [UniFi Protect](#unifi-protect-v0812) below.
 
 ---
 
@@ -101,6 +105,42 @@ When a remote stream starts you'll see:
 ```
 [Camera] Remote / low-bandwidth request (640x360 @ 132k): using BlueIris Stream 0 (re-encoded by BlueIris)
 ```
+
+---
+
+## UniFi Protect (v0.8.12+)
+
+UniFi Protect cameras and doorbells are published from the cameras another Indigo plugin creates. Choose **UniFi Protect Camera** in the bridge's device filter.
+
+| | Durosity **UniFi** plugin | kw123 **uniFiAP** plugin |
+|---|---|---|
+| Camera device | *Protect Camera* | *Camera_Protect_…* |
+| Live video | ✅ from the plugin's RTSP streams | ✅ from the **Stream URL** you paste in |
+| Away from home | Low stream, re-encoded to what HomeKit asks for | Same stream as at home |
+| Snapshots | ✅ | ✅ |
+| Motion (incl. person / vehicle) | ✅ | ✅ |
+| Doorbell | ✅ automatic for UniFi doorbells | ✅ automatic for UniFi doorbells |
+
+### Durosity UniFi plugin
+1. Run the UniFi plugin action **Enable RTSP Streaming** for each camera, with **High** and **Low** ticked
+2. Publish the camera — leave **Stream URL** blank
+
+### kw123 uniFiAP plugin
+1. In Protect, open the camera → **Settings → Advanced → RTSP**, turn on **High** and copy its URL (`rtsps://…:7441/…`)
+2. Publish the camera and paste the URL into **Stream URL**
+
+### How it streams
+- **At home:** the High stream is passed straight through when it suits HomeKit (Medium is used if High is larger than 1920 wide)
+- **Away from home:** the Low stream (~640×360) is re-encoded to the bitrate HomeKit asks for. This only runs while you are watching
+- A camera whose model is a doorbell gets the HomeKit doorbell automatically; other cameras can still use **DoorBell Linked**
+
+### Startup check
+```
+[Front Door] ✓ UniFi remote viewing: Low stream 640x360 h264 (re-encoded to the bitrate HomeKit asks for)
+[Front Door] No UniFi Low stream - away from home the full stream will be used, which may not play on mobile data. Enable the Low RTSP stream for this camera.
+[Front Door] UniFi camera has no stream URL - run the UniFi plugin action 'Enable RTSP Streaming' for this camera (High and Low).
+```
+Stream URLs are shown as `rtsps://host:7441/****` in the log — the end of the URL lets anyone watch the camera, so keep it private.
 
 ---
 

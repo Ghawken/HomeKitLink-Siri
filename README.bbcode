@@ -4,7 +4,7 @@
 
 HomeKitLink Siri is an Indigo plugin that creates native HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri control. No Homebridge. No external server. Everything runs inside Indigo.
 
-[b]Current Version:[/b] 0.8.08   |   [b]Requires:[/b] Indigo 2025.1+ (Python 3)
+[b]Current Version:[/b] 0.8.12   |   [b]Requires:[/b] Indigo 2025.1+ (Python 3)
 [b]GitHub:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri]https://github.com/Ghawken/HomeKitLink-Siri[/url]
 [b]Full Documentation / Wiki:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/wiki]https://github.com/Ghawken/HomeKitLink-Siri/wiki[/url]
 
@@ -23,7 +23,7 @@ Create one or more [b]HomeKitLink Bridge[/b] devices inside Indigo. Each bridge 
 - Blinds and Windows — with position and inversion options
 - Thermostats, Locks, Garage Doors, Valves
 - Security Systems — Paradox, DSC, VSS, AD2USB
-- Cameras — Blue Iris and SecuritySpy with live video, Opus audio, motion detection, doorbell
+- Cameras — Blue Iris, SecuritySpy and UniFi Protect with live video, Opus audio, motion detection, doorbell
 - Full Siri control once paired
 - All configuration stored in the Indigo database — migrates with Indigo
 
@@ -105,7 +105,7 @@ The device list in the bridge config shows your published devices. Greyed-out de
 
 [size=150][u]Camera Setup[/u][/size]
 
-Supported: [b]Blue Iris[/b] (via the Blue Iris Indigo plugin) and [b]SecuritySpy[/b] (via FlyingDiver's SecuritySpy plugin).
+Supported: [b]Blue Iris[/b] (via the Blue Iris Indigo plugin), [b]SecuritySpy[/b] (via FlyingDiver's SecuritySpy plugin) and [b]UniFi Protect[/b] (via the Durosity UniFi or kw123 uniFiAP plugin).
 
 Features: live RTSP streaming, Opus audio, doorbell integration, motion detection (BI cameras register as HomeKit motion sensors).
 
@@ -142,7 +142,24 @@ Delete the bridge from Home app first, then reset, then restart plugin, then re-
 
 [img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
 
-[size=150][u]What's New — Version 0.8.08[/u][/size]
+[size=150][u]What's New — Version 0.8.12[/u][/size]
+
+[u][size=125]New: UniFi Protect Cameras[/size][/u]
+
+- Live video, snapshots, audio, motion and doorbell, from the Durosity UniFi or kw123 uniFiAP plugin.
+- Away from home the Low stream is used, sized to what HomeKit asks for.
+
+[u][size=125]Remote Viewing[/size][/u]
+
+- Blue Iris cameras now play on mobile data, with sound.
+
+[u][size=125]Bug Fixes[/size][/u]
+
+- Garage door start-up state, camera streams left running, and errors after unpublishing a device (thanks Durosity).
+
+[img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
+
+[size=150][u]Previous — Version 0.8.08[/u][/size]
 
 [u][size=125]New: Troubleshoot 4 — HomeKit Pairing & Security Keys[/size][/u]
 

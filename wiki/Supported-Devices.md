@@ -166,6 +166,7 @@ Camera support is a major feature. See the dedicated [Camera Setup](Camera-Setup
 **Supported camera integrations:**
 - **Blue Iris** (via the Blue Iris Indigo plugin) — full support including motion detection, doorbell, Opus audio, stream intelligence
 - **SecuritySpy** (via FlyingDiver's SecuritySpy plugin) — live stream, doorbell, Opus audio, motion events
+- **UniFi Protect** (via the Durosity UniFi or kw123 uniFiAP plugin) — live stream, doorbell, Opus audio, motion events
 
 **Camera features:**
 - Live RTSP → HomeKit stream transcoding / passthrough
@@ -192,4 +193,4 @@ All Indigo action groups are automatically available as **Switch** type accessor
 
 ---
 
-→ [Camera Setup](Camera-Setup) — configure BlueIris and SecuritySpy cameras
+→ [Camera Setup](Camera-Setup) — configure BlueIris, SecuritySpy and UniFi Protect cameras

@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.12 — 2026-11-11
+
+### 📷 UniFi Protect cameras
+- New camera type **UniFi Protect Camera**, for cameras from the Durosity UniFi plugin or kw123's uniFiAP plugin
+- Live video, snapshots, Opus audio, motion and doorbell; away from home the Low stream is re-encoded to the size HomeKit asks for
+- New camera auto-detect picks the right camera type (also fixes SecuritySpy cameras defaulting to Blue Iris)
+- See [Camera Setup → UniFi Protect](Camera-Setup#unifi-protect-v0812)
+
+---
+
 ## 0.8.11 — 2026-11-11
 
 ### 🛠️ Fixes (thanks to Durosity, PR #42)

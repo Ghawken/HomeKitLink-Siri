@@ -18,7 +18,7 @@
 | ⚡ [Quick Start](Quick-Start) | Add your first bridge & device |
 | ⚙️ [Setup & Configuration](Setup-and-Configuration) | Full device setup guide |
 | 📱 [Supported Devices](Supported-Devices) | All supported HomeKit device types |
-| 🎥 [Camera Setup](Camera-Setup) | BlueIris & SecuritySpy configuration |
+| 🎥 [Camera Setup](Camera-Setup) | BlueIris, SecuritySpy & UniFi Protect configuration |
 | 🔧 [Plugin Menu Items](Plugin-Menu-Items) | All plugin menu actions explained |
 | 🆘 [Troubleshooting](Troubleshooting) | **Run menu items 1, 2 & 3 first!** |
 | 🔬 [Advanced Configuration](Advanced-Configuration) | mDNS, networking & debug options |
@@ -36,7 +36,7 @@ HKLS lets you publish any Indigo device into Apple's Home ecosystem. You create 
 - 🎛️ Supports lights, fans, switches, sensors, cameras, thermostats, locks, blinds, security systems and more
 - 🔒 Device configuration is stored in the Indigo database — migrates with Indigo
 - 🎙️ Full **Siri** control once paired
-- 📷 Native **BlueIris** and **SecuritySpy** camera streaming with Opus audio
+- 📷 Native **BlueIris**, **SecuritySpy** and **UniFi Protect** camera streaming with Opus audio
 - 🔍 Built-in **diagnostic tools** — network troubleshooter, mDNS checker, support log
 
 ![divider](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/divider.gif?raw=true)

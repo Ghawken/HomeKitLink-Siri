@@ -75,7 +75,7 @@ When you change a device from one HomeKit type to another, the old accessory mus
 
 ### Which camera systems does HKLS support?
 
-**Blue Iris** (via the Blue Iris Indigo plugin) and **SecuritySpy** (via FlyingDiver's SecuritySpy plugin). Other cameras are not officially supported.
+**Blue Iris** (via the Blue Iris Indigo plugin), **SecuritySpy** (via FlyingDiver's SecuritySpy plugin) and **UniFi Protect** (via the Durosity UniFi or kw123 uniFiAP plugin). Other cameras are not officially supported.
 
 ### Why is my camera audio missing or choppy after the 0.7.10 upgrade?
 

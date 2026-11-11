@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.08** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.12** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -21,7 +21,7 @@ HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exp
 - 🏠 **HomeKit Bridges** — create unlimited bridges, up to 95 devices each
 - 💡 **Lights** — colour, colour temperature, dimmer, switch
 - 🌡️ **Sensors** — temperature, humidity, motion, occupancy, contact, luminance, smoke, CO, leak
-- 📷 **Cameras** — BlueIris & SecuritySpy with live video, Opus audio, motion detection, doorbell
+- 📷 **Cameras** — BlueIris, SecuritySpy & UniFi Protect with live video, Opus audio, motion detection, doorbell
 - 🔒 **Locks, Garage Doors, Blinds, Windows**
 - 🌀 **Fans** (simple & speed-controlled), **Thermostats**, **Valves**, **Security Systems**
 - 🎙️ **Siri** control of everything once paired
@@ -53,7 +53,7 @@ The complete documentation is in the **[Wiki](https://github.com/Ghawken/HomeKit
 | [Quick Start](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Quick-Start) | Bridge setup, pairing, Siri |
 | [Setup & Configuration](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Setup-and-Configuration) | Device config, Plugin Config, limits |
 | [Supported Devices](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Supported-Devices) | All HomeKit device types |
-| [Camera Setup](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Camera-Setup) | BlueIris, SecuritySpy, Opus audio |
+| [Camera Setup](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Camera-Setup) | BlueIris, SecuritySpy, UniFi Protect, Opus audio |
 | [Plugin Menu Items](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Plugin-Menu-Items) | All menu tools explained |
 | [Troubleshooting](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Troubleshooting) | Common issues & fixes |
 | [Advanced Configuration](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Advanced-Configuration) | mDNS, networking, debug options |
@@ -105,7 +105,7 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 - Each Indigo device can only be published to **one** bridge at a time
 - **95 devices maximum** per bridge (create more bridges as needed)
-- Cameras: **Blue Iris** and **SecuritySpy** supported; other camera systems are not
+- Cameras: **Blue Iris**, **SecuritySpy** and **UniFi Protect** supported; other camera systems are not
 
 ---
 
@@ -121,7 +121,12 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.08 — Latest
+### 0.8.12 — Latest
+- **UniFi Protect cameras:** live video, snapshots, audio, motion and doorbell, from the Durosity UniFi or kw123 uniFiAP plugin
+- **Remote viewing:** Blue Iris cameras now play on mobile data, with sound
+- **Fixes:** garage door start-up state, camera streams left running, and errors after unpublishing a device (thanks Durosity)
+
+### 0.8.08
 - **New menu item: Troubleshoot 4 — HomeKit Pairing & Security Keys.** Checks each bridge's pairing and security keys, Home users and connected Home hubs, and explains any problem with a fix
 - **New Show QR Code page:** QR code, setup code, pairing status and steps
 - Clearer log message when a Home app device can't connect to a bridge
