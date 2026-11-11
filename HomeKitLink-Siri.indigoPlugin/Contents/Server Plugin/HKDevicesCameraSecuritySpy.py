@@ -283,6 +283,10 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         bitrate = stream_config.get("a_max_bitrate", 24) or 24
         return max(configured, min(1316, 12 + 3 * int(bitrate * packet_time / 8)))
 
+    def _mask(self, text):
+        """Text safe to log (UniFi hides stream tokens)."""
+        return text
+
     def _select_source(self, stream_config):
         """Stream URL, its ffprobe result and video codec setting for this request (UniFi overrides)."""
         return self.config.get(CONF_STREAM_SOURCE), self.config.get("ffprobe_video"), self.config[CONF_VIDEO_CODEC]
@@ -558,7 +562,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             else:
                 input_source = "-rtsp_transport tcp -i " + input_source
 
-            _LOGGER.debug("INPUT SOURCE: %s", input_source)
+            _LOGGER.debug("INPUT SOURCE: %s", self._mask(input_source))
 
             # ============================================================
             # Launch ffmpeg
@@ -680,7 +684,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             )):
                 _LOGGER.error(
                     "[%s] ffmpeg stream error: %s",
-                    self.display_name, line,
+                    self.display_name, self._mask(line),
                 )
             else:
                 # Log the line from stderr or handle it differently

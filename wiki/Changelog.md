@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.13 — 2026-11-11
+
+### 📷 UniFi Protect logging
+- Each UniFi camera logs its setup at start-up: plugin, model, streams found, doorbell, motion and audio
+- Snapshot problems are logged once with the reason (e.g. HTTP 401 - check the controller's API key), and again when they recover
+- Doorbell rings are logged
+- Stream URLs are masked in all log lines
+
+---
+
 ## 0.8.12 — 2026-11-11
 
 ### 📷 UniFi Protect cameras

@@ -1043,7 +1043,7 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug("Error in getting camera settings.  Skipping setup")
                             continue
                         if self.debug7:
-                            self.logger.debug("Options:\n\n{}\n".format(cameraoptions))
+                            self.logger.debug("Options:\n\n{}\n".format(HKDevicesCameraUniFi.mask_url(cameraoptions)))
                         accessory = HKDevicesCameraUniFi.UniFiCamera(driver, plugin=self, indigodeviceid=item["deviceid"], display_name=item['devicename'], aid=deviceAID, config=cameraoptions)
                         self.listofenabledcameras.append(cameraoptions)
                         device_add_id = str(cameraoptions.get("DoorBell_ID", ""))
@@ -1694,7 +1694,7 @@ class Plugin(indigo.PluginBase):
             except:
                 self.logger.debug("Caught Exception in defaulting Camera Snapshot at creation")
 
-            self.logger.debug("Config Now\n{}\n".format(config))
+            self.logger.debug("Config Now\n{}\n".format(HKDevicesCameraUniFi.mask_url(config) if "UP_name" in config else config))
             return config
 
         except:
@@ -2283,8 +2283,7 @@ class Plugin(indigo.PluginBase):
                 elif str(updateddevice_subtype) == "UniFiProtectCamera":
                     accessory = self.device_list_internal[checkindex]["accessory"]
                     if HKDevicesCameraUniFi.doorbell_rang(original_device, updated_device) and getattr(accessory, "_char_doorbell_detected", None) is not None:
-                        if self.debug2:
-                            self.logger.debug("UniFi doorbell ring: {}".format(updated_device.name))
+                        self.logger.info("[{}] UniFi doorbell ring sent to HomeKit".format(updated_device.name))
                         accessory._char_doorbell_detected.set_value(0)
                         accessory._char_doorbell_detected_switch.set_value(0)
                     if updated_device.pluginProps.get("HomeKit_motionEnabled", True):
@@ -4838,6 +4837,8 @@ class Plugin(indigo.PluginBase):
 
             if result.returncode != 0:
                 err_text = result.stderr.decode(errors="replace").strip() if result.stderr else "(no output)"
+                if "UP_name" in cam:
+                    err_text = HKDevicesCameraUniFi.mask_url(err_text)
                 self.logger.error("[%s] ffprobe exited with code %d: %s", cam_name, result.returncode, err_text)
                 continue
 

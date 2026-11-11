@@ -15,6 +15,8 @@ Nothing here runs unless a UniFi camera is published.
 """
 
 import logging
+import os
+import re
 import warnings
 
 try:
@@ -78,14 +80,12 @@ def stream_urls(dev):
     return urls
 
 
-def mask_url(url):
-    """Hide the stream token (anyone with it can watch the camera) for logging."""
-    try:
-        scheme, rest = url.split("://", 1)
-        host = rest.split("/", 1)[0]
-        return "{}://{}/****".format(scheme, host)
-    except Exception:
-        return "****"
+_URL_TOKEN = re.compile(r"(rtsps?://[^/\s'\",]+/)[^\s:'\",}]+")
+
+
+def mask_url(text):
+    """Hide stream tokens (anyone with one can watch the camera) in text for logging."""
+    return _URL_TOKEN.sub(r"\1****", str(text))
 
 
 def camera_model(dev):
@@ -148,6 +148,13 @@ def get_camera_options(plugin, dev):
         linked = str(dev.pluginProps.get("HomeKit_doorbellId", "") or "")
         if linked not in ("", "-1"):
             config["DoorBell_ID"] = linked
+    yes_no = lambda v: "yes" if v else "no"
+    plugin.logger.info("[{}] UniFi Protect camera ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}".format(
+        dev.name, "UniFi plugin" if dev.pluginId == UNIFI_DUROSITY_ID else "uniFiAP plugin", camera_model(dev) or "model unknown",
+        yes_no(urls["high"]), yes_no(urls["medium"]), yes_no(urls["low"]),
+        yes_no(dev.pluginProps.get("HomeKit_unifiStreamURL")),
+        "built in" if is_doorbell(dev) else ("linked" if "DoorBell_ID" in config else "no"),
+        yes_no(dev.pluginProps.get("HomeKit_motionEnabled", True)), yes_no(config[CONF_SUPPORT_AUDIO])))
     return config
 
 
@@ -168,43 +175,63 @@ def choose_home_stream(cam, log):
 
 
 def fetch_snapshot(plugin, camera, path, width, session):
-    """Save a JPEG of the camera to path.  Returns True on success."""
+    """Save a JPEG of the camera to path.  Returns True on success.
+    Logs (info) the first failure and the recovery, not every attempt."""
+    try:
+        ok, why = _fetch_snapshot(plugin, camera, path, width, session)
+    except Exception as e:
+        ok, why = False, mask_url(e)
+    if ok != camera.get("_snapshot_ok"):
+        if ok:
+            plugin.logger.info("[{}] UniFi snapshots working".format(camera.get("cameraName")))
+        else:
+            plugin.logger.warning("[{}] UniFi snapshot failed: {}".format(camera.get("cameraName"), why))
+        camera["_snapshot_ok"] = ok
+    return ok
+
+
+def _fetch_snapshot(plugin, camera, path, width, session):
     dev = indigo.devices[int(camera["UP_deviceId"])]
     if dev.pluginId == UNIFI_DUROSITY_ID:
         url = _state(dev, "snapshotUrl")
         controller_id = int(dev.ownerProps.get("controllerId", 0) or 0)  ## ownerProps = the UniFi plugin's own props
         if not url or not controller_id or controller_id not in indigo.devices:
-            plugin.logger.debug("[%s] No UniFi snapshot URL / controller", dev.name)
-            return False
+            return False, "no snapshotUrl state or UniFi controller device"
         api_key = indigo.devices[controller_id].ownerProps.get("networkApiKey", "").strip()
         params = {"highQuality": "true"} if int(width) > 1280 else None
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  ## Protect consoles use a self-signed certificate
             r = session.get(url, headers={"X-API-KEY": api_key}, params=params, verify=False, timeout=10)
         if r.status_code != 200 or not r.content:
-            plugin.logger.debug("[%s] UniFi snapshot failed, status %s", dev.name, r.status_code)
-            return False
+            hint = {401: " - check the controller's API key", 403: " - check the API key's permissions", 429: " - Protect rate limit"}.get(r.status_code, "")
+            return False, "HTTP {}{}".format(r.status_code, hint)
         with open(path, "wb") as f:
             f.write(r.content)
-        return True
+        return True, ""
 
     ## kw123 uniFiAP: its own action fetches the snapshot and writes the file
     kw = indigo.server.getPlugin(UNIFI_KW123_ID)
     if not kw.isEnabled():
-        return False
+        return False, "uniFiAP plugin not enabled"
+    before = os.path.getmtime(path) if os.path.exists(path) else 0
     width = int(width)
     kw.executeAction("CAMERAsnapshotProtect", props={
         "cameraDeviceSelected": str(dev.id),
         "whofImage": "{}/{}".format(width, int(width * 9 / 16)),
         "fileNameOfImage": path,
     })
-    return True
+    if not os.path.exists(path) or os.path.getmtime(path) == before:
+        return False, "uniFiAP 'CAMERAS get Snapshot' action wrote no image"
+    return True, ""
 
 
 class UniFiCamera(SecuritySpyCamera):
     """SecuritySpy camera with the UniFi stream choice and snapshot file."""
 
     SNAPSHOT_NAME_KEY = "UP_name"
+
+    def _mask(self, text):
+        return mask_url(text)
 
     def _select_source(self, stream_config):
         req_width = stream_config.get("width", 0) or 0
