@@ -49,6 +49,8 @@ class HAPServerProtocol(asyncio.Protocol):
         self.request_body = []
         self._request_body_size = 0
         self.response = None
+        ## upstream #527: bytes held in h11's buffer while a delayed (snapshot) response is pending
+        self._held_bytes = 0
 
         self.last_activity = None
         self.hap_crypto = None
@@ -112,6 +114,10 @@ class HAPServerProtocol(asyncio.Protocol):
         """Remove the connection and close the transport."""
         if self.peername in self.connections:
             del self.connections[self.peername]
+        ## upstream #527: nobody is left to answer - stop work for a delayed response
+        if self.response is not None and self.response.task is not None:
+            task = self.response.task
+            task.get_loop().call_soon(task.cancel)
         self.transport.write_eof()
         self.transport.close()
 
@@ -186,21 +192,46 @@ class HAPServerProtocol(asyncio.Protocol):
                 self.handler.client_uuid,
                 unencrypted_data,
             )
-            self.conn.receive_data(unencrypted_data)
         else:
-            self.conn.receive_data(data)
+            unencrypted_data = data
             logger.debug(
                 "%s (%s): Recv unencrypted: %s",
                 self.peername,
                 self.handler.client_uuid,
                 data,
             )
+        if not self._hold_data(len(unencrypted_data)):
+            return
+        self.conn.receive_data(unencrypted_data)
         self._process_events()
+
+    def _hold_data(self, size):
+        """Account for data held while a delayed response is pending (upstream #527).
+
+        Returns ``False`` and closes the connection when more than
+        ``MAX_REQUEST_BODY_SIZE`` bytes are held before the response is sent.
+        """
+        if self.response is None:
+            return True
+        self._held_bytes += size
+        if self._held_bytes <= MAX_REQUEST_BODY_SIZE:
+            return True
+        logger.warning(
+            "%s (%s): Received more than %d bytes while a response is pending, closing connection",
+            self.peername,
+            self.handler.client_uuid,
+            MAX_REQUEST_BODY_SIZE,
+        )
+        self.close()
+        return False
 
     def _process_events(self):
         """Process pending events."""
         try:
-            while self._process_one_event():
+            ## upstream #527: while a delayed response is outstanding, further requests stay
+            ## buffered in h11 and are processed once it has been sent (previously a pipelined
+            ## request during a snapshot closed the connection)
+            while self.response is None and self._process_one_event():
                 if self.conn.our_state is h11.MUST_CLOSE:
                     self.finish_and_close()
                     return
@@ -212,7 +243,8 @@ class HAPServerProtocol(asyncio.Protocol):
         if self._event_timer:
             self._event_timer.cancel()
             self._event_timer = None
-        if not self._event_queue:
+        ## upstream #527: no events while a response is outstanding; flushed after it is sent
+        if not self._event_queue or self.response is not None:
             return
         subscribed_events = self._event_queue_with_active_subscriptions()
         if subscribed_events:
@@ -282,6 +314,8 @@ class HAPServerProtocol(asyncio.Protocol):
             # If there is a task pending we will schedule
             # the response later
             self.response = response
+            ## Pipelined data already received is held from now on as well (upstream #527)
+            self._held_bytes = len(self.conn.trailing_data[0])
             response.task.add_done_callback(self._handle_response_ready)
         else:
             self.send_response(response)
@@ -301,7 +335,7 @@ class HAPServerProtocol(asyncio.Protocol):
         self.response = None
         try:
             response.body = task.result()
-        except Exception as ex:  # pylint: disable=broad-except
+        except (Exception, asyncio.CancelledError) as ex:  # pylint: disable=broad-except
             logger.debug(
                 "%s (%s): exception during delayed response",
                 self.peername,
@@ -317,6 +351,14 @@ class HAPServerProtocol(asyncio.Protocol):
             )
             return
         self.send_response(response)
+        if self.conn.our_state is h11.MUST_CLOSE:
+            self.finish_and_close()
+            return
+        ## upstream #527: requests that arrived meanwhile come first; events held meanwhile are
+        ## sent unless their coalescing timer has not fired yet
+        self._process_events()
+        if self._event_timer is None and not self.transport.is_closing():
+            self._send_events()
 
     def _handle_invalid_conn_state(self, message):
         """Log invalid state and close."""

@@ -345,7 +345,7 @@ class Characteristic:
         self.broker.publish(self.value, self, sender_client_addr, immediate)
 
     # pylint: disable=invalid-name
-    def to_HAP(self):
+    def to_HAP(self, include_value=True):
         """Create a HAP representation of this Characteristic.
 
         Used for json serialization.
@@ -368,7 +368,6 @@ class Characteristic:
         ):
             hap_rep[HAP_REPR_DESC] = self.display_name
 
-        value = self.get_value()
         if self.properties[PROP_FORMAT] in HAP_FORMAT_NUMERICS:
             hap_rep.update(
                 {
@@ -385,8 +384,9 @@ class Characteristic:
             max_length = self.properties.get(HAP_REPR_MAX_LEN, DEFAULT_MAX_LENGTH)
             if max_length != DEFAULT_MAX_LENGTH:
                 hap_rep[HAP_REPR_MAX_LEN] = max_length
-        if HAP_PERMISSION_READ in self.properties[PROP_PERMISSIONS]:
-            hap_rep[HAP_REPR_VALUE] = value
+        ## upstream #464: the config hash leaves values out (and doesn't call the getters)
+        if include_value and HAP_PERMISSION_READ in self.properties[PROP_PERMISSIONS]:
+            hap_rep[HAP_REPR_VALUE] = self.get_value()
 
         return hap_rep
 

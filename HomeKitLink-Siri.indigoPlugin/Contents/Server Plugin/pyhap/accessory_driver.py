@@ -815,11 +815,13 @@ class AccessoryDriver:
     @property
     def accessories_hash(self):
         """Hash the get_accessories response to track configuration changes."""
+        ## upstream #464: values are left out - iOS only re-reads /accessories for layout changes,
+        ## and including values bumped config_version on nearly every restart
         return hashlib.sha512(
-            util.to_sorted_hap_json(self.get_accessories())
+            util.to_sorted_hap_json(self.get_accessories(include_value=False))
         ).hexdigest()
 
-    def get_accessories(self):
+    def get_accessories(self, include_value=True):
         """Returns the accessory in HAP format.
 
         :return: An example HAP representation is:
@@ -844,7 +846,7 @@ class AccessoryDriver:
 
         :rtype: dict
         """
-        hap_rep = self.accessory.to_HAP()
+        hap_rep = self.accessory.to_HAP(include_value=include_value)
         if not isinstance(hap_rep, list):
             hap_rep = [
                 hap_rep,

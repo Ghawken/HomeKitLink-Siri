@@ -6,6 +6,15 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.15 — 2026-11-11
+
+### 🏠 HomeKit library updates (part 2)
+- **Fewer Home app reloads:** a bridge's accessory list is no longer treated as changed just because a device's value changed, so the Home app stops re-downloading every bridge after most plugin restarts. Expect one final reload after updating
+- **Camera snapshots:** a request arriving while a snapshot was being fetched closed the connection and lost the snapshot; requests and updates now wait their turn
+- Faster bridge start-up: device values are no longer read just to check for changes
+
+---
+
 ## 0.8.14 — 2026-11-11
 
 ### 🔒 HomeKit library updates
