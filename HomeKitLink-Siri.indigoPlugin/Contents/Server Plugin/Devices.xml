@@ -112,6 +112,13 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 			<Field id="doorBellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true"  visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>Device to make a DoorBell with this camera.</Label>
 			</Field>
+			<Field id="unifiTwoWay" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera" tooltip="Talk through the camera's speaker from the Home app.">
+				<Label/>
+				<Description>Two-way Audio (talk)</Description>
+			</Field>
+			<Field id="unifiTwoWayLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
+				<Label>Talk from the Home app through doorbells and cameras with a speaker. UniFi plugin (Durosity) only; needs Support Audio on.</Label>
+			</Field>
 			<Field id="unifiStreamURL" type="textfield" defaultValue="" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
 				<Label>Stream URL:</Label>
 			</Field>

@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.17 — 2026-11-11
+
+### 🎙️ UniFi Protect two-way audio
+- Talk from the Home app through UniFi doorbells and cameras with a speaker (UniFi plugin by Durosity)
+- Turn on **Two-way Audio (talk)** in the camera's HomeKitLink settings; Support Audio must be on
+- The camera's own audio is muted while you talk, to stop your voice echoing back
+- Based on the two-way audio in PR #42 (thanks Durosity)
+
+---
+
 ## 0.8.16 — 2026-11-11
 
 ### 📷 Camera snapshots

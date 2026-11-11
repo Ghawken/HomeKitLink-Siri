@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.16** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.17** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -121,8 +121,8 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.16 — Latest
-- **UniFi Protect cameras:** live video, snapshots, audio, motion and doorbell, from the Durosity UniFi or kw123 uniFiAP plugin
+### 0.8.17 — Latest
+- **UniFi Protect cameras:** live video, snapshots, audio, motion and doorbell, from the Durosity UniFi or kw123 uniFiAP plugin; two-way audio (talk) for the Durosity plugin
 - **Remote viewing:** Blue Iris cameras now play on mobile data, with sound
 - **Fixes:** garage door start-up state, camera streams left running, and errors after unpublishing a device (thanks Durosity)
 - **HomeKit library updates:** pairing and camera security hardening, data-encoding fixes, fewer Home app reloads after restarts, and more reliable camera snapshots

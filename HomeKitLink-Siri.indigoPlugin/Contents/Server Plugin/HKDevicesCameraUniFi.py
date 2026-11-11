@@ -17,6 +17,7 @@ Nothing here runs unless a UniFi camera is published.
 import logging
 import os
 import re
+import urllib.parse
 import warnings
 
 try:
@@ -113,6 +114,28 @@ def doorbell_rang(original_dev, updated_dev):
     return bool(new) and new != _state(original_dev, key)
 
 
+def talkback_info(dev):
+    """What the audio proxy needs to open a Protect talkback session (two-way audio):
+    console host:port, Protect camera id and API key.  Durosity UniFi plugin only (uniFiAP
+    keeps its credentials private).  Returns None if anything is missing."""
+    if dev.pluginId != UNIFI_DUROSITY_ID:
+        return None
+    camera_id = str(dev.ownerProps.get("cameraId", "") or "").strip()
+    controller_id = int(dev.ownerProps.get("controllerId", 0) or 0)
+    if not camera_id or not controller_id or controller_id not in indigo.devices:
+        return None
+    controller = indigo.devices[controller_id].ownerProps
+    api_key = str(controller.get("networkApiKey", "") or "").strip()
+    host = urllib.parse.urlsplit(str(_state(dev, "snapshotUrl") or "")).netloc  ## keeps a custom port
+    if not host:
+        address = str(controller.get("address", "") or "").strip()
+        port = str(controller.get("port", "") or "").strip()
+        host = "{}:{}".format(address, port) if address and port else address
+    if not (api_key and host):
+        return None
+    return {"host": host, "camera_id": camera_id, "api_key": api_key}
+
+
 def get_camera_options(plugin, dev):
     """HomeKitLink camera config for a UniFi Protect camera device, or None."""
     urls = stream_urls(dev)
@@ -148,13 +171,27 @@ def get_camera_options(plugin, dev):
         linked = str(dev.pluginProps.get("HomeKit_doorbellId", "") or "")
         if linked not in ("", "-1"):
             config["DoorBell_ID"] = linked
+
+    ## Two-way audio (talk) - opt-in per camera
+    two_way = "no"
+    if dev.pluginProps.get("HomeKit_unifiTwoWay", False):
+        if dev.pluginId != UNIFI_DUROSITY_ID:
+            plugin.logger.warning("[{}] Two-way audio needs the UniFi plugin (Durosity) - not available for uniFiAP cameras.".format(dev.name))
+        elif not config[CONF_SUPPORT_AUDIO]:
+            plugin.logger.warning("[{}] Two-way audio needs Support Audio turned on for this camera.".format(dev.name))
+        elif talkback_info(dev) is None:
+            plugin.logger.warning("[{}] Two-way audio: no Protect camera id, console address or API key found on the UniFi devices.".format(dev.name))
+        else:
+            config["two_way_audio"] = True
+            config["speaker_service"] = True  ## HomeKit shows the talk button when the camera has a Speaker
+            two_way = "yes"
     yes_no = lambda v: "yes" if v else "no"
-    plugin.logger.info("[{}] UniFi Protect camera ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}".format(
+    plugin.logger.info("[{}] UniFi Protect camera ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}, two-way {}".format(
         dev.name, "UniFi plugin" if dev.pluginId == UNIFI_DUROSITY_ID else "uniFiAP plugin", camera_model(dev) or "model unknown",
         yes_no(urls["high"]), yes_no(urls["medium"]), yes_no(urls["low"]),
         yes_no(dev.pluginProps.get("HomeKit_unifiStreamURL")),
         "built in" if is_doorbell(dev) else ("linked" if "DoorBell_ID" in config else "no"),
-        yes_no(dev.pluginProps.get("HomeKit_motionEnabled", True)), yes_no(config[CONF_SUPPORT_AUDIO])))
+        yes_no(dev.pluginProps.get("HomeKit_motionEnabled", True)), yes_no(config[CONF_SUPPORT_AUDIO]), two_way))
     return config
 
 
@@ -232,6 +269,23 @@ class UniFiCamera(SecuritySpyCamera):
 
     def _mask(self, text):
         return mask_url(text)
+
+    def _talkback_config(self):
+        """Two-way audio target, built fresh for each stream (it holds the Protect API key,
+        so it is never stored in the camera config or logged)."""
+        if not self.config.get("two_way_audio"):
+            return None
+        try:
+            info = talkback_info(indigo.devices[int(self.config["UP_deviceId"])])
+        except Exception:
+            _LOGGER.debug("[%s] Two-way audio: couldn't get talkback details", self.display_name, exc_info=True)
+            return None
+        if info is None:
+            _LOGGER.warning("[%s] Two-way audio: Protect details missing - talk is off for this stream", self.display_name)
+            return None
+        info["name"] = self.display_name
+        _LOGGER.debug("[%s] Two-way audio enabled for this stream (console %s)", self.display_name, info["host"])
+        return info
 
     def _select_source(self, stream_config):
         req_width = stream_config.get("width", 0) or 0

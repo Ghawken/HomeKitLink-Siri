@@ -267,6 +267,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             serv_speaker = self.add_preload_service("Speaker")
             serv_speaker.configure_char("Mute", value=0)
 
+        ## Two-way audio on a camera that isn't a doorbell needs its own Speaker service
+        if config.get("speaker_service") and "DoorBell_ID" not in config:
+            serv_speaker = self.add_preload_service("Speaker")
+            serv_speaker.configure_char("Mute", value=0)
+
     async def run(self):
         _LOGGER.debug("Run called once for CAMERA MotionSensor, and/or Doorbell, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
@@ -286,6 +291,10 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
     def _mask(self, text):
         """Text safe to log (UniFi hides stream tokens)."""
         return text
+
+    def _talkback_config(self):
+        """Two-way audio target for the audio proxy, or None (UniFi overrides)."""
+        return None
 
     def _select_source(self, stream_config):
         """Stream URL, its ffprobe result and video codec setting for this request (UniFi overrides)."""
@@ -470,6 +479,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                         srtp_key_b64=stream_config["a_srtp_key"],
                         target_clock_rate=target_clock,
                         python_path=os.path.join(sys.prefix, "bin", "python3"),
+                        talkback=self._talkback_config(),
                     )
                     await audio_proxy.async_start()
                 except Exception:

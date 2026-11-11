@@ -26,6 +26,7 @@ class AudioProxy:
         srtp_key_b64: str,
         target_clock_rate: int,
         python_path: str | None = None,
+        talkback: dict | None = None,
     ) -> None:
         """Initialize the audio proxy.
 
@@ -40,6 +41,7 @@ class AudioProxy:
         self._srtp_key_b64 = srtp_key_b64
         self._target_clock_rate = target_clock_rate
         self._python_path = python_path or sys.executable
+        self._talkback = talkback  ## two-way audio target (camera speaker), or None
         self._process: asyncio.subprocess.Process | None = None
         self._stderr_task: asyncio.Task[None] | None = None
         self.local_port: int = 0
@@ -76,6 +78,10 @@ class AudioProxy:
         # Pass SRTP key via stdin to avoid exposing it in process args
         if self._process.stdin:
             self._process.stdin.write(self._srtp_key_b64.encode() + b"\n")
+            # Optional two-way audio target, also via stdin as it carries an API key
+            import json as _json
+            self._process.stdin.write(
+                (_json.dumps(self._talkback) if self._talkback else "").encode() + b"\n")
             await self._process.stdin.drain()
             self._process.stdin.close()
 
@@ -123,22 +129,32 @@ class AudioProxy:
             line = await stderr.readline()
             if not line:
                 return
-            _LOGGER.warning(
-                "Audio proxy: %s",
-                line.decode(errors="replace").rstrip(),
-            )
+            text = line.decode(errors="replace").rstrip()
+            level, _, msg = text.partition(" ")
+            if level == "INFO":
+                _LOGGER.info("%s", msg)
+            elif level == "DEBUG":
+                _LOGGER.debug("%s", msg)
+            elif level == "WARNING":
+                _LOGGER.warning("%s", msg)
+            else:
+                _LOGGER.warning("Audio proxy: %s", text)
 
     async def async_stop(self) -> None:
         """Stop the proxy subprocess and wait for port release."""
-        if self._stderr_task and not self._stderr_task.done():
-            self._stderr_task.cancel()
-            try:
-                await self._stderr_task
-            except asyncio.CancelledError:
-                pass
-            self._stderr_task = None
         if self._process is not None:
             if self._process.returncode is None:
-                self._process.kill()
-                await self._process.wait()
-            self._process = None
+                ## SIGTERM first so the worker can log its two-way audio summary, then kill
+                self._process.terminate()
+                try:
+                    await asyncio.wait_for(self._process.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    self._process.kill()
+                    await self._process.wait()
+        if self._stderr_task and not self._stderr_task.done():
+            try:
+                await asyncio.wait_for(self._stderr_task, timeout=0.5)  ## let the last lines through
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
+            self._stderr_task = None
+        self._process = None

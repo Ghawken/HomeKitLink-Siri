@@ -120,6 +120,7 @@ UniFi Protect cameras and doorbells are published from the cameras another Indig
 | Snapshots | ✅ | ✅ |
 | Motion (incl. person / vehicle) | ✅ | ✅ |
 | Doorbell | ✅ automatic for UniFi doorbells | ✅ automatic for UniFi doorbells |
+| Two-way audio (talk) | ✅ v0.8.17+, opt-in | ❌ |
 
 ### Durosity UniFi plugin
 1. Run the UniFi plugin action **Enable RTSP Streaming** for each camera, with **High** and **Low** ticked
@@ -133,6 +134,18 @@ UniFi Protect cameras and doorbells are published from the cameras another Indig
 - **At home:** the High stream is passed straight through when it suits HomeKit (Medium is used if High is larger than 1920 wide)
 - **Away from home:** the Low stream (~640×360) is re-encoded to the bitrate HomeKit asks for. This only runs while you are watching
 - A camera whose model is a doorbell gets the HomeKit doorbell automatically; other cameras can still use **DoorBell Linked**
+
+### Two-way audio (v0.8.17+)
+Talk from the Home app through a UniFi doorbell or a camera with a speaker (UniFi plugin by Durosity only).
+1. In the camera's HomeKitLink settings, turn on **Support Audio** and **Two-way Audio (talk)**
+2. Save, then restart the bridge — the Home app shows the talk button on the camera
+
+While you talk, the camera's own audio is muted so your voice doesn't echo back. The log shows:
+```
+Two-way audio: talking to Front Door (opus, 24000 Hz, …)
+Two-way audio: finished, 412 packets sent to Front Door
+```
+If talk doesn't work you'll see a warning instead, for example `couldn't open a Protect talkback session` (check the UniFi plugin's API key).
 
 ### Startup check
 ```

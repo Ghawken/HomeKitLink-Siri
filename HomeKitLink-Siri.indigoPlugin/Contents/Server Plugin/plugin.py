@@ -3965,6 +3965,7 @@ class Plugin(indigo.PluginBase):
             values_dict["inverseSelector"] = device.pluginProps.get("HomeKit_inverseSelector",False)
             values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", False)
             values_dict["unifiStreamURL"] = device.pluginProps.get("HomeKit_unifiStreamURL", "")
+            values_dict["unifiTwoWay"] = device.pluginProps.get("HomeKit_unifiTwoWay", False)
 
             ## auto select correct subtype
             detecttype = self.detectHomeKitType(int(values_dict["deviceId"]))
@@ -4075,6 +4076,7 @@ class Plugin(indigo.PluginBase):
 
                 if values_dict.get("deviceSubtype") == "UniFiProtectCamera":
                     device_props["HomeKit_unifiStreamURL"] = str(values_dict.get("unifiStreamURL", "")).strip()
+                    device_props["HomeKit_unifiTwoWay"] = bool(values_dict.get("unifiTwoWay", False))
 
                 if not device_props.get("HomeKit_publishDevice", False): publication_change = True
                 self.device_list.add(device.id)
@@ -4099,6 +4101,7 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_inverseSelector"] = ""
                 device_props["HomeKit_audioSelector"] = ""
                 device_props["HomeKit_unifiStreamURL"] = ""
+                device_props["HomeKit_unifiTwoWay"] = False
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
