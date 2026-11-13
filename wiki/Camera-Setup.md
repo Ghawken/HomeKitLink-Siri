@@ -222,14 +222,12 @@ Any HKLS camera can have a **Doorbell** device associated with it:
 
 ---
 
-## HomeKit Secure Video — preview (v0.8.19+)
+## HomeKit Secure Video (v0.8.22+)
 
 HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doorbell events to iCloud, with the Home app's timeline, face recognition and activity zones. It is **per camera and opt-in**: cameras without an HKSV Recorder device are unchanged.
 
-> **v0.8.19 is phase 1.** The Home app shows the camera's recording options and the hub connects, but **no clips are recorded yet**. Recording comes in a later version. Only add a Recorder now if you want to help test the setup.
-
 ### What you need
-- An iCloud+ plan (HKSV storage doesn't count against it, but the plan sets how many cameras you can record)
+- The **home owner** needs an iCloud+ plan. Without one the Home app shows no Recording Options. The plan sets how many cameras can record: 1 on 50 GB, 5 on 200 GB, unlimited on 2 TB and up
 - A home hub: Apple TV or HomePod
 - The camera published by HomeKitLink, with its **motion sensor** turned on
 
@@ -237,26 +235,41 @@ HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doo
 1. **Plugins → Devices → New Device**, type **HomeKit Secure Video Recorder**
 2. Choose the camera, then Save
 3. HomeKitLink restarts that camera's bridge to add the recording services
-4. In the Home app, open the camera's settings: **Recording Options** should now appear
+4. In the Home app, open the camera's settings → **Recording Options**, and choose when to record (e.g. Stream & Allow Recording when away)
+
+### How it records
+HomeKit wants each recording to start a few seconds **before** the motion, so while the Home app allows recording, one ffmpeg keeps the last few seconds of the camera in memory (the prebuffer). It only runs while recording is allowed: if the Home app is set to Stream or Off (for example while you're home), nothing runs.
+
+At bridge start the Recorder checks each of the camera's streams (BlueIris streams 0–2, UniFi High/Medium/Low, SecuritySpy) and logs one line per stream:
+```
+[Gate Cam] HKSV stream check - BlueIris stream 0: h264 1912x1080 @ 11.2 fps, Main 4.0, keyframe every 2.7 s - copy OK, aac 64000 Hz
+[Gate Cam] HKSV stream check - BlueIris stream 2: h264 2688x1520 @ 11.8 fps, Constrained Baseline 5.1, keyframe every 1.4 s - can't copy: 2688x1520 is larger than 1920x1080, aac 64000 Hz
+```
+A stream is **copied** (no re-encoding, about 1–2 % CPU) when it is H.264, at most 1920×1080 and level 4.2, at most 30 fps, with a keyframe at least every 4 seconds. Otherwise the best stream is **re-encoded** to the format the hub chose, with VideoToolbox by default (measured 6–10 % CPU and ~150 MB for 1080p). Audio is always converted to AAC-LC, which costs very little.
+
+> To let a BlueIris camera be copied, give one of its streams (often stream 0) a size of 1920×1080 or less and a keyframe interval of 4 s or less.
 
 ### The Recorder device
-| | |
+| Setting | |
 |---|---|
-| **Disable** (Enable/Disable communication) | Stops recording. The camera keeps its Home app recording settings |
+| **Copy a suitable stream** | On by default. Turn off to always re-encode |
+| **When re-encoding, use** | VideoToolbox (Mac hardware, low CPU) or libx264 (software, high CPU) |
+| **Disable** (Enable/Disable communication) | Stops recording and the prebuffer. The camera keeps its Home app recording settings |
 | **Delete** | Removes HKSV from the camera (its bridge restarts) and forgets its Home app recording settings |
-
-Its states show what the Home app and hub have set:
 
 | State | Meaning |
 |---|---|
-| `status` | Disabled, Camera off in Home app, Recording off in Home app, Waiting for hub, or Ready |
+| `status` | Disabled, Camera off in Home app, Recording off in Home app, Waiting for hub, Checking streams, Buffering (copy/transcode), Recording, or Can't record |
+| `streamCheck` | Each stream's size and whether it can be copied |
+| `recordSource`, `recordMode`, `recordModeReason` | The stream being recorded, copy or transcode, and why |
+| `ffmpegCpuPercent`, `ffmpegMemoryMB`, `prebufferKbps` | The recorder ffmpeg's CPU, memory and data rate (updated every 30 s) |
+| `prebufferSeconds`, `ffmpegRestarts`, `lastError` | Seconds held in memory, ffmpeg restarts, and the last problem |
+| `recordingsToday`, `lastRecordingStart`, `lastRecordingSeconds`, `lastRecordingMB` | Recordings sent to the hub |
 | `homeAppCameraOn`, `homeAppRecording`, `homeAppRecordingAudio` | The camera's switches in the Home app |
-| `selectedConfig` | The recording format the hub chose (size, frame rate, bitrate, keyframe interval) |
+| `selectedConfig` | The recording format the hub chose |
 | `hubsConnected`, `lastHubContact` | Home hubs connected to the camera's data stream |
 
-In the log, look for `HomeKit Secure Video services added`, `hub chose …` and `hub … connected - data stream ready`.
-
-For more detail, turn on **12. Debug HomeKit Secure Video** in the plugin Config. It logs what the home hub reads and writes for Recorder cameras, and their data stream, to the Indigo log.
+In the log, look for `hub chose …`, `prebuffer started - …`, `recording to hub …` and `recording finished - … s, … MB`. Turn on **12. Debug HomeKit Secure Video** in the plugin Config for more detail.
 
 ---
 

@@ -15,7 +15,7 @@ Ported from HAP-NodeJS lib/datastream (DataStreamServer.js, DataStreamParser.js)
   * Payload: 1 byte header length, header dict, message dict - both in Apple's
     compact binary encoding (below).
   * First message must be control/hello; we answer it. dataSend (the actual
-    recording transfer) comes in phase 2 - requests are refused for now.
+    recording transfer) is handled by hksv_recorder.py.
 
 Changes from PR #42's version: the listener binds only to the local address
 the hub's HAP connection uses, accepts connections only from that hub while a
@@ -368,8 +368,7 @@ class HDSConnection:
                         handler(self, mid, message)
                     else:
                         self.server.log_once("unhandled-{}-{}".format(protocol, topic),
-                                             "[{}] HKSV: hub asked for {}/{} - recording isn't available yet "
-                                             "(phase 1)".format(name, protocol, topic))
+                                             "[{}] HKSV: hub asked for {}/{} - not supported".format(name, protocol, topic))
                         _dbg("[%s] HDS: request %s/%s %s", name, protocol, topic, _summarise(message))
                         # 6 = protocol specific error, as HAP-NodeJS uses for unsupported
                         self.send_response(protocol, topic, mid, status=6)

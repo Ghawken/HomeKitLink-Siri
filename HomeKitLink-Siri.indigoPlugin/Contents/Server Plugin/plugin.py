@@ -1140,10 +1140,16 @@ class Plugin(indigo.PluginBase):
             rec_id = recorder.id
             hk = HKSV.HKSVRecording(accessory, cameraoptions or {}, self._hksv_state_path(camera_id),
                                     recorder_id=rec_id, enabled=recorder.enabled,
-                                    on_state=lambda states, rid=rec_id: self._hksv_update_states(rid, states))
+                                    on_state=lambda states, rid=rec_id: self._hksv_update_states(rid, states),
+                                    options=self._hksv_options(recorder))
             self.hksv_by_camera[int(camera_id)] = hk
         except Exception:
             self.logger.exception("[{}] Couldn't add HomeKit Secure Video to this camera".format(accessory.display_name))
+
+    def _hksv_options(self, recorder):
+        props = recorder.pluginProps
+        return {"allow_copy": bool(props.get("hksvAllowCopy", True)),
+                "encoder": "libx264" if props.get("hksvEncoder", "") == "libx264" else "h264_videotoolbox"}
 
     def _hksv_update_states(self, recorder_id, states):
         """Push HKSV state to the Recorder device (only what changed)."""
@@ -1218,6 +1224,7 @@ class Plugin(indigo.PluginBase):
                 self._hksv_restart_bridge(old_id, "to remove HomeKit Secure Video from its previous camera")
         hk = self.hksv_by_camera.get(camera_id)
         if hk is not None and hk.recorder_id == device.id and not hk.stopped:
+            hk.set_options(self._hksv_options(device))
             hk.set_enabled(True)
             return
         camera, bridge_dev, driver = self._hksv_camera_bridge(camera_id)

@@ -6,6 +6,17 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.22 — 2026-11-14
+
+### 🎥 HomeKit Secure Video — recording
+- **Recording now works**: while the Home app allows recording, the Recorder keeps the last few seconds of the camera in memory and sends motion (and doorbell) clips to the home hub, starting a few seconds before the motion
+- **Stream check**: at bridge start each of the camera's streams is checked and logged. A stream that suits HomeKit (H.264, up to 1920×1080, keyframe every 4 s or less) is **copied** with almost no CPU; otherwise the best one is re-encoded with VideoToolbox
+- **Usage on the Recorder device**: ffmpeg CPU and memory, data rate, seconds buffered, recordings today and the last recording's length and size
+- New Recorder settings: copy on/off, and VideoToolbox or libx264 for re-encoding
+- Nothing runs while the Home app has recording off for the camera
+
+---
+
 ## 0.8.21 — 2026-11-14
 
 ### 🎥 HomeKit Secure Video — preview

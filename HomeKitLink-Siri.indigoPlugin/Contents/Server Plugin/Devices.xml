@@ -231,7 +231,7 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 			<Field id="hksvIntro" type="label" fontSize="small">
 				<Label>Adds HomeKit Secure Video to one HomeKitLink camera. Home hubs then record its motion (and doorbell) events to iCloud, as set in the Home app. Needs an iCloud+ plan and a home hub (Apple TV or HomePod).
 
-This version adds the recording settings to the Home app and connects to the hub. Recording itself comes in a later version.
+While the Home app allows recording, one ffmpeg keeps the last few seconds of the camera in memory (HomeKit wants recordings to start just before the motion). If one of the camera's streams suits HomeKit it is copied, which uses almost no CPU; otherwise it is re-encoded. The device's states show which, and the ffmpeg's CPU and memory.
 
 Saving restarts the camera's bridge to add the recording services. Disabling this device stops recording but keeps the camera's Home app settings; deleting it removes them.</Label>
 			</Field>
@@ -241,6 +241,17 @@ Saving restarts the camera's bridge to add the recording services. Disabling thi
 			</Field>
 			<Field id="hksvCameraNote" type="label" fontSize="small" alignWithControl="true">
 				<Label>Cameras published to HomeKit by HomeKitLink (BlueIris, SecuritySpy or UniFi Protect). The camera needs its motion sensor turned on in HomeKitLink.</Label>
+			</Field>
+			<Field id="hksvAllowCopy" type="checkbox" defaultValue="true">
+				<Label>Copy a suitable stream:</Label>
+				<Description>Record without re-encoding when a stream suits HomeKit</Description>
+			</Field>
+			<Field id="hksvEncoder" type="menu" defaultValue="h264_videotoolbox">
+				<Label>When re-encoding, use:</Label>
+				<List>
+					<Option value="h264_videotoolbox">VideoToolbox (Mac hardware, low CPU)</Option>
+					<Option value="libx264">libx264 (software, high CPU)</Option>
+				</List>
 			</Field>
 		</ConfigUI>
 		<UiDisplayStateId>status</UiDisplayStateId>
@@ -279,6 +290,76 @@ Saving restarts the camera's bridge to add the recording services. Disabling thi
 				<ValueType>String</ValueType>
 				<TriggerLabel>Last Hub Contact</TriggerLabel>
 				<ControlPageLabel>Last Hub Contact</ControlPageLabel>
+			</State>
+			<State id="streamCheck">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Stream Check</TriggerLabel>
+				<ControlPageLabel>Stream Check</ControlPageLabel>
+			</State>
+			<State id="recordSource">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Recording Source Stream</TriggerLabel>
+				<ControlPageLabel>Recording Source Stream</ControlPageLabel>
+			</State>
+			<State id="recordMode">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Recording Mode (copy or transcode)</TriggerLabel>
+				<ControlPageLabel>Recording Mode (copy or transcode)</ControlPageLabel>
+			</State>
+			<State id="recordModeReason">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Recording Mode Reason</TriggerLabel>
+				<ControlPageLabel>Recording Mode Reason</ControlPageLabel>
+			</State>
+			<State id="ffmpegCpuPercent">
+				<ValueType>Number</ValueType>
+				<TriggerLabel>Recorder ffmpeg CPU %</TriggerLabel>
+				<ControlPageLabel>Recorder ffmpeg CPU %</ControlPageLabel>
+			</State>
+			<State id="ffmpegMemoryMB">
+				<ValueType>Number</ValueType>
+				<TriggerLabel>Recorder ffmpeg Memory MB</TriggerLabel>
+				<ControlPageLabel>Recorder ffmpeg Memory MB</ControlPageLabel>
+			</State>
+			<State id="prebufferKbps">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Prebuffer Rate kbps</TriggerLabel>
+				<ControlPageLabel>Prebuffer Rate kbps</ControlPageLabel>
+			</State>
+			<State id="prebufferSeconds">
+				<ValueType>Number</ValueType>
+				<TriggerLabel>Prebuffer Seconds Held</TriggerLabel>
+				<ControlPageLabel>Prebuffer Seconds Held</ControlPageLabel>
+			</State>
+			<State id="ffmpegRestarts">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Recorder ffmpeg Restarts</TriggerLabel>
+				<ControlPageLabel>Recorder ffmpeg Restarts</ControlPageLabel>
+			</State>
+			<State id="recordingsToday">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Recordings Today</TriggerLabel>
+				<ControlPageLabel>Recordings Today</ControlPageLabel>
+			</State>
+			<State id="lastRecordingStart">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Recording Start</TriggerLabel>
+				<ControlPageLabel>Last Recording Start</ControlPageLabel>
+			</State>
+			<State id="lastRecordingSeconds">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Last Recording Seconds</TriggerLabel>
+				<ControlPageLabel>Last Recording Seconds</ControlPageLabel>
+			</State>
+			<State id="lastRecordingMB">
+				<ValueType>Number</ValueType>
+				<TriggerLabel>Last Recording MB</TriggerLabel>
+				<ControlPageLabel>Last Recording MB</ControlPageLabel>
+			</State>
+			<State id="lastError">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Error</TriggerLabel>
+				<ControlPageLabel>Last Error</ControlPageLabel>
 			</State>
 		</States>
 	</Device>

@@ -1,13 +1,13 @@
-"""HomeKit Secure Video (HKSV) for HomeKitLink cameras - phase 1.
+"""HomeKit Secure Video (HKSV) for HomeKitLink cameras.
 
 Only used for a camera that has an "HKSV Recorder" device. Nothing here runs
 for other cameras: the services, the HomeKit Data Stream listener and the
 saved state all belong to that camera alone.
 
-Phase 1 advertises the recording services, saves the home hub's chosen
+This module advertises the recording services, saves the home hub's chosen
 recording configuration and the Home app's switches, and answers the hub's
-HomeKit Data Stream (encrypted, hello only). Recording itself (prebuffer and
-sending clips) is phase 2, so the hub's recording requests are refused.
+HomeKit Data Stream. hksv_recorder.py checks the camera's streams, runs the
+prebuffer while the Home app allows recording, and sends the recordings.
 
 TLV layouts follow HAP-NodeJS lib/camera/RecordingManagement.js, via PR #42
 (Durosity). Changes from the PR: the hub's HAP connection is taken from the
@@ -183,7 +183,7 @@ def _u16(b):
     return struct.unpack("<H", (b + b"\x00" * 2)[:2])[0]
 
 
-def recording_resolutions(camera_config):  # noqa: ARG001 - kept for phase 2 (copy vs transcode)
+def recording_resolutions(camera_config):  # noqa: ARG001
     """Recording sizes to offer: Apple's standard 16:9 sizes (as PR #42, which HomeKit accepted)."""
     return list(RECORDING_RESOLUTIONS)
 
@@ -198,7 +198,8 @@ def describe_selected(parsed):
 class HKSVRecording:
     """Adds and manages the HKSV services on one camera accessory."""
 
-    def __init__(self, accessory, camera_config, state_path, recorder_id=None, enabled=True, on_state=None):
+    def __init__(self, accessory, camera_config, state_path, recorder_id=None, enabled=True, on_state=None,
+                 options=None):
         self.acc = accessory
         self.name = accessory.display_name
         self.state_path = state_path
@@ -210,6 +211,7 @@ class HKSVRecording:
         self.selected_b64 = ""
         self.recording_active = False
         self.hds = None
+        self.recorder = None
         self.motion_char = getattr(accessory, "char_motion_detected", None)
         doorbell = getattr(accessory, "_char_doorbell_detected", None) is not None
 
@@ -223,10 +225,21 @@ class HKSVRecording:
         self._build_services()
         self._restore()
         self._wrap_stop()
+        try:
+            from hksv_recorder import Recorder
+            options = options or {}
+            self.recorder = Recorder(self.name, accessory.driver.loop, camera_config,
+                                     lambda: bool(self.motion_char.value) if self.motion_char is not None else False,
+                                     self._recorder_changed, allow_copy=options.get("allow_copy", True),
+                                     encoder=options.get("encoder", "h264_videotoolbox"))
+            self.recorder.start_probe()
+        except Exception:
+            _LOGGER.exception("[%s] HKSV: couldn't set up the recorder", self.name)
+        self._update_recorder()
         if self.motion_char is None:
             _LOGGER.warning("[%s] HKSV: this camera has no motion sensor in HomeKit, so the hub will never "
                             "record it. Turn on the camera's motion sensor in its HomeKitLink settings", self.name)
-        _LOGGER.info("[%s] HomeKit Secure Video services added (recording itself comes in a later version)", self.name)
+        _LOGGER.info("[%s] HomeKit Secure Video services added", self.name)
         self.log_offer()
         self.publish_state()
 
@@ -405,12 +418,23 @@ class HKSVRecording:
 
         async def stop():
             self.stopped = True
-            self.close()
+            await self.async_close()
             self.publish_state()
             await original()
         self.acc.stop = stop
 
+    async def async_close(self):
+        recorder = self.recorder
+        if recorder is not None:
+            pb = recorder.prebuffer
+            recorder.close()
+            if pb is not None:
+                await pb.stop()     # make sure ffmpeg has gone before the bridge's loop stops
+        self.close()
+
     def close(self):
+        if self.recorder is not None:
+            self.recorder.close()
         if self.hds is not None:
             try:
                 self.hds.close()
@@ -432,9 +456,20 @@ class HKSVRecording:
             status = "Recording off in Home app"
         elif not self.selected:
             status = "Waiting for hub"
+        elif self.recorder is None:
+            status = "Recorder unavailable"
+        elif self.recorder.session is not None:
+            status = "Recording"
+        elif self.recorder.buffering():
+            status = "Buffering ({})".format(self.recorder.choice[1])
+        elif self.recorder.probes is None:
+            status = "Checking streams"
+        elif self.recorder.prebuffer is not None:
+            status = "Starting prebuffer"
         else:
-            status = "Ready (recording not yet supported)"
-        return {
+            status = "Can't record - see lastError"
+        states = self.recorder.states() if self.recorder is not None else {}
+        states.update({
             "status": status,
             "homeAppCameraOn": bool(self.char_camera_active.value),
             "homeAppRecording": bool(self.recording_active),
@@ -442,7 +477,8 @@ class HKSVRecording:
             "selectedConfig": describe_selected(self.selected) if self.selected else "",
             "hubsConnected": hubs,
             "lastHubContact": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last)) if last else "",
-        }
+        })
+        return states
 
     def publish_state(self):
         if self.on_state is None:
@@ -453,7 +489,32 @@ class HKSVRecording:
             _dbg("[%s] HKSV: state update failed", self.name, exc_info=True)
 
     def set_enabled(self, enabled):
+        """From the Recorder device (Indigo's thread)."""
         self.enabled = bool(enabled)
+        self._update_recorder()
+        self._call_on_loop(self.publish_state)
+
+    def set_options(self, options):
+        if self.recorder is not None:
+            self._call_on_loop(self.recorder.set_options, options.get("allow_copy", True),
+                               options.get("encoder", "h264_videotoolbox"))
+
+    def _call_on_loop(self, fn, *args):
+        try:
+            self.acc.driver.loop.call_soon_threadsafe(fn, *args)
+        except RuntimeError:
+            pass   # bridge loop closed
+
+    def _update_recorder(self):
+        """Run the prebuffer only while recording is allowed (Recorder enabled, Home app
+        camera on and recording allowed, and a format chosen by the hub)."""
+        if self.recorder is None:
+            return
+        enabled = bool(self.enabled and not self.stopped and self.recording_active
+                       and (self.char_camera_active.value or 0) and self.selected)
+        self._call_on_loop(self.recorder.configure, self.selected, enabled, bool(self.char_recording_audio.value))
+
+    def _recorder_changed(self, recording=None):
         self.publish_state()
 
     # -------------------------------------------------------------- setters
@@ -473,6 +534,8 @@ class HKSVRecording:
             if self._changed(label, value):
                 _LOGGER.info("[%s] HKSV: %s set to %s", self.name, label, value)
                 self._persist()
+                if label == "RecordingAudioActive":
+                    self._update_recorder()
                 self.publish_state()
         return setter
 
@@ -489,6 +552,7 @@ class HKSVRecording:
         if self._changed("camera", value):
             _LOGGER.info("[%s] HKSV: camera %s in the Home app", self.name, "on" if value else "off")
             self._persist()
+        self._update_recorder()
         self.publish_state()
 
     def _on_recording_active(self, value):
@@ -498,6 +562,7 @@ class HKSVRecording:
             _LOGGER.info("[%s] HKSV: recording %s in the Home app%s", self.name, "allowed" if value else "turned off",
                          "" if (not value or self.selected) else " (the hub hasn't chosen a recording format yet)")
             self._persist()
+        self._update_recorder()
         self.publish_state()
 
     def _on_selected_configuration(self, value):
@@ -517,6 +582,7 @@ class HKSVRecording:
                          describe_selected(parsed), parsed["fragment_ms"],
                          "+".join(n for b, n in ((1, "motion"), (2, "doorbell")) if parsed["event_triggers"] & b) or "none")
             self._persist()
+            self._update_recorder()
         self.publish_state()
 
     def _on_setup_data_stream(self, value):
@@ -547,6 +613,8 @@ class HKSVRecording:
             if self.hds is None:
                 from hds import HDSServer
                 self.hds = HDSServer(self.name, self.acc.driver.loop, on_change=self.publish_state)
+                if self.recorder is not None:
+                    self.recorder.attach(self.hds)
             port, accessory_salt = self.hds.prepare(shared, controller_salt, client[0], sockname[0])
         except Exception:
             _LOGGER.warning("[%s] HKSV: couldn't start the data stream listener", self.name, exc_info=True)
