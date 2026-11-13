@@ -13,8 +13,9 @@ SRTP from the client is decrypted, its RTP timestamps are converted back to
 the 48 kHz Opus clock, and the plain RTP is forwarded to the camera's
 speaker. For UniFi Protect the target comes from the Protect integration API
 (POST .../cameras/{id}/talkback-session), which returns rtp://<camera>:7004
-(Opus). Protect sessions are short-lived, so a fresh one is opened when talk
-audio starts, and again if the camera starts rejecting packets.
+(Opus). Protect sessions are short-lived, so a fresh one is opened (in a
+background thread) when talk audio starts, and again if the camera starts
+rejecting packets.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ import socket
 import ssl
 import struct
 import sys
+import threading
 import time
 import traceback
 import urllib.parse
@@ -47,7 +49,47 @@ _TALKBACK_IDLE_SECONDS = 3.0         # a gap this long means a new "talk"
 # much bigger than near-silent ones, so packet size is a cheap voice detector.
 # While speech was heard recently, audio going back to the phone is replaced with
 # Opus silence (half-duplex ducking).
-_OPUS_SILENCE = b"\xf8\xff\xfe"     # a valid 20 ms Opus frame that decodes to silence
+_CELT_SILENCE_FRAME = b"\xff\xfe"   # a CELT frame body that decodes to silence
+# Opus frame sizes in 2.5 ms ticks, by TOC config number (RFC 6716 s3.1)
+_OPUS_FRAME_TICKS = [4, 8, 16, 24] * 3 + [4, 8] * 2 + [1, 2, 4, 8] * 4
+_CELT_FB_CONFIG = {1: 28, 2: 29, 4: 30, 8: 31}   # CELT fullband 2.5/5/10/20 ms
+_silence_cache: dict = {}
+
+
+def _opus_silence(payload: bytes) -> bytes | None:
+    """An Opus packet of silence lasting as long as ``payload`` (so the phone's
+    jitter buffer and timestamps stay in step at any packet time, e.g. 60 ms)."""
+    if not payload:
+        return None
+    toc = payload[0]
+    code = toc & 3
+    if code == 0:
+        frames = 1
+    elif code in (1, 2):
+        frames = 2
+    elif len(payload) >= 2:
+        frames = payload[1] & 0x3F
+    else:
+        return None
+    key = (toc, frames)
+    cached = _silence_cache.get(key)
+    if cached is not None:
+        return cached
+    ticks = _OPUS_FRAME_TICKS[toc >> 3] * frames
+    if not ticks:
+        return None
+    size = next(t for t in (8, 4, 2, 1) if ticks % t == 0)
+    count = ticks // size
+    stereo = toc & 0x04
+    if count == 1:
+        packet = bytes([(_CELT_FB_CONFIG[size] << 3) | stereo]) + _CELT_SILENCE_FRAME
+    elif count <= 48:     # code 3, constant bitrate, no padding
+        packet = bytes([(_CELT_FB_CONFIG[size] << 3) | stereo | 3, count]) + _CELT_SILENCE_FRAME * count
+    else:
+        return None
+    if len(_silence_cache) < 64:
+        _silence_cache[key] = packet
+    return packet
 
 
 def _log(level: str, msg: str) -> None:
@@ -64,6 +106,9 @@ class _Talkback:
         self._decrypt = SRTPDecryptContext(srtp_key_b64)
         self._source_clock = source_clock_rate or 24000
         self._sock: socket.socket | None = None
+        self._ready: socket.socket | None = None   # set by the opener thread
+        self._opening = False
+        self._dropped = 0
         self._last_attempt = 0.0
         self._last_packet = 0.0
         self._forwarded = 0
@@ -80,9 +125,15 @@ class _Talkback:
     def ducking(self, now: float) -> bool:
         return self.echo_suppress and (now - self.last_speech) < self._hold
 
-    def _open_session(self) -> None:
+    def _start_open(self) -> None:
+        """Open the Protect session in a background thread, so the camera's audio
+        to the phone keeps flowing while the console answers (up to 4 s)."""
         self._close()
         self._last_attempt = time.monotonic()
+        self._opening = True
+        threading.Thread(target=self._open_session, name="talkback-open", daemon=True).start()
+
+    def _open_session(self) -> None:
         url = "https://{}/proxy/protect/integration/v1/cameras/{}/talkback-session".format(
             self._cfg["host"], self._cfg["camera_id"])
         req = urllib.request.Request(url, data=b"", method="POST", headers={
@@ -97,11 +148,13 @@ class _Talkback:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.connect((target.hostname, target.port or 7004))
             sock.setblocking(False)
-            self._sock = sock
+            self._ready = sock         # picked up by handle() on the main thread
             _log("INFO", f"Two-way audio: talking to {self._name} ({info.get('codec')}, "
                          f"{info.get('samplingRate')} Hz, {target.hostname}:{target.port})")
         except Exception as err:  # noqa: BLE001
             _log("WARNING", f"Two-way audio: couldn't open a Protect talkback session for {self._name}: {err}")
+        finally:
+            self._opening = False
 
     def _close(self) -> None:
         if self._sock is not None:
@@ -139,13 +192,16 @@ class _Talkback:
                               f"(speech threshold {self._speech_bytes})")
         # Open a fresh Protect session at the start of each burst of talk,
         # since sessions expire shortly after they're created.
-        if self._sock is None or (now - self._last_packet) > _TALKBACK_IDLE_SECONDS:
-            if self._sock is not None:
-                self._close()
+        ready, self._ready = self._ready, None
+        if ready is not None:
+            self._close()
+            self._sock = ready
+        if not self._opening and (self._sock is None or (now - self._last_packet) > _TALKBACK_IDLE_SECONDS):
             if now - self._last_attempt >= _TALKBACK_RETRY_SECONDS:
-                self._open_session()
+                self._start_open()
         self._last_packet = now
         if self._sock is None:
+            self._dropped += 1      # said while the session was opening
             return
         packet = bytearray(rtp)
         ts = _UINT32_BE.unpack_from(packet, 4)[0]
@@ -164,6 +220,8 @@ class _Talkback:
             self._close()
 
     def close(self) -> None:
+        if self._dropped and self._forwarded:
+            _log("DEBUG", f"Two-way audio: {self._dropped} packets dropped while Protect sessions were opening")
         if self.ducked:
             _log("DEBUG", f"Two-way audio: muted {self.ducked} return-audio packets while you were talking")
         if self._forwarded:
@@ -171,6 +229,9 @@ class _Talkback:
         elif self._received:
             _log("WARNING", f"Two-way audio: received {self._received} Home app packets for {self._name} but sent none")
         self._close()
+        ready, self._ready = self._ready, None
+        if ready is not None:
+            ready.close()
 
 
 def _exit_on_sigterm(signum, frame):  # noqa: ARG001
@@ -298,8 +359,13 @@ def run_proxy(
             # Echo suppression: silence the camera's audio while the user talks
             if talk is not None and talk.ducking(time.monotonic()):
                 hl = _MIN_RTP_HEADER_SIZE + (packet[0] & 0x0F) * 4
-                packet = packet[:hl] + _OPUS_SILENCE
-                talk.ducked += 1
+                if packet[0] & 0x10 and len(packet) >= hl + 4:
+                    hl += 4 + int.from_bytes(packet[hl + 2:hl + 4], "big") * 4
+                silence = _opus_silence(bytes(packet[hl:]))
+                if silence is not None:
+                    packet = packet[:hl] + silence
+                    packet[0] &= ~0x20            # no RTP padding on the replacement
+                    talk.ducked += 1
 
             srtp_packet = srtp.encrypt(bytes(packet))
             send_sock.sendto(srtp_packet, dest)

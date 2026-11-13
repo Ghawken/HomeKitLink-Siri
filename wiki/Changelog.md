@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.18 — 2026-11-14
+
+### 🎙️ UniFi Protect two-way audio fixes
+- The camera's sound no longer freezes when you start talking: the Protect talk session now opens in the background, even if the console is slow to answer
+- When HomeKit uses longer audio packets (often away from home), the camera's sound is now muted cleanly while you talk, instead of glitching
+
+---
+
 ## 0.8.17 — 2026-11-11
 
 ### 🎙️ UniFi Protect two-way audio
