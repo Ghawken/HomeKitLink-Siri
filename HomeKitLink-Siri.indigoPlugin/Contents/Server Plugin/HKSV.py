@@ -330,10 +330,13 @@ class HKSVRecording:
                                                       setter_callback=self._on_simple("RecordingAudioActive"))
         rm.add_linked_service(ds)
 
-        # Motion sensor reports StatusActive, mirroring HomeKitCameraActive
+        # Motion sensor reports StatusActive, mirroring HomeKitCameraActive, and is
+        # linked to recording management so the hub knows what triggers a
+        # recording (as HAP-NodeJS CameraController; PR #42 left this out)
         self.char_status_active = None
         motion_service = getattr(self.motion_char, "service", None)
         if motion_service is not None:
+            rm.add_linked_service(motion_service)
             try:
                 char = loader.get_char("StatusActive")
                 char.set_value(True)
@@ -341,6 +344,12 @@ class HKSVRecording:
                 self.char_status_active = char
             except Exception:
                 _LOGGER.debug("[%s] HKSV: couldn't add StatusActive to the motion sensor", self.name, exc_info=True)
+
+        # A video doorbell's Doorbell service is the accessory's primary service
+        # (as HAP-NodeJS DoorbellController). Only done here, for HKSV cameras.
+        doorbell_service = getattr(getattr(acc, "_char_doorbell_detected", None), "service", None)
+        if doorbell_service is not None:
+            acc.set_primary_service(doorbell_service)
 
     def _attach(self, service, char):
         """Add a characteristic to a service that's already on the accessory,

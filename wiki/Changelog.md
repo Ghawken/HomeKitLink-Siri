@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.20 — 2026-11-14
+
+### 🎥 HomeKit Secure Video — preview
+- The camera's motion sensor is now linked to its recording service, so the home hub knows what triggers a recording
+- On a doorbell camera with a Recorder, the doorbell is now the camera's main service, as HomeKit expects for video doorbells
+
+---
+
 ## 0.8.19 — 2026-11-14
 
 ### 🎥 HomeKit Secure Video — preview (phase 1)
