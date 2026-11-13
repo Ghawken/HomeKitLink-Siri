@@ -222,6 +222,42 @@ Any HKLS camera can have a **Doorbell** device associated with it:
 
 ---
 
+## HomeKit Secure Video — preview (v0.8.19+)
+
+HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doorbell events to iCloud, with the Home app's timeline, face recognition and activity zones. It is **per camera and opt-in**: cameras without an HKSV Recorder device are unchanged.
+
+> **v0.8.19 is phase 1.** The Home app shows the camera's recording options and the hub connects, but **no clips are recorded yet**. Recording comes in a later version. Only add a Recorder now if you want to help test the setup.
+
+### What you need
+- An iCloud+ plan (HKSV storage doesn't count against it, but the plan sets how many cameras you can record)
+- A home hub: Apple TV or HomePod
+- The camera published by HomeKitLink, with its **motion sensor** turned on
+
+### Add a recorder
+1. **Plugins → Devices → New Device**, type **HomeKit Secure Video Recorder**
+2. Choose the camera, then Save
+3. HomeKitLink restarts that camera's bridge to add the recording services
+4. In the Home app, open the camera's settings: **Recording Options** should now appear
+
+### The Recorder device
+| | |
+|---|---|
+| **Disable** (Enable/Disable communication) | Stops recording. The camera keeps its Home app recording settings |
+| **Delete** | Removes HKSV from the camera (its bridge restarts) and forgets its Home app recording settings |
+
+Its states show what the Home app and hub have set:
+
+| State | Meaning |
+|---|---|
+| `status` | Disabled, Camera off in Home app, Recording off in Home app, Waiting for hub, or Ready |
+| `homeAppCameraOn`, `homeAppRecording`, `homeAppRecordingAudio` | The camera's switches in the Home app |
+| `selectedConfig` | The recording format the hub chose (size, frame rate, bitrate, keyframe interval) |
+| `hubsConnected`, `lastHubContact` | Home hubs connected to the camera's data stream |
+
+In the log, look for `HomeKit Secure Video services added`, `hub chose …` and `hub … connected - data stream ready`.
+
+---
+
 ## Camera Performance Tuning
 
 Configure camera performance in **Plugin Config** (Plugins → HomeKitLink Siri → Configure…):

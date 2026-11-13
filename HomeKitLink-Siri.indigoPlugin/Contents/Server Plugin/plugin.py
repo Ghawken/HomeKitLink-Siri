@@ -77,6 +77,7 @@ import HKSecuritySystem
 import HomeKitDevices
 import HKConstants
 import HKDevicesCamera
+HKSV_CAMERA_SUBTYPES = ("BlueIrisCamera", "SecuritySpyCamera", "UniFiProtectCamera")
 import HKDevicesCameraSecuritySpy
 import HKDevicesCameraUniFi
 import HKThermostat
@@ -217,6 +218,9 @@ class Plugin(indigo.PluginBase):
         self.device_list = set()
         self.device_list_internal = []
         self.device_list_internal_idonly = []
+        self.hksv_by_camera = {}   ## HKSV Recorder: camera device id -> HKSV.HKSVRecording on its running bridge
+        self._hksv_last_states = {}
+        self._hksv_restarting = set()
         self.pluginStartingUp = True
         self.pluginDisplayName = pluginDisplayName
         self.pluginId = pluginId
@@ -519,6 +523,8 @@ class Plugin(indigo.PluginBase):
         if self.debug8:
             self.logger.debug(u'Called getDeviceConfigUiValues(self, pluginProps, typeId, devId):')
             self.logger.debug('     ({0}, {1}, {2})'.format(pluginProps, typeId, devId))
+        if typeId == "hksvRecorder":
+            return super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
         valuesDict = pluginProps
         errorMsgDict = indigo.Dict()
 
@@ -546,6 +552,9 @@ class Plugin(indigo.PluginBase):
         return super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
 
     def deviceStartComm(self, device):
+        if device.deviceTypeId == "hksvRecorder":
+            self._hksv_device_start(device)
+            return
         self.logger.debug(f"{device.name}: Starting {device.deviceTypeId} Device {device.id} ")
         device.stateListOrDisplayStateIdChanged()
         checkid = device.pluginProps.get("bridgeUniqueID", "")
@@ -589,6 +598,9 @@ class Plugin(indigo.PluginBase):
     ########################################
     # Indigo Device Startup
     def deviceStopComm(self, device):
+        if device.deviceTypeId == "hksvRecorder":
+            self._hksv_device_stop(device)
+            return
         try:
             self.logger.debug(f"{device.name}: Stopping {device.deviceTypeId} Device {device.id}")
             device.updateStateOnServer(key="Status", value="Off")
@@ -697,6 +709,8 @@ class Plugin(indigo.PluginBase):
 
     def validateDeviceConfigUi(self, values_dict, type_id, dev_id):
         self.logger.debug("ValidateDevice Config UI called {}".format(values_dict))
+        if type_id == "hksvRecorder":
+            return self._hksv_validate(values_dict, dev_id)
         return (True, values_dict)
 
     ########################################
@@ -1075,6 +1089,9 @@ class Plugin(indigo.PluginBase):
                         self.logger.info("Skipping No Subtype this: ID {}  Name {}  DeviceAID {}".format(item["deviceid"], item['devicename'], deviceAID))
                         continue
 
+                    if item['subtype'] in HKSV_CAMERA_SUBTYPES:
+                        self._hksv_attach(accessory, item["deviceid"], cameraoptions)
+
                     manufacturer = item['manufacturername']
                     model = item['devicemodel']
                     serial_number = str(deviceAID)
@@ -1093,6 +1110,170 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.exception("Error in Get Bridge")
         ##
+
+    ###############################################################################
+    # HomeKit Secure Video - "HKSV Recorder" devices (phase 1)
+    # Nothing here runs unless an HKSV Recorder device exists: the camera accessory
+    # only gets the recording services when a Recorder points at it.
+    ###############################################################################
+    def _hksv_recorder_for(self, camera_id):
+        """The HKSV Recorder device for a camera (enabled or not), or None."""
+        for dev in indigo.devices.iter("self.hksvRecorder"):
+            if str(dev.pluginProps.get("cameraDeviceId", "")) == str(camera_id):
+                return dev
+        return None
+
+    def _hksv_state_path(self, camera_id):
+        return os.path.join(self.pluginprefDirectory, "hksv", "{}.json".format(int(camera_id)))
+
+    def _hksv_attach(self, accessory, camera_id, cameraoptions):
+        recorder = self._hksv_recorder_for(camera_id)
+        if recorder is None:
+            return
+        try:
+            import HKSV
+            rec_id = recorder.id
+            hk = HKSV.HKSVRecording(accessory, cameraoptions or {}, self._hksv_state_path(camera_id),
+                                    recorder_id=rec_id, enabled=recorder.enabled,
+                                    on_state=lambda states, rid=rec_id: self._hksv_update_states(rid, states))
+            self.hksv_by_camera[int(camera_id)] = hk
+        except Exception:
+            self.logger.exception("[{}] Couldn't add HomeKit Secure Video to this camera".format(accessory.display_name))
+
+    def _hksv_update_states(self, recorder_id, states):
+        """Push HKSV state to the Recorder device (only what changed)."""
+        last = self._hksv_last_states.setdefault(recorder_id, {})
+        changed = [{"key": k, "value": v} for k, v in states.items() if last.get(k) != v]
+        if not changed:
+            return
+        try:
+            dev = indigo.devices[recorder_id]
+            dev.updateStatesOnServer(changed)
+            last.update(states)
+        except Exception:
+            self.logger.debug("HKSV: couldn't update Recorder device {}".format(recorder_id), exc_info=True)
+
+    def _hksv_set_status(self, device, status):
+        self._hksv_update_states(device.id, {"status": status})
+
+    def _hksv_camera_bridge(self, camera_id):
+        """(camera device, bridge Indigo device, running driver) for a published camera."""
+        try:
+            camera = indigo.devices[int(camera_id)]
+        except Exception:
+            return None, None, None
+        try:
+            uid = int(camera.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+        except (TypeError, ValueError):
+            uid = 99
+        bridge_dev = None
+        for dev in indigo.devices.iter("self.homeKitBridgeDevice"):
+            try:
+                if int(dev.pluginProps.get("bridgeUniqueID", 0)) == uid:
+                    bridge_dev = dev
+                    break
+            except (TypeError, ValueError):
+                continue
+        driver = next((d for d in self.driver_multiple if d is not None and str(d.indigodeviceid) == str(uid)), None)
+        return camera, bridge_dev, driver
+
+    def _hksv_restart_bridge(self, camera_id, why):
+        camera, bridge_dev, driver = self._hksv_camera_bridge(camera_id)
+        if bridge_dev is None or not bridge_dev.enabled or driver is None:
+            return False
+        self.logger.info("HKSV: restarting bridge '{}' {}".format(bridge_dev.name, why))
+        if bridge_dev.id in self._hksv_restarting:
+            return True   ## already restarting (e.g. a Recorder moved between two cameras on one bridge)
+        self._hksv_restarting.add(bridge_dev.id)
+
+        def restart(dev_id=bridge_dev.id):
+            try:
+                t.sleep(1)
+                indigo.device.enable(dev_id, value=False)
+                t.sleep(4)
+                indigo.device.enable(dev_id, value=True)
+            except Exception:
+                self.logger.exception("HKSV: bridge restart failed")
+            finally:
+                self._hksv_restarting.discard(dev_id)
+        threading.Thread(target=restart, daemon=True, name="HKLS-hksv-restart").start()
+        return True
+
+    def _hksv_device_start(self, device):
+        device.stateListOrDisplayStateIdChanged()
+        camera_id = device.pluginProps.get("cameraDeviceId", "")
+        if camera_id in ("", None):
+            self._hksv_set_status(device, "No camera selected")
+            return
+        camera_id = int(camera_id)
+        # A camera this Recorder used to point at keeps its HKSV services until its bridge restarts
+        for old_id, hk in list(self.hksv_by_camera.items()):
+            if hk.recorder_id == device.id and old_id != camera_id:
+                self.hksv_by_camera.pop(old_id, None)
+                self._hksv_restart_bridge(old_id, "to remove HomeKit Secure Video from its previous camera")
+        hk = self.hksv_by_camera.get(camera_id)
+        if hk is not None and hk.recorder_id == device.id and not hk.stopped:
+            hk.set_enabled(True)
+            return
+        camera, bridge_dev, driver = self._hksv_camera_bridge(camera_id)
+        if camera is None:
+            self._hksv_set_status(device, "Camera not found")
+        elif camera.pluginProps.get("HomeKit_deviceSubtype", "") not in HKSV_CAMERA_SUBTYPES or not camera.pluginProps.get("HomeKit_publishDevice", False):
+            self._hksv_set_status(device, "Camera isn't published to HomeKit")
+        elif bridge_dev is None or not bridge_dev.enabled:
+            self._hksv_set_status(device, "Camera's bridge is off")
+        elif self.pluginStartingUp or driver is None:
+            self._hksv_set_status(device, "Waiting for bridge")
+        elif self._hksv_restart_bridge(camera_id, "to add HomeKit Secure Video to '{}'".format(camera.name)):
+            self._hksv_set_status(device, "Adding to camera")
+
+    def _hksv_device_stop(self, device):
+        for hk in self.hksv_by_camera.values():
+            if hk.recorder_id == device.id:
+                hk.set_enabled(False)
+                return
+        self._hksv_set_status(device, "Disabled")
+
+    def _hksv_device_deleted(self, device):
+        self._hksv_last_states.pop(device.id, None)
+        camera_id = device.pluginProps.get("cameraDeviceId", "")
+        if camera_id in ("", None):
+            return
+        camera_id = int(camera_id)
+        try:
+            os.remove(self._hksv_state_path(camera_id))
+        except OSError:
+            pass
+        hk = self.hksv_by_camera.get(camera_id)
+        if hk is not None and hk.recorder_id == device.id:
+            self.hksv_by_camera.pop(camera_id, None)
+            self._hksv_restart_bridge(camera_id, "to remove HomeKit Secure Video from its camera")
+
+    def _hksv_validate(self, values_dict, dev_id):
+        errors = indigo.Dict()
+        camera_id = values_dict.get("cameraDeviceId", "")
+        if camera_id in ("", None):
+            errors["cameraDeviceId"] = "Choose the camera to record"
+        else:
+            for dev in indigo.devices.iter("self.hksvRecorder"):
+                if dev.id != dev_id and str(dev.pluginProps.get("cameraDeviceId", "")) == str(camera_id):
+                    errors["cameraDeviceId"] = "'{}' already records this camera".format(dev.name)
+                    break
+        if len(errors):
+            return (False, values_dict, errors)
+        return (True, values_dict)
+
+    def hksv_camera_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """Published HomeKitLink cameras, for the HKSV Recorder's camera menu."""
+        cameras = []
+        for dev_id in list(self.device_list):
+            try:
+                dev = indigo.devices[dev_id]
+            except Exception:
+                continue
+            if dev.pluginProps.get("HomeKit_deviceSubtype", "") in HKSV_CAMERA_SUBTYPES:
+                cameras.append((str(dev.id), dev.name))
+        return sorted(cameras, key=lambda c: c[1].lower()) or [("", "No HomeKitLink cameras published")]
 
     ###############################################################################
     # Thread to get Cameras
@@ -1792,6 +1973,9 @@ class Plugin(indigo.PluginBase):
     def deviceDeleted(self, deleted_device):
         # Watch for any devices that we care about and see if we need to push a change up to HomeKit
         super(Plugin, self).deviceDeleted(deleted_device)
+        if deleted_device.pluginId == self.pluginId and deleted_device.deviceTypeId == "hksvRecorder":
+            self._hksv_device_deleted(deleted_device)
+            return
 
         try:
             if deleted_device.id in self.device_list_internal_idonly:
@@ -4635,7 +4819,7 @@ class Plugin(indigo.PluginBase):
 
     def restartBridge(self, *args, **kwargs):
         self.logger.info("Restart all Bridges.")
-        for device in indigo.devices.iter("self"):
+        for device in indigo.devices.iter("self.homeKitBridgeDevice"):
             ## only turn on, turn off if device already on.
             if device.enabled:
                 indigo.device.enable(device.id, value=False)

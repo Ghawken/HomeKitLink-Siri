@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.19 — 2026-11-14
+
+### 🎥 HomeKit Secure Video — preview (phase 1)
+- New device type **HomeKit Secure Video Recorder**: adds HKSV to one camera. Cameras without a Recorder are unchanged
+- This version adds the camera's Recording Options to the Home app, remembers what the hub and Home app choose, and accepts the hub's encrypted data stream. **Clips aren't recorded yet**; that comes in a later version
+- The Recorder's states show the Home app's switches, the recording format the hub chose and whether the hub is connected
+- Based on the HKSV work in PR #42 (thanks Durosity), with the data stream limited to the hub that set it up
+
+---
+
 ## 0.8.18 — 2026-11-14
 
 ### 🎙️ UniFi Protect two-way audio fixes

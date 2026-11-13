@@ -323,6 +323,8 @@ class HAPServerProtocol(asyncio.Protocol):
         # If we get a shared key, upgrade to encrypted
         if response.shared_key:
             self.hap_crypto = HAPCrypto(response.shared_key)
+            ## HKSV: HomeKit Data Stream keys derive from this session's secret
+            self.hds_shared_secret = response.shared_key
         # Only update mDNS after sending the response
         if response.pairing_changed:
             async_create_background_task(

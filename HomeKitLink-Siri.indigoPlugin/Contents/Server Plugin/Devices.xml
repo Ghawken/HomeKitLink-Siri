@@ -225,4 +225,62 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 	</Device>
 
 
+	<Device type="custom" id="hksvRecorder">
+		<Name>HomeKit Secure Video Recorder</Name>
+		<ConfigUI>
+			<Field id="hksvIntro" type="label" fontSize="small">
+				<Label>Adds HomeKit Secure Video to one HomeKitLink camera. Home hubs then record its motion (and doorbell) events to iCloud, as set in the Home app. Needs an iCloud+ plan and a home hub (Apple TV or HomePod).
+
+This version adds the recording settings to the Home app and connects to the hub. Recording itself comes in a later version.
+
+Saving restarts the camera's bridge to add the recording services. Disabling this device stops recording but keeps the camera's Home app settings; deleting it removes them.</Label>
+			</Field>
+			<Field id="cameraDeviceId" type="menu" defaultValue="">
+				<Label>Camera:</Label>
+				<List class="self" method="hksv_camera_list" dynamicReload="true"/>
+			</Field>
+			<Field id="hksvCameraNote" type="label" fontSize="small" alignWithControl="true">
+				<Label>Cameras published to HomeKit by HomeKitLink (BlueIris, SecuritySpy or UniFi Protect). The camera needs its motion sensor turned on in HomeKitLink.</Label>
+			</Field>
+		</ConfigUI>
+		<UiDisplayStateId>status</UiDisplayStateId>
+		<States>
+			<State id="status">
+				<ValueType>String</ValueType>
+				<TriggerLabel>HKSV Status</TriggerLabel>
+				<ControlPageLabel>HKSV Status</ControlPageLabel>
+			</State>
+			<State id="homeAppCameraOn">
+				<ValueType>Boolean</ValueType>
+				<TriggerLabel>Camera On in Home App</TriggerLabel>
+				<ControlPageLabel>Camera On in Home App</ControlPageLabel>
+			</State>
+			<State id="homeAppRecording">
+				<ValueType>Boolean</ValueType>
+				<TriggerLabel>Recording Allowed in Home App</TriggerLabel>
+				<ControlPageLabel>Recording Allowed in Home App</ControlPageLabel>
+			</State>
+			<State id="homeAppRecordingAudio">
+				<ValueType>Boolean</ValueType>
+				<TriggerLabel>Record Audio in Home App</TriggerLabel>
+				<ControlPageLabel>Record Audio in Home App</ControlPageLabel>
+			</State>
+			<State id="selectedConfig">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Recording Format Chosen by Hub</TriggerLabel>
+				<ControlPageLabel>Recording Format Chosen by Hub</ControlPageLabel>
+			</State>
+			<State id="hubsConnected">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Home Hubs Connected</TriggerLabel>
+				<ControlPageLabel>Home Hubs Connected</ControlPageLabel>
+			</State>
+			<State id="lastHubContact">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last Hub Contact</TriggerLabel>
+				<ControlPageLabel>Last Hub Contact</ControlPageLabel>
+			</State>
+		</States>
+	</Device>
+
 </Devices>
