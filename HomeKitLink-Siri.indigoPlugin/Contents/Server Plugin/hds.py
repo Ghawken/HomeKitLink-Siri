@@ -37,6 +37,14 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 
 _LOGGER = logging.getLogger("Plugin.HomeKitSpawn.HKSV")
+DEBUG = False   # set by HKSV.set_debug
+
+
+def _dbg(msg, *args, **kwargs):
+    if DEBUG:
+        _LOGGER.info("HKSV debug: " + msg, *args, **kwargs)
+    else:
+        _LOGGER.debug(msg, *args, **kwargs)
 
 
 READ_INFO = b"HDS-Read-Encryption-Key"     # accessory -> controller
@@ -362,7 +370,7 @@ class HDSConnection:
                         self.server.log_once("unhandled-{}-{}".format(protocol, topic),
                                              "[{}] HKSV: hub asked for {}/{} - recording isn't available yet "
                                              "(phase 1)".format(name, protocol, topic))
-                        _LOGGER.debug("[%s] HDS: request %s/%s %s", name, protocol, topic, _summarise(message))
+                        _dbg("[%s] HDS: request %s/%s %s", name, protocol, topic, _summarise(message))
                         # 6 = protocol specific error, as HAP-NodeJS uses for unsupported
                         self.send_response(protocol, topic, mid, status=6)
                     await self.drain()
@@ -372,14 +380,14 @@ class HDSConnection:
                     if handler:
                         handler(self, message)
                     else:
-                        _LOGGER.debug("[%s] HDS: event %s/%s %s", name, protocol, header["event"], _summarise(message))
+                        _dbg("[%s] HDS: event %s/%s %s", name, protocol, header["event"], _summarise(message))
                 elif "response" in header:
-                    _LOGGER.debug("[%s] HDS: response %s/%s status %s", name, protocol, header["response"],
+                    _dbg("[%s] HDS: response %s/%s status %s", name, protocol, header["response"],
                                   header.get("status"))
         except asyncio.TimeoutError:
             _LOGGER.warning("[%s] HDS: hub connected but didn't say hello in time", name)
         except asyncio.IncompleteReadError:
-            _LOGGER.debug("[%s] HDS: hub closed the data stream", name)
+            _dbg("[%s] HDS: hub closed the data stream", name)
         except Exception:
             _LOGGER.warning("[%s] HDS: data stream error", name, exc_info=True)
         finally:
@@ -424,7 +432,7 @@ class HDSServer:
         home hub (Apple TV and HomePods) connects and retries, so per-event
         INFO lines flood the Indigo log."""
         if key in self._logged:
-            _LOGGER.debug(msg)
+            _dbg(msg)
         else:
             self._logged.add(key)
             _LOGGER.info(msg)
@@ -438,7 +446,7 @@ class HDSServer:
             try:
                 self.on_change()
             except Exception:
-                _LOGGER.debug("HDS change callback failed", exc_info=True)
+                _dbg("HDS change callback failed", exc_info=True)
 
     def _listen(self, local_address):
         """Listen on local_address (synchronously, so the port can go straight
@@ -463,7 +471,7 @@ class HDSServer:
         async def start():
             entry[0] = await asyncio.start_server(self._on_connection, sock=sock)
         self.loop.create_task(start())
-        _LOGGER.debug("[%s] HDS: listening for the hub on %s port %d", self.name, local_address, port)
+        _dbg("[%s] HDS: listening for the hub on %s port %d", self.name, local_address, port)
         return port
 
     def prepare(self, shared_secret, controller_salt, hub_address, local_address):
@@ -483,7 +491,7 @@ class HDSServer:
         self.prepared = [p for p in self.prepared if now - p.created < PREPARED_TIMEOUT]
         candidates = [p for p in self.prepared if p.label == host]
         if not candidates or len(self.connections) >= MAX_CONNECTIONS:
-            _LOGGER.debug("[%s] HDS: refused connection from %s (%s)", self.name, peer,
+            _dbg("[%s] HDS: refused connection from %s (%s)", self.name, peer,
                           "no session prepared for it" if not candidates else "too many connections")
             writer.close()
             return
@@ -517,7 +525,7 @@ class HDSServer:
         feeder.feed_data(head + body)
         conn = HDSConnection(self, _ChainedReader(feeder, reader), writer, match)
         self.connections.append(conn)
-        _LOGGER.debug("[%s] HDS: connection from %s matched", self.name, host)
+        _dbg("[%s] HDS: connection from %s matched", self.name, host)
         self._changed()
         await conn.run()
 
@@ -528,7 +536,7 @@ class HDSServer:
             try:
                 self.on_connection_closed(conn)
             except Exception:
-                _LOGGER.debug("HDS connection-closed callback failed", exc_info=True)
+                _dbg("HDS connection-closed callback failed", exc_info=True)
         self._changed()
 
     def close(self):

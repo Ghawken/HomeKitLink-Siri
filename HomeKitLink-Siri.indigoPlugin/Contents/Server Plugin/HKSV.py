@@ -35,6 +35,25 @@ from pyhap import tlv
 from pyhap.characteristic import Characteristic
 
 _LOGGER = logging.getLogger("Plugin.HomeKitSpawn.HKSV")
+DEBUG = False   # plugin Config "Debug HomeKit Secure Video": detail goes to the Indigo log
+
+
+def set_debug(enabled):
+    global DEBUG
+    DEBUG = bool(enabled)
+    try:
+        import hds
+        hds.DEBUG = DEBUG
+    except Exception:
+        pass
+
+
+def _dbg(msg, *args, **kwargs):
+    """HKSV detail: INFO (Indigo log) when Debug HKSV is on, otherwise DEBUG (file only)."""
+    if DEBUG:
+        _LOGGER.info("HKSV debug: " + msg, *args, **kwargs)
+    else:
+        _LOGGER.debug(msg, *args, **kwargs)
 
 # --- Characteristic and service definitions (HAP-NodeJS), registered only when used ---
 _CHARS = {
@@ -108,9 +127,9 @@ TLV_DELIMITER = b"\x00\x00"
 
 PREBUFFER_MS = 4000
 FRAGMENT_MS = 4000
-RECORDING_RESOLUTIONS = [(1920, 1080), (1280, 720), (640, 360)]
-CONF_MAX_WIDTH = "max_width"      # as HKConstants (which needs indigo, so isn't imported here)
-CONF_MAX_HEIGHT = "max_height"
+## Apple's standard 16:9 sizes only, regardless of the camera's live-view limit. PR #42 found hubs
+## rejected offers with a camera's own sizes and only accepted ones including 1920x1080 / 1280x720.
+RECORDING_RESOLUTIONS = [(1920, 1080), (1280, 720), (640, 360), (480, 270), (320, 180)]
 
 
 def register_resources(loader):
@@ -164,15 +183,9 @@ def _u16(b):
     return struct.unpack("<H", (b + b"\x00" * 2)[:2])[0]
 
 
-def recording_resolutions(camera_config):
-    """Recording sizes to offer: the standard ones up to the camera's maximum."""
-    try:
-        max_w = int(camera_config.get(CONF_MAX_WIDTH, 1920) or 1920)
-        max_h = int(camera_config.get(CONF_MAX_HEIGHT, 1080) or 1080)
-    except (TypeError, ValueError):
-        max_w, max_h = 1920, 1080
-    sizes = [(w, h) for (w, h) in RECORDING_RESOLUTIONS if w <= max_w and h <= max_h]
-    return sizes or [RECORDING_RESOLUTIONS[-1]]
+def recording_resolutions(camera_config):  # noqa: ARG001 - kept for phase 2 (copy vs transcode)
+    """Recording sizes to offer: Apple's standard 16:9 sizes (as PR #42, which HomeKit accepted)."""
+    return list(RECORDING_RESOLUTIONS)
 
 
 def describe_selected(parsed):
@@ -214,6 +227,7 @@ class HKSVRecording:
             _LOGGER.warning("[%s] HKSV: this camera has no motion sensor in HomeKit, so the hub will never "
                             "record it. Turn on the camera's motion sensor in its HomeKitLink settings", self.name)
         _LOGGER.info("[%s] HomeKit Secure Video services added (recording itself comes in a later version)", self.name)
+        self.log_offer()
         self.publish_state()
 
     # ------------------------------------------------------------------ TLVs
@@ -305,7 +319,8 @@ class HKSVRecording:
 
         # SetupDataStreamTransport must know which HAP connection wrote it
         ds = loader.get_service("DataStreamTransportManagement")
-        setup = _WriterAwareChar.from_dict("SetupDataStreamTransport", dict(_CHARS["SetupDataStreamTransport"]))
+        ## from_loader: no "description" field, so it's listed exactly like a standard characteristic
+        setup = _WriterAwareChar.from_dict("SetupDataStreamTransport", dict(_CHARS["SetupDataStreamTransport"]), from_loader=True)
         setup.last_writer = None
         ds.characteristics = [c for c in ds.characteristics if c.display_name != "SetupDataStreamTransport"]
         ds.add_characteristic(setup)
@@ -321,35 +336,61 @@ class HKSVRecording:
         for cname, val in (("SupportedCameraRecordingConfiguration", self._supported_camera),
                            ("SupportedVideoRecordingConfiguration", self._supported_video),
                            ("SupportedAudioRecordingConfiguration", self._supported_audio)):
-            rm.configure_char(cname, value=val)
+            rm.configure_char(cname, value=val, getter_callback=self._read_logger(cname, lambda v=val: v))
         self.char_selected = rm.configure_char("SelectedCameraRecordingConfiguration", value="",
                                                setter_callback=self._on_selected_configuration,
-                                               getter_callback=lambda: self.selected_b64 or "")
+                                               getter_callback=self._read_logger("SelectedCameraRecordingConfiguration",
+                                                                                 lambda: self.selected_b64 or ""))
         self.char_recording_active = rm.configure_char("Active", value=0, setter_callback=self._on_recording_active)
         self.char_recording_audio = rm.configure_char("RecordingAudioActive", value=0,
                                                       setter_callback=self._on_simple("RecordingAudioActive"))
         rm.add_linked_service(ds)
 
-        # Motion sensor reports StatusActive, mirroring HomeKitCameraActive, and is
-        # linked to recording management so the hub knows what triggers a
-        # recording (as HAP-NodeJS CameraController; PR #42 left this out)
+        # Motion sensor reports StatusActive, mirroring HomeKitCameraActive.
+        # The services match PR #42's exactly, as HomeKit accepted those here.
+        # (HAP-NodeJS also links the motion sensor to recording management and
+        # makes a doorbell the primary service; 0.8.20 tried that without effect.)
         self.char_status_active = None
         motion_service = getattr(self.motion_char, "service", None)
         if motion_service is not None:
-            rm.add_linked_service(motion_service)
             try:
                 char = loader.get_char("StatusActive")
                 char.set_value(True)
                 self._attach(motion_service, char)
                 self.char_status_active = char
             except Exception:
-                _LOGGER.debug("[%s] HKSV: couldn't add StatusActive to the motion sensor", self.name, exc_info=True)
+                _dbg("[%s] HKSV: couldn't add StatusActive to the motion sensor", self.name, exc_info=True)
 
-        # A video doorbell's Doorbell service is the accessory's primary service
-        # (as HAP-NodeJS DoorbellController). Only done here, for HKSV cameras.
-        doorbell_service = getattr(getattr(acc, "_char_doorbell_detected", None), "service", None)
-        if doorbell_service is not None:
-            acc.set_primary_service(doorbell_service)
+
+    def _read_logger(self, cname, getter):
+        """Getter that notes reads (HomeKit reads these when it looks at the camera's recording support).
+        Getters also run when the bridge's accessory list is read."""
+        counts = self._read_counts = getattr(self, "_read_counts", {})
+
+        def read():
+            value = getter()
+            n = counts.get(cname, 0) + 1
+            counts[cname] = n
+            if n <= 3 or n % 50 == 0:
+                _dbg("[%s] read %s (read %d times) -> %s", self.name, cname, n,
+                     "(empty)" if not value else "{} bytes".format(len(base64.b64decode(value))))
+            return value
+        return read
+
+    def log_offer(self):
+        """What the camera offers the hub (debug)."""
+        if not DEBUG:
+            return
+        sizes = ", ".join("{}x{}".format(w, h) for (w, h) in RECORDING_RESOLUTIONS)
+        _dbg("[%s] offering H.264 baseline/main/high, levels 3.1/3.2/4.0, sizes %s at 30 and 15 fps; "
+             "AAC-LC mono 32/44.1/48 kHz; fragmented MP4, prebuffer %d ms, fragments %d ms; triggers %s",
+             self.name, sizes, PREBUFFER_MS, FRAGMENT_MS,
+             "motion+doorbell" if getattr(self.acc, "_char_doorbell_detected", None) is not None else "motion")
+        try:
+            iids = {svc.display_name: self.acc.iid_manager.get_iid(svc) for svc in self.acc.services}
+            _dbg("[%s] aid %s services (iid): %s", self.name, self.acc.aid, iids)
+        except Exception:
+            pass
 
     def _attach(self, service, char):
         """Add a characteristic to a service that's already on the accessory,
@@ -374,7 +415,7 @@ class HKSVRecording:
             try:
                 self.hds.close()
             except Exception:
-                _LOGGER.debug("[%s] HKSV: data stream close failed", self.name, exc_info=True)
+                _dbg("[%s] HKSV: data stream close failed", self.name, exc_info=True)
             self.hds = None
 
     # -------------------------------------------------------- Indigo states
@@ -409,7 +450,7 @@ class HKSVRecording:
         try:
             self.on_state(self.state())
         except Exception:
-            _LOGGER.debug("[%s] HKSV: state update failed", self.name, exc_info=True)
+            _dbg("[%s] HKSV: state update failed", self.name, exc_info=True)
 
     def set_enabled(self, enabled):
         self.enabled = bool(enabled)
@@ -428,6 +469,7 @@ class HKSVRecording:
 
     def _on_simple(self, label):
         def setter(value):
+            _dbg("[%s] wrote %s = %s", self.name, label, value)
             if self._changed(label, value):
                 _LOGGER.info("[%s] HKSV: %s set to %s", self.name, label, value)
                 self._persist()
@@ -435,11 +477,13 @@ class HKSVRecording:
         return setter
 
     def _on_streaming_active(self, value):
+        _dbg("[%s] wrote RTP stream Active = %s", self.name, value)
         if self._changed("streaming", value):
             _LOGGER.info("[%s] HKSV: live streaming %s", self.name, "allowed" if value else "turned off in the Home app")
             self._persist()
 
     def _on_camera_active(self, value):
+        _dbg("[%s] wrote HomeKitCameraActive = %s", self.name, value)
         if self.char_status_active is not None:
             self.char_status_active.set_value(bool(value))
         if self._changed("camera", value):
@@ -448,6 +492,7 @@ class HKSVRecording:
         self.publish_state()
 
     def _on_recording_active(self, value):
+        _dbg("[%s] wrote recording Active = %s", self.name, value)
         self.recording_active = bool(value)
         if self._changed("recording", value):
             _LOGGER.info("[%s] HKSV: recording %s in the Home app%s", self.name, "allowed" if value else "turned off",
@@ -456,11 +501,12 @@ class HKSVRecording:
         self.publish_state()
 
     def _on_selected_configuration(self, value):
+        _dbg("[%s] hub wrote SelectedCameraRecordingConfiguration (%d bytes)", self.name, len(value or ""))
         try:
             parsed = self.parse_selected(value)
         except Exception:
             _LOGGER.warning("[%s] HKSV: couldn't read the recording format the hub chose", self.name)
-            _LOGGER.debug("raw value %r", value, exc_info=True)
+            _dbg("raw value %r", value, exc_info=True)
             # Refuse it: the hub mustn't think recording is configured (PR review 2.8)
             raise ValueError("unreadable SelectedCameraRecordingConfiguration")
         changed = value != self.selected_b64
@@ -475,6 +521,7 @@ class HKSVRecording:
 
     def _on_setup_data_stream(self, value):
         """Prepare a HomeKit Data Stream session for the hub (write response)."""
+        _dbg("[%s] %s wrote SetupDataStreamTransport", self.name, getattr(self.char_setup_ds, "last_writer", None))
         failure = tlv.encode(DS_RESPONSE_STATUS, DS_STATUS_GENERIC_ERROR, to_base64=True)
         try:
             req = _decode(base64.b64decode(value))
@@ -482,7 +529,7 @@ class HKSVRecording:
             transport = req.get(DS_SETUP_TRANSPORT_TYPE, b"\xff")[0]
             controller_salt = req.get(DS_SETUP_CONTROLLER_KEY_SALT, b"")
         except Exception:
-            _LOGGER.debug("[%s] HKSV: bad SetupDataStreamTransport %r", self.name, value, exc_info=True)
+            _dbg("[%s] HKSV: bad SetupDataStreamTransport %r", self.name, value, exc_info=True)
             return failure
         if cmd != 0 or transport != 0 or len(controller_salt) != 32:
             _LOGGER.warning("[%s] HKSV: unsupported data stream request (command %d, transport %d, salt %d bytes)",
@@ -504,7 +551,7 @@ class HKSVRecording:
         except Exception:
             _LOGGER.warning("[%s] HKSV: couldn't start the data stream listener", self.name, exc_info=True)
             return failure
-        _LOGGER.debug("[%s] HKSV: hub %s asked for a data stream - expecting it on %s port %d",
+        _dbg("[%s] HKSV: hub %s asked for a data stream - expecting it on %s port %d",
                       self.name, client[0], sockname[0], port)
         params = tlv.encode(b"\x01", struct.pack("<H", port))
         stripped = tlv.encode(DS_RESPONSE_STATUS, DS_STATUS_SUCCESS, b"\x02", params)
@@ -533,7 +580,7 @@ class HKSVRecording:
                 json.dump(state, f)
             os.replace(tmp, self.state_path)
         except OSError:
-            _LOGGER.debug("[%s] HKSV: couldn't save state", self.name, exc_info=True)
+            _dbg("[%s] HKSV: couldn't save state", self.name, exc_info=True)
 
     def _restore(self):
         if not self.state_path or not os.path.exists(self.state_path):

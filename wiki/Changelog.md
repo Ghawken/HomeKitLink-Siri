@@ -6,11 +6,11 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
-## 0.8.20 — 2026-11-14
+## 0.8.21 — 2026-11-14
 
 ### 🎥 HomeKit Secure Video — preview
-- The camera's motion sensor is now linked to its recording service, so the home hub knows what triggers a recording
-- On a doorbell camera with a Recorder, the doorbell is now the camera's main service, as HomeKit expects for video doorbells
+- The camera's recording services now match the PR #42 version that HomeKit accepted: the standard 16:9 recording sizes from 1920×1080 down to 320×180, and the same characteristics. 0.8.20's motion-sensor link and doorbell change are undone
+- New **Debug HomeKit Secure Video** option in the plugin Config: shows what the home hub reads and writes for Recorder cameras, and their data stream, in the Indigo log
 
 ---
 

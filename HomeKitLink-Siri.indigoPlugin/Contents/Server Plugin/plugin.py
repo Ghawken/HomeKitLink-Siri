@@ -298,6 +298,7 @@ class Plugin(indigo.PluginBase):
         self.debug9 = self.pluginPrefs.get('debug9', False)
         self.debug10 = self.pluginPrefs.get('debug10', False)
         self.debug11 = self.pluginPrefs.get('debug11', False)
+        self.debugHKSV = self.pluginPrefs.get('debugHKSV', False)
 
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
@@ -462,6 +463,9 @@ class Plugin(indigo.PluginBase):
             self.debug9 = valuesDict.get('debug9', False)
             self.debug10 = valuesDict.get('debug10', False)
             self.debug11 = valuesDict.get('debug11', False)
+            self.debugHKSV = valuesDict.get('debugHKSV', False)
+            if "HKSV" in sys.modules:   ## only once an HKSV Recorder camera is running
+                sys.modules["HKSV"].set_debug(self.debugHKSV)
             self.logClientConnected = valuesDict.get("logClientConnected", True)
             try:
                 self.low_battery_threshold = int (valuesDict.get("batterylow",20))
@@ -1132,6 +1136,7 @@ class Plugin(indigo.PluginBase):
             return
         try:
             import HKSV
+            HKSV.set_debug(self.debugHKSV)
             rec_id = recorder.id
             hk = HKSV.HKSVRecording(accessory, cameraoptions or {}, self._hksv_state_path(camera_id),
                                     recorder_id=rec_id, enabled=recorder.enabled,

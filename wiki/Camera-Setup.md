@@ -256,6 +256,8 @@ Its states show what the Home app and hub have set:
 
 In the log, look for `HomeKit Secure Video services added`, `hub chose …` and `hub … connected - data stream ready`.
 
+For more detail, turn on **12. Debug HomeKit Secure Video** in the plugin Config. It logs what the home hub reads and writes for Recorder cameras, and their data stream, to the Indigo log.
+
 ---
 
 ## Camera Performance Tuning

@@ -68,6 +68,10 @@
         <Label/>
         <Description>11. Debug Actions.   </Description>
     </Field>
+    <Field id="debugHKSV" type="checkbox" tooltip="Enabling shows HomeKit Secure Video detail in the Indigo log: what the home hub reads and writes, and its data stream. Only affects cameras with an HKSV Recorder device.">
+        <Label/>
+        <Description>12. Debug HomeKit Secure Video (HKSV Recorder cameras)</Description>
+    </Field>
     <Field id="debugDeviceid" type="menu" defaultValue="-3" alwaysUseInDialogHeightCalc="true" fontColor="orange">
         <Label>Debug Device:</Label>
         <List class="self" method="debug_device_generator" dynamicReload="true"/>
