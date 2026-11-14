@@ -379,6 +379,81 @@ class Thermostat(HomeAccessory):
 
     ## Thanks HA!
 
+class HeaterCooler(HomeAccessory):
+    """An Indigo thermostat as HomeKit's Heater-Cooler (the Home app's air conditioner tile):
+    a power button separate from the mode (Heat / Cool / Auto), heat and cool targets.
+
+    A zone (published with 'Zone of' set to its main unit, e.g. an Actron Que zone) only
+    switches itself on and off and sets its own targets: it shows the main unit's mode and
+    never changes the main unit. The plugin does the Indigo side (Plugin.heater_cooler_*)."""
+
+    category = CATEGORY_AIR_CONDITIONER
+
+    def __init__(self, driver, plugin, indigodeviceid, display_name, aid, values=None, limits=None):
+        super().__init__(driver, plugin, indigodeviceid, display_name, aid)
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        values = {k: v for k, v in (values or {}).items() if v is not None}   ## None = unknown: use the defaults below
+        limits = limits or {}
+        ## Only what the Indigo thermostat supports: a cooling-only AC gets Cool only, no heat target
+        heat, cool = limits.get("heat", True), limits.get("cool", True)
+        if not heat and not cool:
+            heat = cool = True
+        modes = {}
+        if heat and cool:
+            modes["Auto"] = 0
+        if heat:
+            modes["Heat"] = 1
+        if cool:
+            modes["Cool"] = 2
+        self.modes = set(modes.values())
+        optional = ['TemperatureDisplayUnits']
+        if cool:
+            optional.append(CHAR_COOLING_THRESHOLD_TEMPERATURE)
+        if heat:
+            optional.append(CHAR_HEATING_THRESHOLD_TEMPERATURE)
+        serv = self.add_preload_service('HeaterCooler', optional)
+        target = values.get("TargetHeaterCoolerState", 2 if cool else 1)
+        if target not in self.modes:
+            target = 2 if cool else 1
+        self.chars = {
+            "Active": serv.configure_char("Active", value=values.get("Active", 0)),
+            "CurrentHeaterCoolerState": serv.configure_char("CurrentHeaterCoolerState", value=values.get("CurrentHeaterCoolerState", 0)),
+            "TargetHeaterCoolerState": serv.configure_char("TargetHeaterCoolerState", valid_values=modes),
+            "CurrentTemperature": serv.configure_char("CurrentTemperature", value=values.get("CurrentTemperature", 0)),
+        }
+        self.chars["TargetHeaterCoolerState"].set_value(target, should_notify=False)
+        if cool:
+            self.chars[CHAR_COOLING_THRESHOLD_TEMPERATURE] = serv.configure_char(
+                CHAR_COOLING_THRESHOLD_TEMPERATURE, value=values.get(CHAR_COOLING_THRESHOLD_TEMPERATURE, 24),
+                properties={PROP_MIN_VALUE: limits.get("cool_min", 10), PROP_MAX_VALUE: limits.get("cool_max", 35)})
+        if heat:
+            self.chars[CHAR_HEATING_THRESHOLD_TEMPERATURE] = serv.configure_char(
+                CHAR_HEATING_THRESHOLD_TEMPERATURE, value=values.get(CHAR_HEATING_THRESHOLD_TEMPERATURE, 20),
+                properties={PROP_MIN_VALUE: limits.get("heat_min", 0), PROP_MAX_VALUE: limits.get("heat_max", 30)})
+        serv.configure_char("TemperatureDisplayUnits", value=limits.get("display_units", 0))
+        serv.setter_callback = self._set_chars
+
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Heater-Cooler Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def _set_chars(self, char_values):
+        if self.plugin.debug6:
+            logger.debug(f"Heater-Cooler set: {char_values}")
+        self.plugin.heater_cooler_set(self, char_values)
+
+    def update(self, values):
+        """New values from Indigo (only changed ones are sent to HomeKit)."""
+        for name, value in values.items():
+            char = self.chars.get(name)
+            if name == "TargetHeaterCoolerState" and value not in self.modes:
+                continue   ## e.g. Auto on a cooling-only unit: keep showing the last valid mode
+            if char is not None and value is not None and char.value != value:
+                char.set_value(value)
+
+
 class ThermostatZone(HomeAccessory):
     ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
 

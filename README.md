@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.28** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.29** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -121,7 +121,10 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.28 — Latest
+### 0.8.29 — Latest
+- **New: Heater-Cooler** — any Indigo thermostat as the Home app's air conditioner tile (power button, Heat / Cool / Auto, heat and cool targets), with zones for ducted systems such as Actron Que
+
+### 0.8.28
 - **New: Air Quality Sensor** — PM2.5, PM10, VOC, NO2, ozone, CO2 or an AQI from any device's states, with the Home app's overall air quality (Excellent to Poor)
 
 ### 0.8.27

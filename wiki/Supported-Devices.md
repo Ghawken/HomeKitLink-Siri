@@ -133,6 +133,35 @@ Largely supported. Supports:
 
 > Some fine-tuning may still be needed for complex multi-zone setups.
 
+### Heater-Cooler (v0.8.29+)
+
+The Home app's **air conditioner** tile, for split systems, ducted ACs and heat pumps. Choose **HeaterCooler** instead of Thermostat when publishing an Indigo thermostat.
+
+| | Thermostat | Heater-Cooler |
+|---|---|---|
+| On / off | "Off" is one of the modes | A power button; turning on resumes the last mode |
+| Modes | Off, Heat, Cool, Auto | Heat, Cool, Auto |
+| Targets | One target (a range in Auto) | Heat and cool targets |
+
+**Zones** (e.g. Actron Que zones, which are Indigo thermostats of their own): set **Zone of** to the main unit. It's filled in automatically for Actron Que zones.
+
+- A zone's **power button** only opens or closes that zone. Turning a zone on while the main unit is off opens the zone but doesn't start the unit.
+- A zone **shows the main unit's mode** and never changes it. Changing the mode on a zone's tile is ignored (the log says so); change it on the main unit.
+- Each zone has its **own targets**. If the zone has minimum and maximum setpoint states (Actron zones do, and they move with the main unit's setpoint), a new target is kept within the range at that moment and the tile shows where it landed. The log says when a target was adjusted.
+
+So "Hey Siri, turn on the kitchen air conditioner" opens the kitchen zone.
+
+**Other thermostat and AC plugins** work the same way, through Indigo's standard thermostat commands:
+
+- The tile only offers what the device supports: a cooling-only AC gets Cool (and no heat target), a heating-only one Heat; Auto needs both.
+- A device whose plugin doesn't allow mode changes keeps its tile's power and mode as Indigo reports them (the log says why); its targets can still be set.
+- Fan-only and dry modes have no HomeKit equivalent. Indigo plugins usually report them as another mode or Off, and the tile shows that.
+- A scheduled ("program") mode shows as its plain mode; changing the mode from Home sets the plain mode, as Thermostat does.
+- ACs with a single target temperature: Home sets the cool target in Cool and the heat target in Heat, so it depends on the plugin using the right one for the mode (most do).
+- Wall thermostats for central heating and cooling are usually better left as **Thermostat**.
+
+The tile shows **heating / cooling / idle** from the thermostat's *heater on* / *cooler on* states. A thermostat plugin that doesn't set them shows idle while running.
+
 ---
 
 ## Locks

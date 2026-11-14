@@ -250,7 +250,7 @@ class Plugin(indigo.PluginBase):
                                 "service_SmokeSensor": ["SmokeSensor", "CarbonDioxideSensor", "CarbonMonoxideSensor"],
                                 "service_GarageDoorOpener": ["GarageDoor", "Door"],
                                 "service_MotionSensor": ["MotionSensor", "ContactSensor", "OccupancySensor"],
-                                "service_Thermostat": ["Thermostat"],
+                                "service_Thermostat": ["Thermostat", "HeaterCooler"],
                                 "service_TemperatureSensor": ["TemperatureSensor", "AirQualitySensor"],
                                 "service_HumiditySensor": ["HumiditySensor", "AirQualitySensor"],
                                 "service_AirQuality": ["AirQualitySensor", "TemperatureSensor", "HumiditySensor", "CarbonDioxideSensor"],
@@ -303,6 +303,7 @@ class Plugin(indigo.PluginBase):
         self.debug11 = self.pluginPrefs.get('debug11', False)
         self.debugHKSV = self.pluginPrefs.get('debugHKSV', False)
         self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
+        self._hc_zones = {}   ## main thermostat id -> Heater-Cooler zone device ids (zones show the main unit's mode)
 
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
@@ -1021,6 +1022,13 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.Fanv2(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Fan_switch":
                         accessory = HomeKitDevices.FanSimple(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "HeaterCooler":
+                        accessory = HKThermostat.HeaterCooler(driver, self, item["deviceid"], item['devicename'], aid=deviceAID,
+                                                              values=self.heater_cooler_values(indigodevice),
+                                                              limits=self.heater_cooler_limits(indigodevice))
+                        main_id = self._hc_main_id(indigodevice)
+                        if main_id:
+                            self._hc_zones.setdefault(main_id, set()).add(indigodevice.id)
                     elif item['subtype'] == "Thermostat":
                         accessory = HKThermostat.Thermostat(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "BlueIrisCamera":
@@ -1207,6 +1215,169 @@ class Plugin(indigo.PluginBase):
     def robot_state_list(self, filter="", valuesDict=None, typeId="", targetId=0):
         items = [("default", "Its on/off state (default)"), ("-1", "%%separator%%")]
         items.extend(self.devicestate_generator(filter, valuesDict or {}) or [])
+        return items
+
+    ###############################################################################
+    # Heater-Cooler - an Indigo thermostat as the Home app's air conditioner tile.
+    # Power (Active) is separate from the mode (Heat / Cool / Auto). A main unit's power
+    # and mode use the standard Indigo thermostat commands. A zone (published with
+    # 'Zone of' its main unit, e.g. an Actron Que zone) only turns ITSELF on or off and
+    # sets its own targets: it shows the main unit's mode, and never changes the main
+    # unit's mode or power - a mode change on a zone tile is ignored and put back.
+    ###############################################################################
+    HC_MODE_TO_HK = {"HeatCool": 0, "Heat": 1, "Cool": 2}   ## Indigo hvacMode name -> TargetHeaterCoolerState
+
+    def _hc_main_id(self, dev):
+        try:
+            main = int(dev.pluginProps.get("HomeKit_hcZoneOf", "") or 0)
+        except (TypeError, ValueError):
+            return None
+        return main if main and main != dev.id else None
+
+    def _hc_mode_name(self, dev):
+        """'Off', 'Heat', 'Cool' or 'HeatCool' (programmed modes count as their plain mode)."""
+        mode = str(getattr(dev, "hvacMode", ""))
+        for name in ("HeatCool", "Heat", "Cool"):
+            if mode.endswith(name) or mode.endswith("Program" + name):
+                return name
+        if "Auto" in mode:
+            return "HeatCool"
+        return "Off"
+
+    def _hc_temp(self, dev, value):
+        """An Indigo temperature as HomeKit Celsius (converted if the device is in Fahrenheit)."""
+        value = HKutils.convert_to_float(value)
+        if value is None:
+            return None
+        if dev.pluginProps.get("HomeKit_tempSelector", False):
+            value = HKutils.fahrenheit_to_celsius(value)
+        return round(value, 1)
+
+    def heater_cooler_values(self, dev):
+        """HeaterCooler characteristic values for a thermostat device (None = leave as is)."""
+        values = {}
+        try:
+            main = None
+            main_id = self._hc_main_id(dev)
+            if main_id:
+                try:
+                    main = indigo.devices[main_id]
+                except Exception:
+                    main = None
+            own_mode = self._hc_mode_name(dev)
+            unit_mode = self._hc_mode_name(main) if main is not None else own_mode
+            active = own_mode != "Off" and (main is None or unit_mode != "Off")
+            values["Active"] = 1 if own_mode != "Off" else 0
+            values["TargetHeaterCoolerState"] = self.HC_MODE_TO_HK.get(unit_mode)   ## Off: keep showing the last mode
+            source = main if main is not None else dev
+            if not active:
+                values["CurrentHeaterCoolerState"] = 0                      ## inactive
+            elif source.states.get("hvacHeaterIsOn"):
+                values["CurrentHeaterCoolerState"] = 2                      ## heating
+            elif source.states.get("hvacCoolerIsOn"):
+                values["CurrentHeaterCoolerState"] = 3                      ## cooling
+            else:
+                values["CurrentHeaterCoolerState"] = 1                      ## idle
+            temps = list(getattr(dev, "temperatures", []) or [])
+            values["CurrentTemperature"] = self._hc_temp(dev, temps[0] if temps else dev.states.get("temperatureInput1"))
+            values["HeatingThresholdTemperature"] = self._hc_temp(dev, getattr(dev, "heatSetpoint", None))
+            values["CoolingThresholdTemperature"] = self._hc_temp(dev, getattr(dev, "coolSetpoint", None))
+        except Exception:
+            self.logger.debug("Heater-Cooler values failed", exc_info=True)
+        return values
+
+    def heater_cooler_limits(self, dev):
+        """The tile's fixed settings. Target ranges stay HomeKit's own: HomeKit only reads them when the
+        bridge starts, and a zone's limits move with the main unit (Actron: its setpoint plus or minus a
+        few degrees), so they're applied when a target is set instead (see _hc_clamp)."""
+        return {"display_units": 1 if dev.pluginProps.get("HomeKit_tempSelector", False) else 0,
+                "heat": bool(getattr(dev, "supportsHeatSetpoint", True)),
+                "cool": bool(getattr(dev, "supportsCoolSetpoint", True))}
+
+    def _hc_clamp(self, dev, char, value):
+        """A new target, kept within the device's current Min/Max setpoint states if it has them."""
+        states = ("MinHeatSetpoint", "MaxHeatSetpoint") if char == "HeatingThresholdTemperature" else ("MinCoolSetpoint", "MaxCoolSetpoint")
+        low = HKutils.convert_to_float(dev.states.get(states[0])) if states[0] in dev.states else None
+        high = HKutils.convert_to_float(dev.states.get(states[1])) if states[1] in dev.states else None
+        clamped = value
+        if low is not None and clamped < low:
+            clamped = low
+        if high is not None and clamped > high:
+            clamped = high
+        if clamped != value:
+            self.logger.info("{}: {} target {} is outside its current range ({} to {}) - set to {}".format(
+                dev.name, "heat" if char == "HeatingThresholdTemperature" else "cool", value, low, high, clamped))
+        return clamped
+
+    def _hc_refresh_zones(self, main_id):
+        for zone_id in list(self._hc_zones.get(main_id, ())):
+            accessory = next((i["accessory"] for i in self.device_list_internal
+                              if i["deviceid"] == zone_id and i["accessory"] is not None), None)
+            if accessory is not None and hasattr(accessory, "update"):
+                try:
+                    accessory.update(self.heater_cooler_values(indigo.devices[zone_id]))
+                except Exception:
+                    self.logger.debug("Heater-Cooler zone refresh failed", exc_info=True)
+
+    def heater_cooler_set(self, accessory, char_values):
+        """The Home app changed a Heater-Cooler: power, mode or targets."""
+        try:
+            dev = indigo.devices[accessory.indigodeviceid]
+            unit = dev.pluginProps.get("HomeKit_tempSelector", False)
+            main_id = self._hc_main_id(dev)
+            if main_id:
+                ## A zone: only itself on/off and its own targets. Never the main unit.
+                if "TargetHeaterCoolerState" in char_values:
+                    self.logger.info("{}: a zone follows its main unit's mode - change the mode on the main unit".format(dev.name))
+                    accessory.update({"TargetHeaterCoolerState": self.heater_cooler_values(dev).get("TargetHeaterCoolerState")})
+                if "Active" in char_values:
+                    on = bool(char_values["Active"])
+                    if on and self._hc_mode_name(dev) == "Off":
+                        try:
+                            unit_mode = self._hc_mode_name(indigo.devices[main_id])
+                        except Exception:
+                            unit_mode = "Off"
+                        mode = getattr(indigo.kHvacMode, unit_mode if unit_mode != "Off" else "Cool")
+                        self.logger.info("{}: HomeKit turned the zone on".format(dev.name))
+                        indigo.thermostat.setHvacMode(dev.id, value=mode)
+                    elif not on and self._hc_mode_name(dev) != "Off":
+                        self.logger.info("{}: HomeKit turned the zone off".format(dev.name))
+                        indigo.thermostat.setHvacMode(dev.id, value=indigo.kHvacMode.Off)
+            elif not getattr(dev, "supportsHvacOperationMode", True) and ("Active" in char_values or "TargetHeaterCoolerState" in char_values):
+                self.logger.warning("{}: its plugin doesn't let Indigo change its mode or turn it on and off".format(dev.name))
+                values = self.heater_cooler_values(dev)
+                accessory.update({k: values.get(k) for k in ("Active", "TargetHeaterCoolerState")})
+            else:
+                active = bool(char_values.get("Active", accessory.chars["Active"].value))
+                target = char_values.get("TargetHeaterCoolerState", accessory.chars["TargetHeaterCoolerState"].value)
+                wanted = {0: "HeatCool", 1: "Heat", 2: "Cool"}.get(target, "Cool")
+                current = self._hc_mode_name(dev)
+                if not active:
+                    if "Active" in char_values and current != "Off":
+                        self.logger.info("{}: HomeKit turned it off".format(dev.name))
+                        indigo.thermostat.setHvacMode(dev.id, value=indigo.kHvacMode.Off)
+                elif current != wanted and ("Active" in char_values or "TargetHeaterCoolerState" in char_values):
+                    self.logger.info("{}: HomeKit set {}".format(dev.name, {"HeatCool": "auto", "Heat": "heat", "Cool": "cool"}[wanted]))
+                    indigo.thermostat.setHvacMode(dev.id, value=getattr(indigo.kHvacMode, wanted))
+            for char, setter in (("HeatingThresholdTemperature", indigo.thermostat.setHeatSetpoint),
+                                 ("CoolingThresholdTemperature", indigo.thermostat.setCoolSetpoint)):
+                if char in char_values:
+                    value = float(char_values[char])
+                    if unit:
+                        value = round(HKutils.celsius_to_fahrenheit(value), 1)
+                    clamped = self._hc_clamp(dev, char, value)
+                    setter(dev.id, value=clamped)
+                    if clamped != value:   ## show where it landed even if Indigo's setpoint doesn't change
+                        accessory.update({char: self._hc_temp(dev, clamped)})
+        except Exception:
+            self.logger.exception("Heater-Cooler: couldn't apply the Home app's change")
+
+    def heater_cooler_zone_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        items = [("none", "Not a zone (default)"), ("-1", "%%separator%%")]
+        this = str((valuesDict or {}).get("deviceId", ""))
+        for dev in indigo.devices.iter("indigo.thermostat"):
+            if str(dev.id) != this:
+                items.append((str(dev.id), dev.name))
         return items
 
     ###############################################################################
@@ -2337,6 +2508,8 @@ class Plugin(indigo.PluginBase):
             if self.pluginStartingUp:
                 self.logger.debug("Still starting up. Ignoring device update")
                 return
+            if original_device.id in self._hc_zones:   ## a main unit changed: its Heater-Cooler zones show its mode
+                self._hc_refresh_zones(original_device.id)
             if original_device.id not in self.device_list_internal_idonly:
                 return
 
@@ -2743,6 +2916,9 @@ class Plugin(indigo.PluginBase):
                             if batteryLevel is not None:
                                 accessory._char_battery.set_value(batteryLevel)
                                 accessory._char_low_battery.set_value(1 if batteryLevel < self.low_battery_threshold else 0)
+                    return
+                elif str(updateddevice_subtype) == "HeaterCooler":
+                    self.device_list_internal[checkindex]["accessory"].update(self.heater_cooler_values(updated_device))
                     return
                 elif str(updateddevice_subtype) in ("Vacuum", "LawnMower"):
                     running = self._robot_running(updated_device)
@@ -4505,6 +4681,10 @@ class Plugin(indigo.PluginBase):
             for field, _, _ in self.AQ_READINGS:
                 values_dict[field] = device.pluginProps.get("HomeKit_" + field, "") or guess.get(field, "") or "none"
             values_dict["aqGasUnit"] = device.pluginProps.get("HomeKit_aqGasUnit", "") or "ugm3"
+            zone_of = device.pluginProps.get("HomeKit_hcZoneOf", "")
+            if not zone_of:   ## an Actron Que zone knows its main unit
+                zone_of = str(getattr(device, "states", {}).get("deviceMasterController", "") or "")
+            values_dict["hcZoneOf"] = zone_of or "none"
 
             ## auto select correct subtype
             detecttype = self.detectHomeKitType(int(values_dict["deviceId"]))
@@ -4627,6 +4807,9 @@ class Plugin(indigo.PluginBase):
                     device_props["HomeKit_aqGasUnit"] = str(values_dict.get("aqGasUnit", "ugm3") or "ugm3")
                     device_props["HomeKit_aqConfigured"] = True
 
+                if values_dict.get("deviceSubtype") == "HeaterCooler":
+                    device_props["HomeKit_hcZoneOf"] = str(values_dict.get("hcZoneOf", "none") or "none")
+
                 if values_dict.get("deviceSubtype") in ("Vacuum", "LawnMower"):
                     device_props["HomeKit_robotStart"] = str(values_dict.get("robotStart", "") or "")
                     device_props["HomeKit_robotStop"] = str(values_dict.get("robotStop", "") or "")
@@ -4669,6 +4852,7 @@ class Plugin(indigo.PluginBase):
                     device_props["HomeKit_" + field] = ""
                 device_props["HomeKit_aqGasUnit"] = ""
                 device_props["HomeKit_aqConfigured"] = False
+                device_props["HomeKit_hcZoneOf"] = ""
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)

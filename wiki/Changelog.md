@@ -6,6 +6,17 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.29 — 2026-11-15
+
+### ❄️ Heater-Cooler (air conditioners)
+- New HomeKit type **Heater-Cooler** for any Indigo thermostat, offered alongside Thermostat (existing thermostats are unchanged). The Home app shows its air conditioner tile: a power button separate from the mode, Heat / Cool / Auto, and heat and cool targets
+- **Zones** of ducted systems: set **Zone of** to the main unit (filled in automatically for Actron Que zones). A zone's power button only opens or closes that zone; it shows the main unit's mode and never changes the main unit's mode or power. Each zone uses its own targets, kept within the zone's current minimum and maximum (Actron's move with the main unit's setpoint), and the log says when a target is adjusted
+- Only the modes and targets the thermostat supports are offered (a cooling-only AC gets Cool only); a thermostat whose plugin can't change modes keeps its power and mode as Indigo reports them
+- Turning a main unit back on resumes its last mode. Fahrenheit thermostats are converted as for Thermostat
+- Heating, cooling or idle comes from the thermostat's "heater on" and "cooler on" states; devices that don't set them show idle while running
+
+---
+
 ## 0.8.28 — 2026-11-15
 
 ### 🌫️ Air quality sensors
