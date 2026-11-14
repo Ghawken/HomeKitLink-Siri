@@ -40,7 +40,7 @@ RESTART_DELAY = 10
 USAGE_INTERVAL = 30
 PROBE_TIMEOUT = 15
 CLOSE_TIMEOUT = 12               # after the last fragment, close if the hub hasn't (HAP-NodeJS)
-OPEN_WAIT_SECONDS = 5            # how long an open waits for the prebuffer to have its init segment
+OPEN_WAIT_SECONDS = 8            # how long an open waits for the prebuffer's init segment and first fragment
 
 # HDS status / protocol-specific reasons (HAP-NodeJS DataStreamServer)
 HDS_PROTOCOL_SPECIFIC_ERROR = 6
@@ -508,8 +508,10 @@ class RecordingSession:
         sent = 0
         q = None
         try:
+            # Wait for the init segment and at least one keyframe fragment (with keyframes
+            # several seconds apart, the first one can take a while after a restart)
             for _ in range(OPEN_WAIT_SECONDS * 10):
-                if r.prebuffer is not None and r.prebuffer.init_segment:
+                if r.prebuffer is not None and r.prebuffer.init_segment and r.prebuffer.groups:
                     break
                 await asyncio.sleep(0.1)
             pb = r.prebuffer
@@ -523,7 +525,10 @@ class RecordingSession:
             await self.conn.drain()
             seq = 1
             await self._send(pb.init_segment, True, seq, False)
+            held = len(pb.groups)
             pre = pb.prebuffered(r.prebuffer_s)
+            _dbg("[%s] recording open: %d keyframe fragments held (%.1f s), sending %s", name, held,
+                 pb.buffered_seconds(), "{:.1f} s".format(pre[1] - pre[0]) if pre else "none")
             if pre is not None:
                 seq += 1
                 await self._send(pre[3], False, seq, False)

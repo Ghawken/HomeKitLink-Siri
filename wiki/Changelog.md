@@ -6,6 +6,15 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.24 — 2026-11-14
+
+### 🎥 HomeKit Secure Video
+- A recording that starts soon after the camera stream (re)starts now waits up to 8 s for its first few seconds of video, so it begins with the pre-roll instead of none
+- Checked with SecuritySpy and UniFi Protect cameras as well as BlueIris: each camera's own streams are checked (SecuritySpy full size and resized; UniFi High, Medium and Low) and the best one is copied or re-encoded
+- Debug HKSV shows how much video was held when each recording started
+
+---
+
 ## 0.8.23 — 2026-11-14
 
 ### 🎥 HomeKit Secure Video — fixes from the first real recordings
