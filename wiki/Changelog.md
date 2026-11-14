@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.31 — 2026-11-15
+
+### ❄️ Heater-Cooler
+- Clearer **Zone of** setting: "Not a zone - a main unit or a single AC" for a main unit, and a heading over the main units a zone can belong to. The help says each zone is published separately
+
+---
+
 ## 0.8.30 — 2026-11-15
 
 ### ❄️ Heater-Cooler

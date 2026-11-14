@@ -145,7 +145,7 @@ The Home app's **air conditioner** tile, for split systems, ducted ACs and heat 
 
 Actron Que devices (main unit and zones) default to HeaterCooler (v0.8.30+); devices already published keep their type.
 
-**Zones** (e.g. Actron Que zones, which are Indigo thermostats of their own): set **Zone of** to the main unit. It's filled in automatically for Actron Que zones.
+**Zones** (e.g. Actron Que zones, which are Indigo thermostats of their own): publish each zone you want in the Home app separately, each with **Zone of** set to its main unit. Leave the main unit itself as *Not a zone*. It's filled in automatically for Actron Que zones.
 
 - A zone's **power button** only opens or closes that zone. Turning a zone on while the main unit is off opens the zone but doesn't start the unit.
 - A zone **shows the main unit's mode** and never changes it. Changing the mode on a zone's tile is ignored (the log says so); change it on the main unit.

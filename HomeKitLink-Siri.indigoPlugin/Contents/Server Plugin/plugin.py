@@ -1232,7 +1232,7 @@ class Plugin(indigo.PluginBase):
             main = int(dev.pluginProps.get("HomeKit_hcZoneOf", "") or 0)
         except (TypeError, ValueError):
             return None
-        return main if main and main != dev.id else None
+        return main if main > 0 and main != dev.id else None
 
     def _hc_mode_name(self, dev):
         """'Off', 'Heat', 'Cool' or 'HeatCool' (programmed modes count as their plain mode)."""
@@ -1373,7 +1373,8 @@ class Plugin(indigo.PluginBase):
             self.logger.exception("Heater-Cooler: couldn't apply the Home app's change")
 
     def heater_cooler_zone_list(self, filter="", valuesDict=None, typeId="", targetId=0):
-        items = [("none", "Not a zone (default)"), ("-1", "%%separator%%")]
+        items = [("none", "Not a zone - a main unit or a single AC (default)"), ("-1", "%%separator%%"),
+                 ("-2", "%%disabled:A zone of this main unit:%%")]
         this = str((valuesDict or {}).get("deviceId", ""))
         for dev in indigo.devices.iter("indigo.thermostat"):
             if str(dev.id) != this:

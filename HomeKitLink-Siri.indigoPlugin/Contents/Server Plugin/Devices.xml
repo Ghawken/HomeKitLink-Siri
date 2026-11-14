@@ -182,7 +182,8 @@ A UniFi doorbell is set up as a doorbell automatically.</Label>
 			</Field>
 			<Field id="hcLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="HeaterCooler">
 				<Label>The Home app's air conditioner tile: a power button, Heat / Cool / Auto, and heat and cool targets.
-Zone of: for a zone of a ducted system (e.g. an Actron Que zone, filled in automatically), choose its main unit. The zone's power button then only opens or closes the zone, it shows the main unit's mode, and it never changes the main unit's mode or power.</Label>
+Zone of: leave as "Not a zone" for a main unit or a single AC. For a zone of a ducted system (e.g. an Actron Que zone, filled in automatically), choose its main unit: the zone's power button then only opens or closes the zone, it shows the main unit's mode, and it never changes the main unit.
+Publish each zone you want in the Home app separately; each becomes its own tile.</Label>
 			</Field>
 			<Field id="robotStart" type="menu" defaultValue="default" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
 				<Label>Start:</Label>
