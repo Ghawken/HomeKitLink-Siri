@@ -4439,8 +4439,17 @@ class Plugin(indigo.PluginBase):
         # so no pivotal is completely right.
         #
 
+    HEATER_COOLER_PLUGINS = ("com.GlennNZ.indigoplugin.ActronQUE",)   ## air conditioner plugins: Heater-Cooler by default
+
     def _default_subtype(self, deviceid, detecttype):
-        """First subtype for the detected type - except cameras, which follow the camera's plugin."""
+        """First subtype for the detected type - except cameras, which follow the camera's plugin,
+        and air conditioners, which default to Heater-Cooler."""
+        if detecttype == "service_Thermostat":
+            try:
+                if indigo.devices[deviceid].pluginId in self.HEATER_COOLER_PLUGINS:
+                    return "HeaterCooler"
+            except Exception:
+                pass
         if detecttype == "service_Camera":
             try:
                 dev = indigo.devices[deviceid]

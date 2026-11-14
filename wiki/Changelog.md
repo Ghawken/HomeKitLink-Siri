@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.30 — 2026-11-15
+
+### ❄️ Heater-Cooler
+- Actron Que devices (main unit and zones) now default to **HeaterCooler** when publishing; zones get **Zone of** filled in. Other thermostats still default to Thermostat. Devices already published keep their type
+
+---
+
 ## 0.8.29 — 2026-11-15
 
 ### ❄️ Heater-Cooler (air conditioners)
