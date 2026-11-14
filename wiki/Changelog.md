@@ -6,6 +6,19 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.34 — 2026-11-15
+
+### 📋 Bridge settings: finding devices
+- New **Search** box above the device list: type part of a name (or several words, in any order) and press **Find**, and the list shows only matching devices; **Clear** shows them all again. Works with every list type. Pressing Return in the box applies the search and keeps the window open, rather than closing it
+- The device menu is now labelled **Device to Publish**
+- Device lists are now sorted properly: ignoring capitals (so `appleTV…` no longer comes after `Zone…`) and with numbers in order (`Zone 2` before `Zone 10`)
+- New list types: **Indigo Thermostats**, **Indigo Fans (Speed Control)**, **Indigo Sprinklers**, **Plugin Devices** (every third-party plugin's devices, with a sub-header per plugin) and **Cameras (all)** (Blue Iris, SecuritySpy and UniFi Protect together, each under its own sub-header)
+- Devices on other bridges show the bridge's name instead of its number, and are sorted by device name
+- HomeKitLink's own bridges and HKSV Recorders are no longer listed (they can't be published); an empty list says so
+- Opening a bridge's settings no longer shows the last device's options (greyed out): device options appear only once a device is chosen, and are cleared again when the list type changes or a search is run
+
+---
+
 ## 0.8.33 — 2026-11-15
 
 ### 🔔 Linked doorbells

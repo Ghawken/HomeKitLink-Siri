@@ -15,6 +15,11 @@
 				 	<Option value="lights">Indigo Lights</Option>
 				    <Option value="switch">Indigo Relay Devices</Option>
 				    <Option value="sensor">Indigo Sensor Devices</Option>
+				    <Option value="thermostat">Indigo Thermostats</Option>
+				    <Option value="fan">Indigo Fans (Speed Control)</Option>
+				    <Option value="sprinkler">Indigo Sprinklers</Option>
+				    <Option value="plugin">Plugin Devices (grouped by plugin)</Option>
+				    <Option value="cameras">Cameras (all)</Option>
 				    <Option value="BI_camera">Blue Iris Camera</Option>
 				 	<Option value="SS_camera">Security Spy Camera</Option>
 				 	<Option value="UP_camera">UniFi Protect Camera</Option>
@@ -22,8 +27,27 @@
                 </List>
 				  <CallbackMethod>menuChanged</CallbackMethod>
 			</Field>
+			<Field id="listSearch" type="textfield" defaultValue="">
+				<Label>Search:</Label>
+			</Field>
+			<Field id="listSearchApplied" type="textfield" hidden="true" defaultValue="">
+				<Label/>
+			</Field>
+			<Field id="listSearchFind" type="button">
+				<Label/>
+				<Title>Find</Title>
+				<CallbackMethod>list_search</CallbackMethod>
+			</Field>
+			<Field id="listSearchClear" type="button">
+				<Label/>
+				<Title>Clear</Title>
+				<CallbackMethod>list_search_clear</CallbackMethod>
+			</Field>
+			<Field id="listSearchLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>Type part of a name (or several words, in any order) and press Find to list only matching devices; Clear lists them all again. Use Find rather than Return (Return is the dialog's Save).</Label>
+			</Field>
 			<Field id="deviceId" type="menu" defaultValue="">
-				<Label>Publish:</Label>
+				<Label>Device to Publish:</Label>
 				<List class="self" method="device_list_generator" dynamicReload="true"/>
 				<CallbackMethod>select_device</CallbackMethod>
 			</Field>
@@ -39,7 +63,7 @@
 
 			<Field id="sep1" type="separator"/>
 
-			<Field type="checkbox" id="HomeKit_publishDevice_2" defaultValue="false" enabledBindingId="isDeviceSelected">
+			<Field type="checkbox" id="HomeKit_publishDevice_2" defaultValue="false" enabledBindingId="isDeviceSelected" visibleBindingId="isDeviceSelected" visibleBindingValue="true">
 				<Label>Publish device:</Label>
 				<Description>Make this device available to HomeKit           </Description>
 				<CallbackMethod>toggle_publish</CallbackMethod>
@@ -52,10 +76,10 @@
 				<Description/>
 			</Field>
 
-			<Field id="altName" type="textfield" enabledBindingId="HomeKit_publishDevice_2" defaultValue="false">
+			<Field id="altName" type="textfield" enabledBindingId="HomeKit_publishDevice_2" defaultValue="false" visibleBindingId="isDeviceSelected" visibleBindingValue="true">
 				<Label>HomeKit Device name:</Label>
 			</Field>
-			<Field id="altNameLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+			<Field id="altNameLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true">
 				<Label>This is the HomeKit Name of the Device.</Label>
 			</Field>
 
@@ -223,7 +247,7 @@ If incorrect, hopefully won't break bridge and update with this selector.   For 
 				</Label>
 			</Field>
 
-			<Field id="save" type="button"  alignWithControl="true" fontSize="large" fontColor="red" enabledBindingId="isDeviceSelected">
+			<Field id="save" type="button"  alignWithControl="true" fontSize="large" fontColor="red" enabledBindingId="isDeviceSelected" visibleBindingId="isDeviceSelected" visibleBindingValue="true">
 				<Label>Click Here to Save: </Label>
 				<Title>**        Save Device      **</Title>
 				<CallbackMethod>save</CallbackMethod>
@@ -247,9 +271,9 @@ Plus the Publish checkbox must be enabled if you wish device in HomeKit</Label>
 				</Label>
 			</Field>
 
-	<Field id="sep21a1" type="separator"/>
+	<Field id="sep21a1" type="separator" visibleBindingId="isDeviceSelected" visibleBindingValue="true"/>
 
-			<Field id="showALL" type="checkbox" tooltip="Enabling will show all HomeKit device options." enabledBindingId="HomeKit_publishDevice_2" dynamicReload="true">
+			<Field id="showALL" type="checkbox" tooltip="Enabling will show all HomeKit device options." enabledBindingId="HomeKit_publishDevice_2" dynamicReload="true" visibleBindingId="isDeviceSelected" visibleBindingValue="true">
         <Label></Label>
         <Description>Show all Options</Description>
 				<CallbackMethod>all_options_menuChanged</CallbackMethod>

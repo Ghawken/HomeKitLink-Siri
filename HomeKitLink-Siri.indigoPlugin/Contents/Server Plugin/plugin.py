@@ -41,6 +41,7 @@ except:
 
 import time as t
 import datetime
+import re
 import platform
 import sys
 
@@ -304,6 +305,7 @@ class Plugin(indigo.PluginBase):
         self.debugHKSV = self.pluginPrefs.get('debugHKSV', False)
         self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
         self._hc_zones = {}   ## main thermostat id -> Heater-Cooler zone device ids (zones show the main unit's mode)
+        self._search_refused = {}   ## bridge dialog: search text a Save was refused for (refused once only)
 
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
@@ -563,7 +565,10 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.info(f"Error Caught:  Appears {devId} is not a valid device Id.")
             pass
-
+        pluginProps["listSearch"] = ""          ## each time the dialog opens: no search, the whole list
+        pluginProps["listSearchApplied"] = ""
+        self._search_refused.pop(devId, None)
+        self._clear_device_selection(pluginProps)   ## and no device chosen: its options stay hidden until one is
         return super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
 
     def deviceStartComm(self, device):
@@ -716,6 +721,20 @@ class Plugin(indigo.PluginBase):
             return self._hksv_validate(values_dict, dev_id)
         if type_id == "hkButtons":
             return self._buttons_validate(values_dict, dev_id)
+        if type_id == "homeKitBridgeDevice":
+            ## Return in the Search box presses the dialog's default button (Save). If the search text hasn't
+            ## been applied with Find, apply it and keep the dialog open instead of closing it - but only ONCE
+            ## per search text: the refusal is remembered here (not only in the dialog), so pressing Save again
+            ## always saves, whatever the dialog does with values returned from a refused Save.
+            search = str(values_dict.get("listSearch", "") or "").strip()
+            applied = str(values_dict.get("listSearchApplied", "") or "").strip()
+            if search != applied and self._search_refused.get(dev_id) != search:
+                self._search_refused[dev_id] = search
+                values_dict["listSearchApplied"] = search   ## the list is rebuilt with it; the device selection is kept
+                errors = indigo.Dict()
+                errors["listSearch"] = "Search applied - choose from Device to Publish. (Return saves and closes this window; use Find. Press Save again to save.)"
+                return (False, values_dict, errors)
+            self._search_refused.pop(dev_id, None)
         return (True, values_dict)
 
     ########################################
@@ -4106,11 +4125,31 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("Subtype callback: returning valuesDict \n {}".format(valuesDict))
         return valuesDict
 
+    def _clear_device_selection(self, valuesDict):
+        """No device chosen in the bridge dialog: hide every device option (they're shown by type, and the
+        dialog's values are saved with the bridge, so the last device's options would otherwise show)."""
+        valuesDict["isDeviceSelected"] = False
+        valuesDict["deviceId"] = ""
+        valuesDict["deviceSubtype"] = ""
+        valuesDict["showSubtypes"] = False
+        valuesDict["showALL"] = False
+        valuesDict["HomeKit_publishDevice_2"] = False
+        return valuesDict
+
+    def list_search(self, valuesDict, *args, **kwargs):
+        """Find button: the device menu is rebuilt with the Search text applied (empty = the whole list)."""
+        self._clear_device_selection(valuesDict)
+        valuesDict["listSearchApplied"] = str(valuesDict.get("listSearch", "") or "").strip()
+        return valuesDict
+
+    def list_search_clear(self, valuesDict, *args, **kwargs):
+        valuesDict["listSearch"] = ""
+        return self.list_search(valuesDict)
+
     def menuChanged(self, valuesDict, *args, **kwargs):  # typeId, devId):
         if self.debug8:
             self.logger.debug("menuChanged: {}".format(valuesDict))
-        valuesDict["isDeviceSelected"] = False
-        return valuesDict
+        return self._clear_device_selection(valuesDict)
 
     def action_menuChanged(self, valuesDict, *args, **kwargs):  # typeId, devId):
         if self.debug11:
@@ -4236,210 +4275,146 @@ class Plugin(indigo.PluginBase):
         self.logger.debug("List:{}".format(endpoint_list))
         return sorted(endpoint_list)
 
+    ## Bridge dialog "Select Type to List": which devices each entry lists. The lists keep the same three
+    ## sections (available / on this bridge / on other bridges), sorted by name; "Plugin devices" and
+    ## "Cameras (all)" also get grey sub-headers by plugin. The Search box narrows any list to matching names.
+    SS_CAMERA_PLUGINS = {"org.cynic.indigo.securityspy": "Camera", "com.flyingdiver.indigoplugin.securityspy": "SecuritySpy Camera"}
+
+    @staticmethod
+    def _natural_key(name):
+        """Case-insensitive, with numbers in order: 'apple' after 'Apple', 'Zone 2' before 'Zone 10'."""
+        return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", str(name).lower())]
+
+    def _is_bi_camera(self, dev):
+        return dev.pluginId == "com.GlennNZ.indigoplugin.BlueIris" and dev.model == "BlueIris Camera"
+
+    def _is_ss_camera(self, dev):
+        return self.SS_CAMERA_PLUGINS.get(dev.pluginId) == dev.model
+
+    def _listed_devices(self, list_type):
+        """(device, sub-header or None) for a 'Select Type to List' entry. HomeKitLink's own bridges and
+        HKSV Recorders are never listed (they can't be published); its Buttons devices are."""
+        def publishable(dev):
+            return not (dev.pluginId == self.pluginId and dev.deviceTypeId != "hkButtons")
+        if list_type == "device":
+            return [(d, None) for d in indigo.devices if publishable(d)]   ## no sub-headers: one sorted list is easiest to search
+        if list_type == "plugin":
+            names = {}
+            out = []
+            for d in indigo.devices:
+                ## every device of a third-party plugin (any kind: relays, sensors, custom...), not Indigo's own
+                ## interfaces (Z-Wave, Insteon... are com.perceptiveautomation.*) and not HomeKitLink's
+                if d.pluginId and not d.pluginId.startswith("com.perceptiveautomation.") and d.pluginId != self.pluginId:
+                    if d.pluginId not in names:
+                        try:
+                            plugin = indigo.server.getPlugin(d.pluginId)
+                            name = plugin.pluginDisplayName if plugin.isInstalled() else ""
+                        except Exception:
+                            name = ""
+                        names[d.pluginId] = name or "{} (not installed)".format(d.pluginId)
+                    out.append((d, names[d.pluginId]))
+            return out
+        if list_type == "cameras":
+            out = []
+            for d in indigo.devices:
+                if self._is_bi_camera(d):
+                    out.append((d, "Blue Iris"))
+                elif self._is_ss_camera(d):
+                    out.append((d, "SecuritySpy"))
+                elif HKDevicesCameraUniFi.is_unifi_camera(d):
+                    out.append((d, "UniFi Protect"))
+            return out
+        rules = {
+            "lights": lambda d: hasattr(d, "brightness"),
+            "switch": lambda d: type(d) == indigo.RelayDevice,
+            "sensor": lambda d: type(d) == indigo.SensorDevice,
+            "thermostat": lambda d: type(d) == indigo.ThermostatDevice,
+            "fan": lambda d: type(d) == indigo.SpeedControlDevice,
+            "sprinkler": lambda d: type(d) == indigo.SprinklerDevice,
+            "BI_camera": self._is_bi_camera,
+            "SS_camera": self._is_ss_camera,
+            "UP_camera": HKDevicesCameraUniFi.is_unifi_camera,
+        }
+        if list_type == "hk_buttons":
+            return [(d, None) for d in indigo.devices.iter("self.hkButtons")]
+        rule = rules.get(list_type)
+        return [(d, None) for d in indigo.devices if rule(d)] if rule else []
+
     def device_list_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
         try:
-            unassigned_device_list = []
-            assigned_device_list = []
-            assigned_another_bridgelist = []  # seperate out devices published by another bridge.
-            isdevorAG = valuesDict.get("selectdevice_or_AG", "device")
-            NametoUse = "Devices"
+            list_type = valuesDict.get("selectdevice_or_AG", "device")
             try:
                 bridgeuniqueID = int(valuesDict.get("bridgeUniqueID", 99))
             except ValueError:
                 bridgeuniqueID = 99
-
             if self.debug8:
                 self.logger.debug("Device list Generator:\n valuesDict {} \n typeId {}".format(valuesDict, typeId))
-            if isdevorAG == "device":
-                NametoUse = "Devices"
-                for device in indigo.devices:
-                    if device.id in self.device_list:
-                        device_name = device.name
-                        ## is assigned to a bridgeget bridge it is assigned to
-                        try:
-                            bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
-                        except ValueError:
-                            bridgeassigned = 99
-                        if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                            assigned_device_list.append((device.id, device_name))
-                        else:  ## assigned but by another Bridge.
-                            assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
-                    else:
-                        unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "action_group":
-                NametoUse = "Action Groups"
-                for actionGroup in indigo.actionGroups:
-                    if actionGroup.id in self.device_list:
-                        actionG_name = actionGroup.name
-                        try:
-                            bridgeassigned = int(actionGroup.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
-                        except ValueError:
-                            bridgeassigned = 99  ## shouldnt ever =99.
+            names = {"device": "Devices", "action_group": "Action Groups", "lights": "Lights", "switch": "Relays",
+                     "sensor": "Sensors", "thermostat": "Thermostats", "fan": "Fans", "sprinkler": "Sprinklers",
+                     "cameras": "Cameras", "BI_camera": "Blue Iris Cameras", "SS_camera": "Security Spy Cameras",
+                     "UP_camera": "UniFi Protect Cameras", "hk_buttons": "HomeKitLink Buttons", "plugin": "Plugin devices"}
+            NametoUse = names.get(list_type, "Devices")
+            bridge_names = {}
+            for bridge in indigo.devices.iter("self.homeKitBridgeDevice"):
+                try:
+                    bridge_names[int(bridge.pluginProps.get("bridgeUniqueID", 0))] = bridge.name
+                except (TypeError, ValueError):
+                    pass
 
-                        if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                            assigned_device_list.append((actionGroup.id, actionG_name))
-                        else:  ## assigned but by another Bridge.
-                            assigned_another_bridgelist.append((actionGroup.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + (actionG_name) + ":%%"))  ## disabled selection
-                    else:
-                        unassigned_device_list.append((actionGroup.id, actionGroup.name))
-            elif isdevorAG == "BI_camera":
-                NametoUse = "Blue Iris Cameras"
-                for device in indigo.devices:
-                    if device.pluginId == "com.GlennNZ.indigoplugin.BlueIris":
-                        # self.logger.info("{}".format(device.model) )
-                        if device.model == "BlueIris Camera":
-                            if device.id in self.device_list:
-                                device_name = device.name
-                                try:
-                                    bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
-                                except ValueError:
-                                    bridgeassigned = 99  ## shouldnt ever =99
-                                if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                    assigned_device_list.append((device.id, device_name))
-                                else:  ## assigned but by another Bridge.
-                                    assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
-                            else:
-                                unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "lights":
-                NametoUse = "Lights"
-                for device in indigo.devices:
-                    if hasattr(device, "brightness"):
-                        if device.id in self.device_list:
-                            device_name = device.name
-                            try:
-                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
-                            except ValueError:
-                                bridgeassigned = 99  ## shouldnt ever =99
-                            if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                assigned_device_list.append((device.id, device_name))
-                            else:  ## assigned but by another Bridge.
-                                assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
-                        else:
-                            unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "SS_camera":
-                NametoUse = "Security Spy Cameras"
-                for device in indigo.devices:
-                    if device.pluginId == "org.cynic.indigo.securityspy":
-                        # self.logger.info("{}".format(device.model) )
-                        if device.model == "Camera":
-                            if device.id in self.device_list:
-                                device_name = device.name
-                                try:
-                                    bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
-                                except ValueError:
-                                    bridgeassigned = 99
-                                ## shouldnt ever =99
-                                if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                    assigned_device_list.append((device.id, device_name))
-                                else:  ## assigned but by another Bridge.
-                                    assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + (device_name) + ":%%"))  ## disabled selection
-                            else:
-                                unassigned_device_list.append((device.id, device.name))
-                    elif device.pluginId == "com.flyingdiver.indigoplugin.securityspy":
-                        # self.logger.info("{}".format(device.model) )
-                        if device.model == "SecuritySpy Camera":
-                            if device.id in self.device_list:
-                                device_name = device.name
-                                try:
-                                    bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99)) ## shouldnt ever =99
-                                except ValueError:
-                                    bridgeassigned = 99
-                                if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                    assigned_device_list.append((device.id, device_name))
-                                else:  ## assigned but by another Bridge.
-                                    assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + (device_name) + ":%%"))  ## disabled selection
-                            else:
-                                unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "UP_camera":
-                NametoUse = "UniFi Protect Cameras"
-                for pluginid in HKDevicesCameraUniFi.UNIFI_CAMERA_TYPES:
-                    for device in indigo.devices.iter(pluginid):
-                        if not HKDevicesCameraUniFi.is_unifi_camera(device):
-                            continue
-                        if device.id in self.device_list:
-                            try:
-                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
-                            except ValueError:
-                                bridgeassigned = 99
-                            if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                assigned_device_list.append((device.id, device.name))
-                            else:  ## assigned but by another Bridge.
-                                assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + device.name + ":%%"))  ## disabled selection
-                        else:
-                            unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "switch":
-                NametoUse = "Relays"
-                for device in indigo.devices:
-                    if type(device) == indigo.RelayDevice:  ## use relay
-                        if device.id in self.device_list:
-                            device_name = device.name
-                            ## is assigned to a bridgeget bridge it is assigned to
-                            try:
-                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99) ) ## shouldnt ever =99
-                            except ValueError:
-                                bridgeassigned = 99
-                            if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                assigned_device_list.append((device.id, device_name))
-                            else:  ## assigned but by another Bridge.
-                                assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
-                        else:
-                            unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "hk_buttons":
-                NametoUse = "HomeKitLink Buttons"
-                for device in indigo.devices.iter("self.hkButtons"):
-                    if device.id in self.device_list:
-                        try:
-                            bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
-                        except ValueError:
-                            bridgeassigned = 99
-                        if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                            assigned_device_list.append((device.id, device.name))
-                        else:  ## assigned but by another Bridge.
-                            assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + device.name + ":%%"))
-                    else:
-                        unassigned_device_list.append((device.id, device.name))
-            elif isdevorAG == "sensor":
-                NametoUse = "Sensors"
-                for device in indigo.devices:
-                    if type(device) == indigo.SensorDevice:  ## use relay
-                        if device.id in self.device_list:
-                            device_name = device.name
-                            ## is assigned to a bridgeget bridge it is assigned to
-                            try:
-                                bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99) )## shouldnt ever =99
-                            except ValueError:
-                                bridgeassigned = 99  ## shouldnt ever =99
-                            if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
-                                assigned_device_list.append((device.id, device_name))
-                            else:  ## assigned but by another Bridge.
-                                assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
-                        else:
-                            unassigned_device_list.append((device.id, device.name))
+            if list_type == "action_group":
+                items = [(ag, None) for ag in indigo.actionGroups]
+            else:
+                items = self._listed_devices(list_type)
+            search = str(valuesDict.get("listSearch", "") or "").strip().lower()
+            if search:   ## every word must appear in the name, in any order
+                words = search.split()
+                items = [(obj, header) for obj, header in items if all(w in obj.name.lower() for w in words)]
+                NametoUse = '{} matching "{}"'.format(NametoUse, search)
 
-            unassigned_device_list.sort(key=lambda x: x[1])
-            assigned_device_list.sort(key=lambda x: x[1])
-            assigned_another_bridgelist.sort(key=lambda x: x[1])
-            # if self.debug8:
-            # self.logger.debug("\nUnassigned list: {}\nAssigned List {}\nAssigned Another Bridge{}".format(unassigned_device_list,assigned_device_list, assigned_another_bridgelist))
+            ## three sections, each: [(sub-header or None, id, label)]
+            available, this_bridge, other_bridges = [], [], []
+            for obj, header in items:
+                if obj.id in self.device_list:
+                    try:
+                        bridgeassigned = int(obj.pluginProps.get("HomeKit_bridgeUniqueID", 99))  ## shouldnt ever =99
+                    except (TypeError, ValueError):
+                        bridgeassigned = 99
+                    if bridgeassigned == bridgeuniqueID:  ## device assigned to this bridge can access
+                        this_bridge.append((header, obj.id, obj.name))
+                    else:  ## published by another bridge: shown, not selectable
+                        where = bridge_names.get(bridgeassigned, "Bridge Id {}".format(bridgeassigned))
+                        other_bridges.append((header, obj.id, "%%disabled:{}  (on {}):%%".format(obj.name, where), obj.name))
+                else:
+                    available.append((header, obj.id, obj.name))
+
+            def section(entries, title, start_id):
+                """Sorted entries under a grey title, with grey sub-headers when the list has them."""
+                out = []
+                if not entries:
+                    return out, start_id
+                out.append((start_id, "%%disabled:" + title + ":%%"))
+                start_id -= 1
+                entries.sort(key=lambda e: (self._natural_key(e[0] or ""), self._natural_key(e[-1])))
+                current = object()
+                for entry in entries:
+                    header = entry[0]
+                    if header is not None and header != current:
+                        out.append((start_id, "%%disabled:   — " + header + " —%%"))
+                        start_id -= 1
+                        current = header
+                    out.append((entry[1], entry[2]))
+                out.append((start_id, "%%separator%%"))
+                return out, start_id - 1
+
             device_list = []
-
-            if len(unassigned_device_list):
-                device_list.append((-1, "%%disabled:" + str(NametoUse) + " available for publishing to HomeKit:%%"))
-                device_list.extend(unassigned_device_list)
-                device_list.append((-2, u"%%separator%%"))
-
-            if len(assigned_device_list):
-                device_list.append((-3, "%%disabled:" + str(NametoUse) + " on this Bridge published to HomeKit:%%"))
-                device_list.extend(assigned_device_list)
-                device_list.append((-4, u"%%separator%%"))
-
-            if len(assigned_another_bridgelist):
-                device_list.append((-5, "%%disabled:" + str(NametoUse) + " on other Bridges published to HomeKit:%%"))
-                device_list.extend(assigned_another_bridgelist)
-                device_list.append((-6, u"%%separator%%"))
-            ##
-            # if self.debug8:
-            # self.logger.debug("Device_list:{}".format(device_list))
+            next_id = -1
+            for entries, title in ((available, NametoUse + " available for publishing to HomeKit"),
+                                   (this_bridge, NametoUse + " on this Bridge published to HomeKit"),
+                                   (other_bridges, NametoUse + " on other Bridges published to HomeKit")):
+                part, next_id = section(entries, title, next_id)
+                device_list.extend(part)
+            if not device_list:
+                device_list.append((-1, "%%disabled:No " + NametoUse + " found in Indigo:%%"))
             return device_list
         except:
             self.logger.exception("")
@@ -4724,8 +4699,7 @@ class Plugin(indigo.PluginBase):
 
         except KeyError:
             # No device is selected, so hide everything
-            values_dict["isDeviceSelected"] = False
-            values_dict["HomeKit_publishDevice_2"] = False
+            self._clear_device_selection(values_dict)
         return values_dict
 
     ########################################
