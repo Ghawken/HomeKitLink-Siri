@@ -693,36 +693,19 @@ class Plugin(indigo.PluginBase):
                 ##########################################################################
 
                 self.logger.debug(f"Now updating internal lists of active devices, for BridgeID {checkid}")
-                for item in self.device_list:
-                    try:
-                        ## just a list of item numbers all goodies stored in deviceProps
-                        device = self.return_deviceorAG(item)  # indigo.devices[item]
-                        if device == None:
-                            self.logger.debug("Error with this device ID {}.  Skipping.".format(item))
-                            continue
-                        device_props = dict(device.pluginProps)
-                      #  devicename = device_props.get("homekit-name", "")
-                      #  deviceType = device_props.get("HomeKit_deviceSubtype", "")
-                      #  deviceSensor = device_props.get("HomeKit_deviceSensor", "")
-                ## update internal list now a bridge is stopped.
-                        try:
-                            bridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
-                        except ValueError:
-                            bridgeID = 99
-                        if bridgeID == checkid:  ## Current shutting down Bridge ID number
-                            if device.id in self.device_list_internal_idonly:
-                                # It's one we care about
-                                checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
-                                if checkindex != None:
-                                    self.logger.debug("Removing item:{}".format(self.device_list_internal[checkindex]))
-                                    del self.device_list_internal[checkindex]
-                                    # it should be in this below list as should match above only containing IDs
-                                    if device.id in self.device_list_internal_idonly:
-                                        self.device_list_internal_idonly.remove(device.id)
-                                    if device.id in self.running_deviceids:
-                                        self.running_deviceids.remove(device.id)
-                    except:
-                            self.logger.exception("Issue updating internal lists...")
+                try:
+                    ## Every entry of this bridge: its devices, and the doorbells linked to its cameras (whose own
+                    ## bridge may be another one, so they can't be found from the devices' bridge setting)
+                    removed = [item for item in self.device_list_internal if int(item.get("bridgeID", 99)) == checkid]
+                    for item in removed:
+                        self.logger.debug("Removing item:{}".format(item))
+                    self.device_list_internal = [item for item in self.device_list_internal if int(item.get("bridgeID", 99)) != checkid]
+                    self._sync_internal_ids()
+                    for item in removed:
+                        if item["deviceid"] in self.running_deviceids and item["deviceid"] not in self.device_list_internal_idonly:
+                            self.running_deviceids.remove(item["deviceid"])
+                except:
+                    self.logger.exception("Issue updating internal lists...")
 
         except:
             self.logger.debug("Exception in DeviceStopCom \n", exc_info=True)
@@ -931,7 +914,7 @@ class Plugin(indigo.PluginBase):
                 manufacturerName = HKutils.cleanup_name_for_homekit(manufacturerName)
 
                 if deviceBridgeID != 99 and int(deviceBridgeID) in self.deviceBridgeNumber:
-                    checkexists = next((i for i, itemtocheck in enumerate(self.device_list_internal) if itemtocheck["deviceid"] == item), None)
+                    checkexists = self._own_index(item)   ## a linked doorbell entry for this device doesn't count
                     if checkexists == None:  ## remove those devices that don't have bridge device ID, or arent started
                         ## only add item if doesn't exist
                         self.device_list_internal.append({"deviceid": int(item),
@@ -1052,6 +1035,7 @@ class Plugin(indigo.PluginBase):
                                                        "accessory": None,  ##link to accessory
                                                        "aid": int(device_add_id),
                                                        "subtype": "Linked-DoorBell",
+                                                       "linkedcamera": int(item["deviceid"]),   ## the camera this doorbell rings
                                                        "bridgeID": int(bridgenumber),
                                                        "devicemodel": "Blue Iris DoorBell",
                                                        "devicesensor": "Blue Iris DoorBell",
@@ -1081,6 +1065,7 @@ class Plugin(indigo.PluginBase):
                                                        "accessory": None,  ##link to accessory
                                                        "aid": int(device_add_id),
                                                        "subtype": "Linked-DoorBell",
+                                                       "linkedcamera": int(item["deviceid"]),   ## the camera this doorbell rings
                                                        "bridgeID": int(bridgenumber),
                                                        "devicemodel": "Security Spy DoorBell",
                                                        "devicesensor": "Security Spy DoorBell",
@@ -1104,6 +1089,7 @@ class Plugin(indigo.PluginBase):
                                                        "accessory": None,  ##link to accessory
                                                        "aid": int(device_add_id),
                                                        "subtype": "Linked-DoorBell",
+                                                       "linkedcamera": int(item["deviceid"]),   ## the camera this doorbell rings
                                                        "bridgeID": int(bridgenumber),
                                                        "devicemodel": "UniFi Protect DoorBell",
                                                        "devicesensor": "UniFi Protect DoorBell",
@@ -1519,9 +1505,9 @@ class Plugin(indigo.PluginBase):
             values_dict["HomeKit_deviceSubtype"] = ""
             if dev is not None and old_uid:
                 self.device_list.discard(dev.id)
-                self.device_list_internal = [i for i in self.device_list_internal if i["deviceid"] != dev.id]
-                if dev.id in self.device_list_internal_idonly:
-                    self.device_list_internal_idonly.remove(dev.id)
+                self.device_list_internal = [i for i in self.device_list_internal
+                                             if i["deviceid"] != dev.id or i["subtype"] == self.LINKED_DOORBELL]
+                self._sync_internal_ids()
         buttons_changed = (str(old_props.get("buttonCount", "1")) != str(values_dict.get("buttonCount", "1")) or
                            str(old_props.get("buttonNames", "")) != str(values_dict.get("buttonNames", "")))
         if old_uid != new_uid:
@@ -2464,13 +2450,10 @@ class Plugin(indigo.PluginBase):
         try:
             if deleted_device.id in self.device_list_internal_idonly:
                 # It's one we care about
-                checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == deleted_device.id), None)
-                if checkindex != None:
-                    self.logger.info("Deleting item:{}".format(self.device_list_internal[checkindex]))
-                    del self.device_list_internal[checkindex]
-                    # it should be in this below list as should match above only containing IDs
-                    if deleted_device.id in self.device_list_internal_idonly:
-                        self.device_list_internal_idonly.remove(deleted_device.id)
+                for item in [i for i in self.device_list_internal if i["deviceid"] == deleted_device.id]:   ## its own and any linked-doorbell entries
+                    self.logger.info("Deleting item:{}".format(item))
+                self.device_list_internal = [i for i in self.device_list_internal if i["deviceid"] != deleted_device.id]
+                self._sync_internal_ids()
                 self.logger.error("Device: {}, just deleted, was published and has an active accessory within HomeKit currently (!)".format(deleted_device.name))
                 try:
                     bridgeID = int(deleted_device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
@@ -2517,589 +2500,16 @@ class Plugin(indigo.PluginBase):
             if original_device.id not in self.device_list_internal_idonly:
                 return
 
-            this_is_debug_device = False
-            checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == original_device.id), None)
-
-            if checkindex != None:
-                if self.debug2:
-                    self.logger.debug("Device Changed that interested in...{}".format(original_device.name))
-                    self.logger.debug("Device Found in Device List. CheckIndex Key Exists :{}".format(checkindex))
-                if self.debug2:
-                    self.logger.debug("Subtype:{}, and type(original_device):{} & devicesensor:{}".format(
-                        self.device_list_internal[checkindex]["subtype"], type(original_device),
-                        self.device_list_internal[checkindex]["devicesensor"]))
-                ## Debug Device Update Found.
-                if self.debugDeviceid == original_device.id:
-                    self.logger.warning("{0:=^130}".format(" Device Selected for Logging "))
-                    self.logger.warning(f"Original Device States:\n{original_device.states} ")
-                    self.logger.warning(f"Updated Device States: \n{updated_device.states} ")
-                    this_is_debug_device = True
-
-                updateddevice_subtype = self.device_list_internal[checkindex]["subtype"]
-
-                if str(updateddevice_subtype) == "Thermostat":
-                    if self.debug2:
-                        self.logger.debug("Found Thermostat Matching Device...")
-                    if this_is_debug_device:
-                        self.logger.info("Found Thermostat Matching Device...")
-                    if hasattr(updated_device, "temperatures"):  ## double check here in
-                        if original_device.temperatures != updated_device.temperatures:
-                            listtemps = updated_device.temperatures
-                            if isinstance(listtemps, list):
-                                temptosend = sum(listtemps) / len(listtemps)  ##average of all values
-                            elif isinstance(listtemps, (float, int)):
-                                temptosend = listtemps
-                            else:
-                                temptosend = 1.3
-                            if self.debug2:
-                                self.logger.debug("Updating Temperature to {}".format(temptosend))
-                            if this_is_debug_device:
-                                self.logger.warning("Updating Temperature to {}".format(temptosend))
-                            # add conversion for F disable to test TODO big
-                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(temptosend), "current")
-                            # self.device_list_internal[checkindex]["accessory"].char_current_temp.set_value(HKutils.convert_to_float(temptosend))
-
-                    if hasattr(updated_device, "hvacMode"):  ## double check here in
-                        if original_device.hvacMode != updated_device.hvacMode:
-                            ## set target mode when hvacMode changes
-                            newmode = updated_device.hvacMode
-                            listHvacModes = {indigo.kHvacMode.Off: 0,
-                                             indigo.kHvacMode.Heat: 1,
-                                             indigo.kHvacMode.Cool: 2,
-                                             indigo.kHvacMode.HeatCool: 3,
-                                             indigo.kHvacMode.ProgramHeat: 1,
-                                             indigo.kHvacMode.ProgramCool: 2,
-                                             indigo.kHvacMode.ProgramHeatCool: 3}
-                            homekitModeWished = listHvacModes.get(newmode, 0)
-                            self.device_list_internal[checkindex]["accessory"].char_target_heat_cool.set_value(homekitModeWished)
-
-                            ## Mode has been changed need to update target and range for HomeKit
-                            if 'setpointCool' in updated_device.states:
-                                setpointcool = updated_device.states['setpointCool']
-                                setpointheat = updated_device.states['setpointHeat']
-                                if updated_device.hvacMode == indigo.kHvacMode.Off:
-                                    pass
-                                elif updated_device.hvacMode == indigo.kHvacMode.Heat:
-                                    ## set targettemp to setpointHeat
-                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "target")
-                                elif updated_device.hvacMode == indigo.kHvacMode.Cool:
-                                    ## set targettemp to setpointHeat
-                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "target")
-                                elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
-                                    ## set targettemp to setpointHeat
-                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "coolthresh")
-                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
-                            ## Given mode change also change the current setting depending on heater cooler mode immediately
-                            if updated_device.hvacMode == indigo.kHvacMode.Off:
-                                if self.debug2:
-                                    self.logger.debug(f"hvacMode == Off")
-                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                            elif updated_device.hvacMode == indigo.kHvacMode.Heat:
-                                ## set targettemp to setpointHeat
-                                if self.debug2:
-                                    self.logger.debug(f"hvacMode == Heat and current Heater is {updated_device.states['hvacHeaterIsOn']}")
-                                if 'hvacHeaterIsOn' in updated_device.states:
-                                    if updated_device.states["hvacHeaterIsOn"]==True:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
-                                    else:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                            elif updated_device.hvacMode == indigo.kHvacMode.Cool:
-                                if self.debug2:
-                                    self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
-                                if 'hvacCoolerIsOn' in updated_device.states:
-                                    if updated_device.states["hvacCoolerIsOn"] == True:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
-                                    else:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)  #cooling
-                            elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
-                                ## set targettemp to setpointHeat
-                                if self.debug2:
-                                    self.logger.debug(f"hvacMode == HeatCool and current Cooler is {updated_device.states['hvacCoolerIsOn']}, and Heater is {updated_device.states['hvacHeaterIsOn']}")
-                                if 'hvacCoolerIsOn' in updated_device.states:
-                                    if updated_device.states["hvacCoolerIsOn"] == True:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
-                                    elif updated_device.states["hvacHeaterIsOn"] == True:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)  #cooling
-                                    else:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                            if this_is_debug_device:
-                                self.logger.warning("Setting Target and Current Mode of Hvac. Mode Wished. {}".format(homekitModeWished))
-                            if self.debug2:
-                                self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
-
-                        if 'hvacHeaterIsOn' in updated_device.states and 'hvacCoolerIsOn' in updated_device.states:
-                            if updated_device.states["hvacHeaterIsOn"] != original_device.states["hvacHeaterIsOn"] or updated_device.states["hvacCoolerIsOn"] != original_device.states["hvacCoolerIsOn"] :
-                                ## current allowed 0,1,2 only
-                                ## target allowed
-                                if self.debug2:
-                                    self.logger.debug("Thermostat Device Heater On or Cooler On has changed.  Updating.")
-                                '''
-                                Current
-                                     "Cool": 2,
-                                     "Heat": 1,
-                                     "Off": 0
-                                Target
-                                    "Auto": 3,
-                                    "Cool": 2,
-                                    "Heat": 1,
-                                    "Off": 0
-                                '''
-                                # if homekitModeWished != 3:
-                                #     # if not auto set to heat or cool or 0
-                                #     self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(homekitModeWished)
-                                #     # Crashed Home Kit with no error message
-                                #     # add ability for fan idle if temp reached - well attempt to.  Seems from this and below code block doesn't occur in auto modes
-                                #
-                                # else:
-                                    # if auto - is the hvac heating or cooling currently..  Use Image selector...
-                                if updated_device.hvacMode == indigo.kHvacMode.Off:
-                                    if self.debug2:
-                                        self.logger.debug(f"hvacMode == Off")
-                                    self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                                elif updated_device.hvacMode == indigo.kHvacMode.Heat:
-                                    ## set targettemp to setpointHeat
-                                    if self.debug2:
-                                        self.logger.debug(f"hvacMode == Heat and current Heater is {updated_device.states['hvacHeaterIsOn']}")
-                                    if updated_device.states["hvacHeaterIsOn"]==False:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                                    else:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
-                                elif updated_device.hvacMode == indigo.kHvacMode.Cool:
-                                    if self.debug2:
-                                        self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
-                                    if updated_device.states["hvacCoolerIsOn"] == False:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                                    else:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)  #cooling
-                                elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
-                                    ## set targettemp to setpointHeat
-                                    if self.debug2:
-                                        self.logger.debug(f"hvacMode == HeatCool and current Cooler is {updated_device.states['hvacCoolerIsOn']}, and Heater is {updated_device.states['hvacHeaterIsOn']}")
-                                    if updated_device.states["hvacCoolerIsOn"] == True:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
-                                    elif updated_device.states["hvacHeaterIsOn"] == True:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)  #cooling
-                                    else:
-                                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-
-
-                    if "setpointCool" in updated_device.states:
-                        if self.debug2:
-                            self.logger.debug(f"setpointCool Found: Original: {original_device.states['setpointCool']} and updated:  {updated_device.states['setpointCool']} ")
-                        if original_device.states["setpointCool"] != updated_device.states["setpointCool"]:
-                            setpointCool = updated_device.states["setpointCool"]
-                            if self.debug2:
-                                self.logger.debug("Updating setpointCool to {}".format(setpointCool))
-                            if this_is_debug_device:
-                                self.logger.warning("Updating setpointCool to {}".format(setpointCool))
-                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointCool), "setpointCool")
-                    if "setpointHeat" in updated_device.states:
-                        if original_device.states["setpointHeat"] != updated_device.states["setpointHeat"]:
-                            setpointHeat = updated_device.states["setpointHeat"]
-                            if self.debug2:
-                                self.logger.debug("Updating setpointHeat to {}".format(setpointHeat))
-                            if this_is_debug_device:
-                                self.logger.warning("Updating setpointHeat to {}".format(setpointHeat))
-                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointHeat), "setpointHeat")
-
-                elif str(updateddevice_subtype) in ("TemperatureSensor", "HumiditySensor", "LightSensor"):  # , "OccupancySensor", "ContactSensor", "CarbonDioxideSensor"):  ## example of one way sesnor
-                    if type(original_device) == indigo.SensorDevice:
-                        sensortouse = self.device_list_internal[checkindex]["devicesensor"]
-                        if sensortouse != "sensorValue":
-                            if sensortouse != "":
-                                if sensortouse in updated_device.states:
-                                    ## add below check for this state after changed
-                                    if updated_device.states[sensortouse] != original_device.states[sensortouse]:
-                                        sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
-                                        if type(sensorvalue) in (float, int):
-                                            if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
-                                                sensorvalue = 100000
-                                        if self.debug2:
-                                            self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                        if this_is_debug_device:
-                                            self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-
-                                        if str(updateddevice_subtype) == "TemperatureSensor":
-                                            if this_is_debug_device:
-                                                self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
-                                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
-                                        else:
-                                            if this_is_debug_device:
-                                                self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
-                                            self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
-                        else:
-                            if "sensorValue" in updated_device.states:
-                                if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
-                                    sensorvalue = HKutils.convert_to_float(updated_device.states["sensorValue"])
-                                    if type(sensorvalue) in (float, int):
-                                        if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
-                                            sensorvalue = 100000
-                                    if self.debug2:
-                                        self.logger.debug("Device {} + SensorValue:{} + type(sensorValue) {}".format(
-                                            updated_device.name, sensorvalue, type(sensorvalue)))
-                                    if this_is_debug_device:
-                                        self.logger.warning("Device {} + SensorValue:{} + type(sensorValue) {}".format(
-                                            updated_device.name, sensorvalue, type(sensorvalue)))
-                                    if self.debug1:
-                                        self.logger.debug("Found a Sensor value, using that")
-                                    if str(updateddevice_subtype) == "TemperatureSensor":
-                                        if this_is_debug_device:
-                                            self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
-                                        self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
-                                    else:
-                                        if this_is_debug_device:
-                                            self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
-                                        self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
-
-                                    #self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)  ##CurrentTemperature is chartemp
-                        ## else check internal list for sensor State that we wish to return back
-                    else:
-                        sensortouse = self.device_list_internal[checkindex]["devicesensor"]
-                        if sensortouse != "":
-                            if sensortouse in updated_device.states:
-                                if updated_device.states[sensortouse] != original_device.states[sensortouse]:
-                                    sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
-                                    if type(sensorvalue) in (float, int):
-                                        if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
-                                            sensorvalue = 100000
-                                    if self.debug2:
-                                        self.logger.debug(
-                                            "Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
-                                                updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-
-                                    if this_is_debug_device:
-                                        self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
-                                            updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                    if str(updateddevice_subtype) == "TemperatureSensor":
-                                        if this_is_debug_device:
-                                            self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
-                                        self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
-                                    else:
-                                        if this_is_debug_device:
-                                            self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
-                                        self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
-
-                    # sensor type updated and check Battery
-                    if "batteryLevel" in updated_device.states:
-                        battery_accessory = self.device_list_internal[checkindex]["accessory"]
-                        if getattr(battery_accessory, "_char_battery", None) and getattr(battery_accessory, "_char_low_battery", None):
-                            if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
-                                batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
-                                if batteryLevel is not None:
-                                    battery_accessory._char_battery.set_value(batteryLevel)
-                                    is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
-                                    battery_accessory._char_low_battery.set_value(is_low_battery)
-                                    if self.debug2:
-                                        self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
-
-
-                elif str(updateddevice_subtype) in ("LeakSensor", "OccupancySensor", "SmokeSensor", "ContactSensor", "CarbonMonoxideSensor", "MotionSensor", "CarbonDioxideSensor"):  ## example of one way sesnor
-                    if type(original_device) == indigo.SensorDevice:
-                        sensortouse = self.device_list_internal[checkindex]["devicesensor"]
-                        if sensortouse != "sensorValue":
-                            if sensortouse != "":
-                                if sensortouse in updated_device.states:
-                                    if updated_device.states[sensortouse] != original_device.states[sensortouse]:
-                                        sensorvalue = updated_device.states[sensortouse]
-                                        if self.debug2:
-                                            self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                        if this_is_debug_device:
-                                            self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
-                        else:
-                            if "sensorValue" in updated_device.states:
-                                if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
-                                    sensorvalue = updated_device.states["sensorValue"]
-                                    if self.debug2:
-                                        self.logger.debug("Device {} + sensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensorvalue, type(sensorvalue)))
-                                    if this_is_debug_device:
-                                        self.logger.warning("Device {} + sensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensorvalue, type(sensorvalue)))
-
-                                    self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)  ##CurrentTemperature is chartemp
-                        ## else check internal list for sensor State that we wish to return back
-                    else:
-                        sensortouse = self.device_list_internal[checkindex]["devicesensor"]
-                        if sensortouse != "":
-                            if sensortouse in updated_device.states:
-                                if updated_device.states[sensortouse] != original_device.states[sensortouse]:
-                                    sensorvalue = updated_device.states[sensortouse]
-                                    if self.debug2:
-                                        self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-                                    if this_is_debug_device:
-                                        self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
-
-                                    self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
-                    # sensor type updated and check Battery
-                    if "batteryLevel" in updated_device.states:
-                        battery_accessory = self.device_list_internal[checkindex]["accessory"]
-                        if getattr(battery_accessory, "_char_battery", None) and getattr(battery_accessory, "_char_low_battery", None):
-                            if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
-                                batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
-                                if batteryLevel is not None:
-                                    battery_accessory._char_battery.set_value(batteryLevel)
-                                    is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
-                                    battery_accessory._char_low_battery.set_value(is_low_battery)
-                                    if self.debug2:
-                                        self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
-
-                elif str(updateddevice_subtype) == "Lock" :  ## example of one way sesnor
-                    # if type(original_device) == indigo.RelayDevice:
-                    if updated_device.states['onOffState'] != original_device.states['onOffState']:
-                        newstate = updated_device.states["onOffState"]
-                        if self.debug2:
-                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        if this_is_debug_device:
-                            self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
-                        self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
-                        return
-                    elif "lastChangedVia" in updated_device.states and updated_device.states['lastChangedVia'] != original_device.states['lastChangedVia']:
-                        ## Locks send Onoffstate, and then lastchangedvia update.
-                        ## homekit appears to like some time between target and current
-                        ## below here - resend back to homekit update on this other trigger.
-                        newstate = updated_device.states["onOffState"]
-                        if self.debug2:
-                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        if this_is_debug_device:
-                            self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
-                        self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
-
-                elif str(updateddevice_subtype) == "Security":
-                    if updated_device.states != original_device.states:
-                        if self.debug2:
-                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
-                        if this_is_debug_device:
-                            self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
-
-                        if self.device_list_internal[checkindex]['manufacturername'] == "com.frightideas.indigoplugin.dscAlarm":
-                            if "state" in updated_device.states:
-                                if updated_device.states['state'] != original_device.states['state']:  # focusing only on changes of 'state' (not LED, Time etc)
-                                    self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
-                        else:
-                            self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
-                        return
-
-                elif str(updateddevice_subtype) == "GarageDoor":
-                    for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
-                        # doorState:    0 -> open, 1 -> closed, 2 -> opening, 3 -> closing, 4 -> stopped, 5 -> reversing
-                        # onOffState:   0 -> open, 1 -> closed
-                        # binaryInput1: 0 -> open, 1 -> closed
-                        if stateName in updated_device.states:  # choose the first match
-                            oldstate = original_device.states[stateName]
-                            newstate = updated_device.states[stateName]
-                            if newstate != oldstate:  # state has changed
-
-                                if self.debug2:
-                                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                                if this_is_debug_device:
-                                    self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                                accessory = self.device_list_internal[checkindex]["accessory"]
-
-                                currentDoorState = (0, 1, 2, 3, 0, 2)[newstate]
-                                accessory.char_current_state.set_value(currentDoorState)
-
-                                # TargetDoorState must be 0 -> open or 1 -> closed
-                                targetDoorState = (0, 1, 0, 1, 0, 0)[newstate]
-                                accessory.char_target_state.set_value(targetDoorState)
-
-                                # ObstructionDetected must be 0 -> False or 1 -> True
-                                obstructionDetected = (None, 0, None, None, 1, 1)[newstate]
-                                if obstructionDetected is not None:
-                                    accessory.char_obstruction_detected.set_value(obstructionDetected)
-
-                            break
-                    return
-
-                elif str(updateddevice_subtype) == "AirQualitySensor":
-                    accessory = self.device_list_internal[checkindex]["accessory"]
-                    accessory.update(self.air_quality_readings(updated_device))
-                    if "batteryLevel" in updated_device.states and getattr(accessory, "_char_battery", None):
-                        if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
-                            batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
-                            if batteryLevel is not None:
-                                accessory._char_battery.set_value(batteryLevel)
-                                accessory._char_low_battery.set_value(1 if batteryLevel < self.low_battery_threshold else 0)
-                    return
-                elif str(updateddevice_subtype) == "HeaterCooler":
-                    self.device_list_internal[checkindex]["accessory"].update(self.heater_cooler_values(updated_device))
-                    return
-                elif str(updateddevice_subtype) in ("Vacuum", "LawnMower"):
-                    running = self._robot_running(updated_device)
-                    if running != self._robot_running(original_device):
-                        if self.debug2:
-                            self.logger.debug(f"{updated_device.name}: {updateddevice_subtype} running is now {running}")
-                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(running)
-                    return
-                elif str(updateddevice_subtype) in ("Valve","Irrigation","Showerhead","Faucet"):
-                    # if type(original_device) == indigo.RelayDevice:
-                    if updated_device.states['onOffState'] != original_device.states['onOffState']:
-                        newstate = updated_device.states["onOffState"]
-                        currentstate = 1 if newstate == True else 0
-                        if self.debug2:
-                            self.logger.debug(f"{updateddevice_subtype} Subtype NewState of Device:{updated_device.name} & State: {newstate} & new State {currentstate}")
-                        self.device_list_internal[checkindex]["accessory"].set_valve_state(currentstate)
-                        return
-                # Check Doorbell prior to Camera..
-                elif str(updateddevice_subtype) == "Linked-DoorBell":
-                    # if type(original_device) == indigo.RelayDevice:
-                    if "onOffState" in updated_device.states:  ## double check Linked Doorbell are set only to have onOffStates
-                        if updated_device.states['onOffState'] != original_device.states['onOffState']:
-                            newstate = updated_device.onState
-                            if self.debug2:
-                                self.logger.debug("OnOffState Changed...and New State {}".format(newstate))
-                            if self.debug2:
-                                self.logger.debug("OnOffState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            ## Trigger doorbell if state change, rather than just On.if newstate:  ##
-                            self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
-                            self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
-                    # if Doorbell nothing further to do... return regardless
-                    return
-
-                elif str(updateddevice_subtype) == "BlueIrisCamera":  #update
-                    # if type(original_device) == indigo.RelayDevice:
-                    motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
-                    if motionEnabled:
-                        if updated_device.states['Motion'] != original_device.states['Motion']:
-                            newstate = updated_device.states["Motion"]
-                            if self.debug2:
-                                self.logger.debug("Motion Changed...and New State {}".format(newstate))
-                            if self.debug2:
-                                self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
-                            return
-
-                elif str(updateddevice_subtype) == "UniFiProtectCamera":
-                    accessory = self.device_list_internal[checkindex]["accessory"]
-                    if HKDevicesCameraUniFi.doorbell_rang(original_device, updated_device) and getattr(accessory, "_char_doorbell_detected", None) is not None:
-                        self.logger.info("[{}] UniFi doorbell ring sent to HomeKit".format(updated_device.name))
-                        accessory._char_doorbell_detected.set_value(0)
-                        accessory._char_doorbell_detected_switch.set_value(0)
-                    if updated_device.pluginProps.get("HomeKit_motionEnabled", True):
-                        newstate = HKDevicesCameraUniFi.motion_active(updated_device)
-                        if newstate != HKDevicesCameraUniFi.motion_active(original_device):
-                            if self.debug2:
-                                self.logger.debug("UniFi Motion Changed: {} {}".format(updated_device.name, newstate))
-                            accessory.char_motion_detected.set_value(newstate)
-                    return
-
-                elif str(updateddevice_subtype) == "SecuritySpyCamera":
-                    # if type(original_device) == indigo.RelayDevice:
-
-                    motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
-                    if self.debug2:
-                        self.logger.debug(f"Within the SecuritySpyCamera Motion Check. {motionEnabled=}")
-
-                    if motionEnabled:
-                        if 'event_on' in updated_device.states:  ## Other plugin doesnt have it
-                            if updated_device.states['event_on'] != original_device.states['event_on']:
-                                newstate = updated_device.states["event_on"]
-                                if self.debug2:
-                                    self.logger.debug("Motion Changed...and New State {}".format(newstate))
-                                if self.debug2:
-                                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                                self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
-                                return
-
-                elif str(updateddevice_subtype) == "Fan":
-                    ## Fan device has a brightnessLevel below, likely dimmer update Rotation speed with that.
-                    ## Onoff will be active at bottom as well
-                    if "brightnessLevel" in updated_device.states:
-                        if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
-                            brightness = updated_device.states["brightnessLevel"]
-                            if self.debug2:
-                                self.logger.debug("This is a Fan: But found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
-                            if isinstance(brightness, int):
-                                self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(brightness)
-                    elif type(updated_device) == indigo.SpeedControlDevice:
-                        ## Speed control device update speedLevel hope rest follows... hard to test
-                        ## strange device, hard to test
-                        ## update speed index to that set by Homekit 0-100 fits
-                        if updated_device.speedLevel != original_device.speedLevel:
-                            speedLevel = updated_device.speedLevel
-                            if self.debug2:
-                                self.logger.debug("This is a Fan (HK) & SpeedControlDevice (indigo) found a speedLevel state try using that:  speedLevel: {}".format(speedLevel))
-                            if isinstance(speedLevel, int):
-                                self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(speedLevel)
-
-                elif str(updateddevice_subtype) in ("Blind", "Window", "Door"):
-                    if "brightnessLevel" in updated_device.states:
-                        if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
-                            brightness = updated_device.states["brightnessLevel"]
-                            if self.debug2:
-                                self.logger.debug("Blind/Window: Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
-                            if isinstance(brightness, int):
-                                self.device_list_internal[checkindex]["accessory"].set_covering_state(brightness, None)
-                    elif "onOffState" in updated_device.states:
-                        ## use brightness and calculate onOff first, if no brightness because of device - use on off and 100/0
-                        ## Inverse can be actioned at the accessory level
-                        if updated_device.states['onOffState'] != original_device.states['onOffState']:
-                            newstate = updated_device.states["onOffState"]
-                            if self.debug2:
-                                self.logger.debug("Blind/Window: Defaulting to onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                            self.device_list_internal[checkindex]["accessory"].set_covering_state(None, updated_device.states["onOffState"])
-
-                if str(updateddevice_subtype) in ("HueLightBulb", "LightBulb", "ColorTempLightBulb"):
-                    if "brightnessLevel" in updated_device.states:
-                        if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
-                            brightness = updated_device.states["brightnessLevel"]
-                            if self.debug2:
-                                self.logger.debug("Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
-                            if isinstance(brightness, int):
-                                self.device_list_internal[checkindex]["accessory"].Brightness.set_value(brightness)
-                                self.device_list_internal[checkindex]["accessory"].HomeKitBrightnessLevel = brightness
-
-                if str(updateddevice_subtype) in ( "HueLightBulb", "ColorTempLightBulb"):
-                    # remove specific hue stuff, huelevel wrong and better to go one lower to indigo dimmer
-                    if 'redLevel' in updated_device.states:  # and 'hue' not in updated_device.states:  ### if Hue - set with hue as above, if no hue use RGB here...  done- could move to RGB for all given HueLights...
-                        ##   use redLevel as check for all if has redLevel, will have greenLevel & blueLevel no need to check for all
-                        if updated_device.supportsRGB:  # has to otherwise wouldnt be huelightbulb - except for User Forcing - keep check
-                            if updated_device.states['redLevel'] != original_device.states["redLevel"] or updated_device.states['blueLevel'] != original_device.states["blueLevel"] or updated_device.states['greenLevel'] != original_device.states["greenLevel"]:
-                                ## check any updated, don't worry about state/brighgtess other changes
-                                red = updated_device.states['redLevel']
-                                green = updated_device.states['greenLevel']
-                                blue = updated_device.states['blueLevel']
-                                hsvReturned = colorsys.rgb_to_hsv(red / 100, green / 100, blue / 100)
-                                # rgbReturned = colorsys.hsv_to_rgb(huetoSet / 360.0, saturationtoSet / 100.0, 1)
-                                if self.debug2:
-                                    self.logger.debug("Found updated Red/Green/Blue Level & Converted/Returned HSV data: {}".format(hsvReturned))
-                                if len(hsvReturned) >= 1:
-                                    self.device_list_internal[checkindex]["accessory"].Hue.set_value(hsvReturned[0] * 360)
-                                    self.device_list_internal[checkindex]["accessory"].Saturation.set_value(hsvReturned[1] * 100)
-                            elif "whiteTemperature" in updated_device.states:
-                                if updated_device.supportsWhiteTemperature:
-                                ## add check for whiteTemp supported - although won't be picked up by Hue...
-                                    if updated_device.states["whiteTemperature"] != original_device.states["whiteTemperature"]:
-                                        ## colortemp changed.
-                                        mired = HKutils.color_temperature_kelvin_to_mired(updated_device.states["whiteTemperature"])
-                                        if self.debug2:
-                                            self.logger.debug("Found WhiteTemp Changed, converting to mired == {}".format(mired))
-                                        hue, saturation = HKutils.color_temperature_to_hs(HKutils.color_temperature_mired_to_kelvin(mired))
-                                        self.device_list_internal[checkindex]["accessory"].Hue.set_value(round(hue, 0))
-                                        self.device_list_internal[checkindex]["accessory"].Saturation.set_value(round(saturation, 0))
-                                        ## check for device state change in colorMode - below checks hue ?
-                                        ## Not sure others - if not present will delay inteface update
-                                        self.device_list_internal[checkindex]["accessory"].char_color_temp.set_value(round(mired, 0))
-                            ## if huebulb and colorMode change notify
-                            if "colorMode" in updated_device.states:
-                                if updated_device.supportsWhiteTemperature and updated_device.supportsRGB:
-                                    if updated_device.states["colorMode"] != original_device.states["colorMode"]:
-                                        ## there has been a change in color mode
-                                        ## should update
-                                        if self.debug2:
-                                            self.logger.debug("ColorMode has changed sending Notify to Hue,Sat, and ColorTemp.  New Mode {}".format(updated_device.states["colorMode"]))
-                                        self.device_list_internal[checkindex]["accessory"].Hue.notify()
-                                        self.device_list_internal[checkindex]["accessory"].Saturation.notify()
-                                        self.device_list_internal[checkindex]["accessory"].char_color_temp.notify()
-
-                if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window","Door","TemperatureSensor", "HumiditySensor", "LightSensor"):   ## work around to remnove this TODO
-                    if updated_device.states['onOffState'] != original_device.states['onOffState']:
-                        newstate = updated_device.states["onOffState"]
-                        if self.debug2:
-                            self.logger.debug("onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        if this_is_debug_device:
-                            self.logger.warning("onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(newstate)
+            ## Every entry for this device: e.g. a doorbell linked to one or more cameras AND published itself.
+            ## Each is updated on its own, so a problem with one doesn't stop the others.
+            for checkindex in [i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == original_device.id]:
+                try:
+                    self._device_updated_entry(checkindex, original_device, updated_device)
+                except AttributeError:
+                    self.logger.info(f"HomeKitLink Published Device: {original_device.name} caused a Nonetype error, this usually means device, or entire bridge has not correctly started.")
+                    self.logger.debug("Caught exception in Device Update", exc_info=True)
+                except Exception:
+                    self.logger.debug("Caught exception in Device Update", exc_info=True)
 
         except (AttributeError):
             self.logger.info(f"HomeKitLink Published Device: {original_device.name} caused a Nonetype error, this usually means device, or entire bridge has not correctly started.")
@@ -3107,6 +2517,591 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.debug("Caught exception in Device Update", exc_info=True)
         ## Motion Detected
+
+    def _device_updated_entry(self, checkindex, original_device, updated_device):
+        """One internal-list entry of a changed device: its accessory, by its HomeKit type. A device can
+        have several entries (e.g. a doorbell linked to a camera and also published itself), and each is
+        updated; 'return' here only ends this entry."""
+        this_is_debug_device = False
+        if self.debug2:
+            self.logger.debug("Device Changed that interested in...{}".format(original_device.name))
+            self.logger.debug("Device Found in Device List. CheckIndex Key Exists :{}".format(checkindex))
+        if self.debug2:
+            self.logger.debug("Subtype:{}, and type(original_device):{} & devicesensor:{}".format(
+                self.device_list_internal[checkindex]["subtype"], type(original_device),
+                self.device_list_internal[checkindex]["devicesensor"]))
+        ## Debug Device Update Found.
+        if self.debugDeviceid == original_device.id:
+            self.logger.warning("{0:=^130}".format(" Device Selected for Logging "))
+            self.logger.warning(f"Original Device States:\n{original_device.states} ")
+            self.logger.warning(f"Updated Device States: \n{updated_device.states} ")
+            this_is_debug_device = True
+
+        updateddevice_subtype = self.device_list_internal[checkindex]["subtype"]
+
+        if str(updateddevice_subtype) == "Thermostat":
+            if self.debug2:
+                self.logger.debug("Found Thermostat Matching Device...")
+            if this_is_debug_device:
+                self.logger.info("Found Thermostat Matching Device...")
+            if hasattr(updated_device, "temperatures"):  ## double check here in
+                if original_device.temperatures != updated_device.temperatures:
+                    listtemps = updated_device.temperatures
+                    if isinstance(listtemps, list):
+                        temptosend = sum(listtemps) / len(listtemps)  ##average of all values
+                    elif isinstance(listtemps, (float, int)):
+                        temptosend = listtemps
+                    else:
+                        temptosend = 1.3
+                    if self.debug2:
+                        self.logger.debug("Updating Temperature to {}".format(temptosend))
+                    if this_is_debug_device:
+                        self.logger.warning("Updating Temperature to {}".format(temptosend))
+                    # add conversion for F disable to test TODO big
+                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(temptosend), "current")
+                    # self.device_list_internal[checkindex]["accessory"].char_current_temp.set_value(HKutils.convert_to_float(temptosend))
+
+            if hasattr(updated_device, "hvacMode"):  ## double check here in
+                if original_device.hvacMode != updated_device.hvacMode:
+                    ## set target mode when hvacMode changes
+                    newmode = updated_device.hvacMode
+                    listHvacModes = {indigo.kHvacMode.Off: 0,
+                                     indigo.kHvacMode.Heat: 1,
+                                     indigo.kHvacMode.Cool: 2,
+                                     indigo.kHvacMode.HeatCool: 3,
+                                     indigo.kHvacMode.ProgramHeat: 1,
+                                     indigo.kHvacMode.ProgramCool: 2,
+                                     indigo.kHvacMode.ProgramHeatCool: 3}
+                    homekitModeWished = listHvacModes.get(newmode, 0)
+                    self.device_list_internal[checkindex]["accessory"].char_target_heat_cool.set_value(homekitModeWished)
+
+                    ## Mode has been changed need to update target and range for HomeKit
+                    if 'setpointCool' in updated_device.states:
+                        setpointcool = updated_device.states['setpointCool']
+                        setpointheat = updated_device.states['setpointHeat']
+                        if updated_device.hvacMode == indigo.kHvacMode.Off:
+                            pass
+                        elif updated_device.hvacMode == indigo.kHvacMode.Heat:
+                            ## set targettemp to setpointHeat
+                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "target")
+                        elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                            ## set targettemp to setpointHeat
+                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "target")
+                        elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
+                            ## set targettemp to setpointHeat
+                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointcool), "coolthresh")
+                            self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointheat), "heatthresh")
+                    ## Given mode change also change the current setting depending on heater cooler mode immediately
+                    if updated_device.hvacMode == indigo.kHvacMode.Off:
+                        if self.debug2:
+                            self.logger.debug(f"hvacMode == Off")
+                        self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                    elif updated_device.hvacMode == indigo.kHvacMode.Heat:
+                        ## set targettemp to setpointHeat
+                        if self.debug2:
+                            self.logger.debug(f"hvacMode == Heat and current Heater is {updated_device.states['hvacHeaterIsOn']}")
+                        if 'hvacHeaterIsOn' in updated_device.states:
+                            if updated_device.states["hvacHeaterIsOn"]==True:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
+                            else:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                    elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                        if self.debug2:
+                            self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
+                        if 'hvacCoolerIsOn' in updated_device.states:
+                            if updated_device.states["hvacCoolerIsOn"] == True:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
+                            else:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)  #cooling
+                    elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
+                        ## set targettemp to setpointHeat
+                        if self.debug2:
+                            self.logger.debug(f"hvacMode == HeatCool and current Cooler is {updated_device.states['hvacCoolerIsOn']}, and Heater is {updated_device.states['hvacHeaterIsOn']}")
+                        if 'hvacCoolerIsOn' in updated_device.states:
+                            if updated_device.states["hvacCoolerIsOn"] == True:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
+                            elif updated_device.states["hvacHeaterIsOn"] == True:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)  #cooling
+                            else:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                    if this_is_debug_device:
+                        self.logger.warning("Setting Target and Current Mode of Hvac. Mode Wished. {}".format(homekitModeWished))
+                    if self.debug2:
+                        self.logger.debug("Thermostat Device has been changed, updating all temp targets/setpoints")
+
+                if 'hvacHeaterIsOn' in updated_device.states and 'hvacCoolerIsOn' in updated_device.states:
+                    if updated_device.states["hvacHeaterIsOn"] != original_device.states["hvacHeaterIsOn"] or updated_device.states["hvacCoolerIsOn"] != original_device.states["hvacCoolerIsOn"] :
+                        ## current allowed 0,1,2 only
+                        ## target allowed
+                        if self.debug2:
+                            self.logger.debug("Thermostat Device Heater On or Cooler On has changed.  Updating.")
+                        '''
+                        Current
+                             "Cool": 2,
+                             "Heat": 1,
+                             "Off": 0
+                        Target
+                            "Auto": 3,
+                            "Cool": 2,
+                            "Heat": 1,
+                            "Off": 0
+                        '''
+                        # if homekitModeWished != 3:
+                        #     # if not auto set to heat or cool or 0
+                        #     self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(homekitModeWished)
+                        #     # Crashed Home Kit with no error message
+                        #     # add ability for fan idle if temp reached - well attempt to.  Seems from this and below code block doesn't occur in auto modes
+                        #
+                        # else:
+                            # if auto - is the hvac heating or cooling currently..  Use Image selector...
+                        if updated_device.hvacMode == indigo.kHvacMode.Off:
+                            if self.debug2:
+                                self.logger.debug(f"hvacMode == Off")
+                            self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                        elif updated_device.hvacMode == indigo.kHvacMode.Heat:
+                            ## set targettemp to setpointHeat
+                            if self.debug2:
+                                self.logger.debug(f"hvacMode == Heat and current Heater is {updated_device.states['hvacHeaterIsOn']}")
+                            if updated_device.states["hvacHeaterIsOn"]==False:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                            else:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
+                        elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                            if self.debug2:
+                                self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
+                            if updated_device.states["hvacCoolerIsOn"] == False:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+                            else:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)  #cooling
+                        elif updated_device.hvacMode == indigo.kHvacMode.HeatCool:
+                            ## set targettemp to setpointHeat
+                            if self.debug2:
+                                self.logger.debug(f"hvacMode == HeatCool and current Cooler is {updated_device.states['hvacCoolerIsOn']}, and Heater is {updated_device.states['hvacHeaterIsOn']}")
+                            if updated_device.states["hvacCoolerIsOn"] == True:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(2)
+                            elif updated_device.states["hvacHeaterIsOn"] == True:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)  #cooling
+                            else:
+                                self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
+
+
+            if "setpointCool" in updated_device.states:
+                if self.debug2:
+                    self.logger.debug(f"setpointCool Found: Original: {original_device.states['setpointCool']} and updated:  {updated_device.states['setpointCool']} ")
+                if original_device.states["setpointCool"] != updated_device.states["setpointCool"]:
+                    setpointCool = updated_device.states["setpointCool"]
+                    if self.debug2:
+                        self.logger.debug("Updating setpointCool to {}".format(setpointCool))
+                    if this_is_debug_device:
+                        self.logger.warning("Updating setpointCool to {}".format(setpointCool))
+                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointCool), "setpointCool")
+            if "setpointHeat" in updated_device.states:
+                if original_device.states["setpointHeat"] != updated_device.states["setpointHeat"]:
+                    setpointHeat = updated_device.states["setpointHeat"]
+                    if self.debug2:
+                        self.logger.debug("Updating setpointHeat to {}".format(setpointHeat))
+                    if this_is_debug_device:
+                        self.logger.warning("Updating setpointHeat to {}".format(setpointHeat))
+                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(setpointHeat), "setpointHeat")
+
+        elif str(updateddevice_subtype) in ("TemperatureSensor", "HumiditySensor", "LightSensor"):  # , "OccupancySensor", "ContactSensor", "CarbonDioxideSensor"):  ## example of one way sesnor
+            if type(original_device) == indigo.SensorDevice:
+                sensortouse = self.device_list_internal[checkindex]["devicesensor"]
+                if sensortouse != "sensorValue":
+                    if sensortouse != "":
+                        if sensortouse in updated_device.states:
+                            ## add below check for this state after changed
+                            if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                                sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
+                                if type(sensorvalue) in (float, int):
+                                    if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
+                                        sensorvalue = 100000
+                                if self.debug2:
+                                    self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                if this_is_debug_device:
+                                    self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+
+                                if str(updateddevice_subtype) == "TemperatureSensor":
+                                    if this_is_debug_device:
+                                        self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
+                                    self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
+                                else:
+                                    if this_is_debug_device:
+                                        self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                    self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+                else:
+                    if "sensorValue" in updated_device.states:
+                        if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
+                            sensorvalue = HKutils.convert_to_float(updated_device.states["sensorValue"])
+                            if type(sensorvalue) in (float, int):
+                                if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
+                                    sensorvalue = 100000
+                            if self.debug2:
+                                self.logger.debug("Device {} + SensorValue:{} + type(sensorValue) {}".format(
+                                    updated_device.name, sensorvalue, type(sensorvalue)))
+                            if this_is_debug_device:
+                                self.logger.warning("Device {} + SensorValue:{} + type(sensorValue) {}".format(
+                                    updated_device.name, sensorvalue, type(sensorvalue)))
+                            if self.debug1:
+                                self.logger.debug("Found a Sensor value, using that")
+                            if str(updateddevice_subtype) == "TemperatureSensor":
+                                if this_is_debug_device:
+                                    self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
+                                self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
+                            else:
+                                if this_is_debug_device:
+                                    self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+
+                            #self.device_list_internal[checkindex]["accessory"].char_temp.set_value(sensorvalue)  ##CurrentTemperature is chartemp
+                ## else check internal list for sensor State that we wish to return back
+            else:
+                sensortouse = self.device_list_internal[checkindex]["devicesensor"]
+                if sensortouse != "":
+                    if sensortouse in updated_device.states:
+                        if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                            sensorvalue = HKutils.convert_to_float(updated_device.states[sensortouse])
+                            if type(sensorvalue) in (float, int):
+                                if sensorvalue > 100000:  ## should be hit by LightSensor or really really hot days...
+                                    sensorvalue = 100000
+                            if self.debug2:
+                                self.logger.debug(
+                                    "Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
+                                        updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+
+                            if this_is_debug_device:
+                                self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(
+                                    updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                            if str(updateddevice_subtype) == "TemperatureSensor":
+                                if this_is_debug_device:
+                                    self.logger.warning("Temperature Sensor found, sending to HKAccessory to convert.  Current Sensorvalue {}".format(sensorvalue))
+                                self.device_list_internal[checkindex]["accessory"].set_temperature(HKutils.convert_to_float(sensorvalue))
+                            else:
+                                if this_is_debug_device:
+                                    self.logger.warning("Humidity or Light Sensor found, Sending Sensorvalue {}".format(sensorvalue))
+                                self.device_list_internal[checkindex]["accessory"].char_temp.set_value(HKutils.convert_to_float(sensorvalue))
+
+            # sensor type updated and check Battery
+            if "batteryLevel" in updated_device.states:
+                battery_accessory = self.device_list_internal[checkindex]["accessory"]
+                if getattr(battery_accessory, "_char_battery", None) and getattr(battery_accessory, "_char_low_battery", None):
+                    if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
+                        batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
+                        if batteryLevel is not None:
+                            battery_accessory._char_battery.set_value(batteryLevel)
+                            is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
+                            battery_accessory._char_low_battery.set_value(is_low_battery)
+                            if self.debug2:
+                                self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
+
+
+        elif str(updateddevice_subtype) in ("LeakSensor", "OccupancySensor", "SmokeSensor", "ContactSensor", "CarbonMonoxideSensor", "MotionSensor", "CarbonDioxideSensor"):  ## example of one way sesnor
+            if type(original_device) == indigo.SensorDevice:
+                sensortouse = self.device_list_internal[checkindex]["devicesensor"]
+                if sensortouse != "sensorValue":
+                    if sensortouse != "":
+                        if sensortouse in updated_device.states:
+                            if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                                sensorvalue = updated_device.states[sensortouse]
+                                if self.debug2:
+                                    self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                if this_is_debug_device:
+                                    self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                                self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
+                else:
+                    if "sensorValue" in updated_device.states:
+                        if original_device.states["sensorValue"] != updated_device.states["sensorValue"]:
+                            sensorvalue = updated_device.states["sensorValue"]
+                            if self.debug2:
+                                self.logger.debug("Device {} + sensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensorvalue, type(sensorvalue)))
+                            if this_is_debug_device:
+                                self.logger.warning("Device {} + sensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensorvalue, type(sensorvalue)))
+
+                            self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)  ##CurrentTemperature is chartemp
+                ## else check internal list for sensor State that we wish to return back
+            else:
+                sensortouse = self.device_list_internal[checkindex]["devicesensor"]
+                if sensortouse != "":
+                    if sensortouse in updated_device.states:
+                        if updated_device.states[sensortouse] != original_device.states[sensortouse]:
+                            sensorvalue = updated_device.states[sensortouse]
+                            if self.debug2:
+                                self.logger.debug("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+                            if this_is_debug_device:
+                                self.logger.warning("Device {} ,SensortoUse {} SensorValue:{} + type(sensorValue) {}".format(updated_device.name, sensortouse, sensorvalue, type(sensorvalue)))
+
+                            self.device_list_internal[checkindex]["accessory"].char_on.set_value(sensorvalue)
+            # sensor type updated and check Battery
+            if "batteryLevel" in updated_device.states:
+                battery_accessory = self.device_list_internal[checkindex]["accessory"]
+                if getattr(battery_accessory, "_char_battery", None) and getattr(battery_accessory, "_char_low_battery", None):
+                    if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
+                        batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
+                        if batteryLevel is not None:
+                            battery_accessory._char_battery.set_value(batteryLevel)
+                            is_low_battery = 1 if batteryLevel < self.low_battery_threshold else 0
+                            battery_accessory._char_low_battery.set_value(is_low_battery)
+                            if self.debug2:
+                                self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
+
+        elif str(updateddevice_subtype) == "Lock" :  ## example of one way sesnor
+            # if type(original_device) == indigo.RelayDevice:
+            if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                newstate = updated_device.states["onOffState"]
+                if self.debug2:
+                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                if this_is_debug_device:
+                    self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
+                self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
+                return
+            elif "lastChangedVia" in updated_device.states and updated_device.states['lastChangedVia'] != original_device.states['lastChangedVia']:
+                ## Locks send Onoffstate, and then lastchangedvia update.
+                ## homekit appears to like some time between target and current
+                ## below here - resend back to homekit update on this other trigger.
+                newstate = updated_device.states["onOffState"]
+                if self.debug2:
+                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                if this_is_debug_device:
+                    self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                self.device_list_internal[checkindex]["accessory"].char_target_state.set_value(newstate)
+                self.device_list_internal[checkindex]["accessory"].char_current_state.set_value(newstate)
+
+        elif str(updateddevice_subtype) == "Security":
+            if updated_device.states != original_device.states:
+                if self.debug2:
+                    self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
+                if this_is_debug_device:
+                    self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, updated_device.states))
+
+                if self.device_list_internal[checkindex]['manufacturername'] == "com.frightideas.indigoplugin.dscAlarm":
+                    if "state" in updated_device.states:
+                        if updated_device.states['state'] != original_device.states['state']:  # focusing only on changes of 'state' (not LED, Time etc)
+                            self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
+                else:
+                    self.device_list_internal[checkindex]["accessory"].set_fromdeviceUpdate(updated_device.states)
+                return
+
+        elif str(updateddevice_subtype) == "GarageDoor":
+            for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
+                # doorState:    0 -> open, 1 -> closed, 2 -> opening, 3 -> closing, 4 -> stopped, 5 -> reversing
+                # onOffState:   0 -> open, 1 -> closed
+                # binaryInput1: 0 -> open, 1 -> closed
+                if stateName in updated_device.states:  # choose the first match
+                    oldstate = original_device.states[stateName]
+                    newstate = updated_device.states[stateName]
+                    if newstate != oldstate:  # state has changed
+
+                        if self.debug2:
+                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                        if this_is_debug_device:
+                            self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                        accessory = self.device_list_internal[checkindex]["accessory"]
+
+                        currentDoorState = (0, 1, 2, 3, 0, 2)[newstate]
+                        accessory.char_current_state.set_value(currentDoorState)
+
+                        # TargetDoorState must be 0 -> open or 1 -> closed
+                        targetDoorState = (0, 1, 0, 1, 0, 0)[newstate]
+                        accessory.char_target_state.set_value(targetDoorState)
+
+                        # ObstructionDetected must be 0 -> False or 1 -> True
+                        obstructionDetected = (None, 0, None, None, 1, 1)[newstate]
+                        if obstructionDetected is not None:
+                            accessory.char_obstruction_detected.set_value(obstructionDetected)
+
+                    break
+            return
+
+        elif str(updateddevice_subtype) == "AirQualitySensor":
+            accessory = self.device_list_internal[checkindex]["accessory"]
+            accessory.update(self.air_quality_readings(updated_device))
+            if "batteryLevel" in updated_device.states and getattr(accessory, "_char_battery", None):
+                if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
+                    batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
+                    if batteryLevel is not None:
+                        accessory._char_battery.set_value(batteryLevel)
+                        accessory._char_low_battery.set_value(1 if batteryLevel < self.low_battery_threshold else 0)
+            return
+        elif str(updateddevice_subtype) == "HeaterCooler":
+            self.device_list_internal[checkindex]["accessory"].update(self.heater_cooler_values(updated_device))
+            return
+        elif str(updateddevice_subtype) in ("Vacuum", "LawnMower"):
+            running = self._robot_running(updated_device)
+            if running != self._robot_running(original_device):
+                if self.debug2:
+                    self.logger.debug(f"{updated_device.name}: {updateddevice_subtype} running is now {running}")
+                self.device_list_internal[checkindex]["accessory"].char_on.set_value(running)
+            return
+        elif str(updateddevice_subtype) in ("Valve","Irrigation","Showerhead","Faucet"):
+            # if type(original_device) == indigo.RelayDevice:
+            if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                newstate = updated_device.states["onOffState"]
+                currentstate = 1 if newstate == True else 0
+                if self.debug2:
+                    self.logger.debug(f"{updateddevice_subtype} Subtype NewState of Device:{updated_device.name} & State: {newstate} & new State {currentstate}")
+                self.device_list_internal[checkindex]["accessory"].set_valve_state(currentstate)
+                return
+        # Check Doorbell prior to Camera..
+        elif str(updateddevice_subtype) == "Linked-DoorBell":
+            # if type(original_device) == indigo.RelayDevice:
+            if "onOffState" in updated_device.states:  ## double check Linked Doorbell are set only to have onOffStates
+                if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                    newstate = updated_device.onState
+                    if self.debug2:
+                        self.logger.debug("OnOffState Changed...and New State {}".format(newstate))
+                    if self.debug2:
+                        self.logger.debug("OnOffState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                    ## Trigger doorbell if state change, rather than just On.if newstate:  ##
+                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
+                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
+            # if Doorbell nothing further to do... return regardless
+            return
+
+        elif str(updateddevice_subtype) == "BlueIrisCamera":  #update
+            # if type(original_device) == indigo.RelayDevice:
+            motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
+            if motionEnabled:
+                if updated_device.states['Motion'] != original_device.states['Motion']:
+                    newstate = updated_device.states["Motion"]
+                    if self.debug2:
+                        self.logger.debug("Motion Changed...and New State {}".format(newstate))
+                    if self.debug2:
+                        self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                    self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
+                    return
+
+        elif str(updateddevice_subtype) == "UniFiProtectCamera":
+            accessory = self.device_list_internal[checkindex]["accessory"]
+            if HKDevicesCameraUniFi.doorbell_rang(original_device, updated_device) and getattr(accessory, "_char_doorbell_detected", None) is not None:
+                self.logger.info("[{}] UniFi doorbell ring sent to HomeKit".format(updated_device.name))
+                accessory._char_doorbell_detected.set_value(0)
+                accessory._char_doorbell_detected_switch.set_value(0)
+            if updated_device.pluginProps.get("HomeKit_motionEnabled", True):
+                newstate = HKDevicesCameraUniFi.motion_active(updated_device)
+                if newstate != HKDevicesCameraUniFi.motion_active(original_device):
+                    if self.debug2:
+                        self.logger.debug("UniFi Motion Changed: {} {}".format(updated_device.name, newstate))
+                    accessory.char_motion_detected.set_value(newstate)
+            return
+
+        elif str(updateddevice_subtype) == "SecuritySpyCamera":
+            # if type(original_device) == indigo.RelayDevice:
+
+            motionEnabled = updated_device.pluginProps.get("HomeKit_motionEnabled", True)
+            if self.debug2:
+                self.logger.debug(f"Within the SecuritySpyCamera Motion Check. {motionEnabled=}")
+
+            if motionEnabled:
+                if 'event_on' in updated_device.states:  ## Other plugin doesnt have it
+                    if updated_device.states['event_on'] != original_device.states['event_on']:
+                        newstate = updated_device.states["event_on"]
+                        if self.debug2:
+                            self.logger.debug("Motion Changed...and New State {}".format(newstate))
+                        if self.debug2:
+                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                        self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
+                        return
+
+        elif str(updateddevice_subtype) == "Fan":
+            ## Fan device has a brightnessLevel below, likely dimmer update Rotation speed with that.
+            ## Onoff will be active at bottom as well
+            if "brightnessLevel" in updated_device.states:
+                if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
+                    brightness = updated_device.states["brightnessLevel"]
+                    if self.debug2:
+                        self.logger.debug("This is a Fan: But found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
+                    if isinstance(brightness, int):
+                        self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(brightness)
+            elif type(updated_device) == indigo.SpeedControlDevice:
+                ## Speed control device update speedLevel hope rest follows... hard to test
+                ## strange device, hard to test
+                ## update speed index to that set by Homekit 0-100 fits
+                if updated_device.speedLevel != original_device.speedLevel:
+                    speedLevel = updated_device.speedLevel
+                    if self.debug2:
+                        self.logger.debug("This is a Fan (HK) & SpeedControlDevice (indigo) found a speedLevel state try using that:  speedLevel: {}".format(speedLevel))
+                    if isinstance(speedLevel, int):
+                        self.device_list_internal[checkindex]["accessory"].char_rotation_speed.set_value(speedLevel)
+
+        elif str(updateddevice_subtype) in ("Blind", "Window", "Door"):
+            if "brightnessLevel" in updated_device.states:
+                if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
+                    brightness = updated_device.states["brightnessLevel"]
+                    if self.debug2:
+                        self.logger.debug("Blind/Window: Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
+                    if isinstance(brightness, int):
+                        self.device_list_internal[checkindex]["accessory"].set_covering_state(brightness, None)
+            elif "onOffState" in updated_device.states:
+                ## use brightness and calculate onOff first, if no brightness because of device - use on off and 100/0
+                ## Inverse can be actioned at the accessory level
+                if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                    newstate = updated_device.states["onOffState"]
+                    if self.debug2:
+                        self.logger.debug("Blind/Window: Defaulting to onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                    self.device_list_internal[checkindex]["accessory"].set_covering_state(None, updated_device.states["onOffState"])
+
+        if str(updateddevice_subtype) in ("HueLightBulb", "LightBulb", "ColorTempLightBulb"):
+            if "brightnessLevel" in updated_device.states:
+                if updated_device.states['brightnessLevel'] != original_device.states['brightnessLevel']:
+                    brightness = updated_device.states["brightnessLevel"]
+                    if self.debug2:
+                        self.logger.debug("Found a brightnessLevel state try using that:  ValuetoSet: {}".format(brightness))
+                    if isinstance(brightness, int):
+                        self.device_list_internal[checkindex]["accessory"].Brightness.set_value(brightness)
+                        self.device_list_internal[checkindex]["accessory"].HomeKitBrightnessLevel = brightness
+
+        if str(updateddevice_subtype) in ( "HueLightBulb", "ColorTempLightBulb"):
+            # remove specific hue stuff, huelevel wrong and better to go one lower to indigo dimmer
+            if 'redLevel' in updated_device.states:  # and 'hue' not in updated_device.states:  ### if Hue - set with hue as above, if no hue use RGB here...  done- could move to RGB for all given HueLights...
+                ##   use redLevel as check for all if has redLevel, will have greenLevel & blueLevel no need to check for all
+                if updated_device.supportsRGB:  # has to otherwise wouldnt be huelightbulb - except for User Forcing - keep check
+                    if updated_device.states['redLevel'] != original_device.states["redLevel"] or updated_device.states['blueLevel'] != original_device.states["blueLevel"] or updated_device.states['greenLevel'] != original_device.states["greenLevel"]:
+                        ## check any updated, don't worry about state/brighgtess other changes
+                        red = updated_device.states['redLevel']
+                        green = updated_device.states['greenLevel']
+                        blue = updated_device.states['blueLevel']
+                        hsvReturned = colorsys.rgb_to_hsv(red / 100, green / 100, blue / 100)
+                        # rgbReturned = colorsys.hsv_to_rgb(huetoSet / 360.0, saturationtoSet / 100.0, 1)
+                        if self.debug2:
+                            self.logger.debug("Found updated Red/Green/Blue Level & Converted/Returned HSV data: {}".format(hsvReturned))
+                        if len(hsvReturned) >= 1:
+                            self.device_list_internal[checkindex]["accessory"].Hue.set_value(hsvReturned[0] * 360)
+                            self.device_list_internal[checkindex]["accessory"].Saturation.set_value(hsvReturned[1] * 100)
+                    elif "whiteTemperature" in updated_device.states:
+                        if updated_device.supportsWhiteTemperature:
+                        ## add check for whiteTemp supported - although won't be picked up by Hue...
+                            if updated_device.states["whiteTemperature"] != original_device.states["whiteTemperature"]:
+                                ## colortemp changed.
+                                mired = HKutils.color_temperature_kelvin_to_mired(updated_device.states["whiteTemperature"])
+                                if self.debug2:
+                                    self.logger.debug("Found WhiteTemp Changed, converting to mired == {}".format(mired))
+                                hue, saturation = HKutils.color_temperature_to_hs(HKutils.color_temperature_mired_to_kelvin(mired))
+                                self.device_list_internal[checkindex]["accessory"].Hue.set_value(round(hue, 0))
+                                self.device_list_internal[checkindex]["accessory"].Saturation.set_value(round(saturation, 0))
+                                ## check for device state change in colorMode - below checks hue ?
+                                ## Not sure others - if not present will delay inteface update
+                                self.device_list_internal[checkindex]["accessory"].char_color_temp.set_value(round(mired, 0))
+                    ## if huebulb and colorMode change notify
+                    if "colorMode" in updated_device.states:
+                        if updated_device.supportsWhiteTemperature and updated_device.supportsRGB:
+                            if updated_device.states["colorMode"] != original_device.states["colorMode"]:
+                                ## there has been a change in color mode
+                                ## should update
+                                if self.debug2:
+                                    self.logger.debug("ColorMode has changed sending Notify to Hue,Sat, and ColorTemp.  New Mode {}".format(updated_device.states["colorMode"]))
+                                self.device_list_internal[checkindex]["accessory"].Hue.notify()
+                                self.device_list_internal[checkindex]["accessory"].Saturation.notify()
+                                self.device_list_internal[checkindex]["accessory"].char_color_temp.notify()
+
+        if "onOffState" in updated_device.states and str(updateddevice_subtype) not in ("Blind", "Window","Door","TemperatureSensor", "HumiditySensor", "LightSensor"):   ## work around to remnove this TODO
+            if updated_device.states['onOffState'] != original_device.states['onOffState']:
+                newstate = updated_device.states["onOffState"]
+                if self.debug2:
+                    self.logger.debug("onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                if this_is_debug_device:
+                    self.logger.warning("onOffState Check: NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
+                self.device_list_internal[checkindex]["accessory"].char_on.set_value(newstate)
 
     ## TODO consider move to Que model and thread setter out
     def Plugin_setter_callback(self, accessoryself, statetoReturn, valuetoSet):
@@ -3531,7 +3526,7 @@ class Plugin(indigo.PluginBase):
                 ## now where is that saved device info gone...
                 ## should remain in internal device list, iter that and pull the Sensor state using...
                 ## Can use this for every sensor -- will need to check for correct values otherwise HK == crash
-                checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == indigodevice.id), None)
+                checkindex = self._own_index(indigodevice.id)
                 if checkindex != None:
                     sensortouse = self.device_list_internal[checkindex]["devicesensor"]
                 else:
@@ -3810,7 +3805,7 @@ class Plugin(indigo.PluginBase):
             if self.debug4:
                 self.logger.debug("Initial at Start: Setting up Accessory {}".format(accessoryself.indigodeviceid))
 
-            check = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == accessoryself.indigodeviceid), None)
+            check = self._own_index(accessoryself.indigodeviceid)
             # check=  next((item for item in self.device_list_internalif item["deviceid"] == ), False)
             if check != None:
                 # self.logger.info("Found Key= {}".format(check))
@@ -3831,7 +3826,9 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug("Found Doorbell Service {}".format(accessoryself))
                     if accessoryself.doorbellID != None and int(accessoryself.doorbellID) != accessoryself.indigodeviceid:  ## UniFi doorbell is the camera itself
                         self.logger.debug("Found DoorBell ID in Accessory. = {} \nSearching self.device_list_internal for it..".format(accessoryself.doorbellID))
-                        doorbell_ID_Found = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == int(accessoryself.doorbellID)), None)
+                        doorbell_ID_Found = next((i for i, item in enumerate(self.device_list_internal)   ## this camera's own linked entry
+                                                  if item["deviceid"] == int(accessoryself.doorbellID) and item["subtype"] == self.LINKED_DOORBELL
+                                                  and item.get("linkedcamera") == accessoryself.indigodeviceid), None)
                         if doorbell_ID_Found != None:
                             self.logger.debug(f"Check DoorBell Found: id: {accessoryself.doorbellID}")
                             self.device_list_internal[doorbell_ID_Found]["accessory"] = accessoryself
@@ -4093,6 +4090,17 @@ class Plugin(indigo.PluginBase):
             self.logger.debug("all_options Menuchanged: returning valuesDict")
         return valuesDict
 
+    LINKED_DOORBELL = "Linked-DoorBell"
+
+    def _own_index(self, devid):
+        """The device's own entry in the internal list (not a doorbell entry linked to a camera), or None."""
+        return next((i for i, item in enumerate(self.device_list_internal)
+                     if item["deviceid"] == devid and item["subtype"] != self.LINKED_DOORBELL), None)
+
+    def _sync_internal_ids(self):
+        """device_list_internal_idonly always lists the ids that have at least one internal entry."""
+        self.device_list_internal_idonly = [item["deviceid"] for item in self.device_list_internal]
+
     def subtype_callback(self, valuesDict, *args, **kwargs):  # typeId, devId):
         if self.debug8:
             self.logger.debug("Subtype callback: returning valuesDict \n {}".format(valuesDict))
@@ -4163,7 +4171,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.info("Selected Device not in internal HomeKitLinkSiri database.  ? Selected device no longer active, enabled, or running")
                 return
 
-            checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == int(deviceId)), None)
+            checkindex = self._own_index(int(deviceId))
 
             if checkindex != None:
                 homekit_name = self.device_list_internal[checkindex]["devicename"]
@@ -4868,12 +4876,11 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_hcZoneOf"] = ""
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
-                    checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
+                    checkindex = self._own_index(device.id)   ## only its own entry: a camera may still use it as its doorbell
                     if checkindex != None:
                         self.logger.info("Deleting item:{}".format(self.device_list_internal[checkindex]))
                         del self.device_list_internal[checkindex]
-                        if device.id in self.device_list_internal_idonly:
-                            self.device_list_internal_idonly.remove(device.id)
+                        self._sync_internal_ids()
                     self.logger.info("Given just unpublished device to HomeKit, Bridge will need to be restarted for changes to take effect")
                 except:
                     self.logger.debug("device_list remove error, Exception\n", exc_info=True)

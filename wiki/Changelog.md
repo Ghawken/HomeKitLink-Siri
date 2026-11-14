@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.33 — 2026-11-15
+
+### 🔔 Linked doorbells
+- A device used as a camera's **DoorBell Linked** that is also published itself (e.g. as a switch or sensor) now updates both: the camera rings **and** its own tile changes. Before, only one of them worked, and the device's own tile could be attached to the camera instead
+- One doorbell linked to **several cameras** now rings all of them (before, only the first)
+- Restarting a bridge no longer leaves old linked-doorbell entries behind, and a doorbell that's also published keeps its own tile after a bridge restart
+- Each device's update is handled on its own, so a problem updating one entry no longer stops the others
+
+---
+
 ## 0.8.32 — 2026-11-15
 
 ### 🌫️ Air quality sensors
