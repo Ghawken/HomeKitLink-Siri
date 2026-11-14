@@ -53,7 +53,8 @@ REASON_INVALID_CONFIGURATION = 9
 # Copy limits
 COPY_MAX_WIDTH, COPY_MAX_HEIGHT = 1920, 1080
 COPY_MAX_LEVEL = 42
-COPY_MAX_GOP_SECONDS = 4.0
+COPY_MAX_GOP_SECONDS = 4.0      # typical (median) keyframe gap
+COPY_MAX_GOP_PEAK_SECONDS = 8.0 # longest single gap (BlueIris streams vary)
 COPY_MAX_FPS = 30.5
 BAD_PROFILES = ("High 10", "High 4:2:2", "High 4:4:4 Predictive", "High 10 Intra", "High 4:2:2 Intra")
 
@@ -137,36 +138,53 @@ def probe_stream(ffprobe, url, timeout=PROBE_TIMEOUT):
                 level=int(video.get("level") or 0), pix_fmt=video.get("pix_fmt", "?"), gop_s=None,
                 audio_codec=audio.get("codec_name") if audio else None,
                 audio_rate=int(audio.get("sample_rate") or 0) if audio else 0)
-    # Keyframe interval from a few seconds of packets
-    try:
-        res = subprocess.run([ffprobe, *_rtsp_args(url), "-v", "error", "-select_streams", "v:0",
-                              "-show_entries", "packet=pts_time,flags", "-of", "csv=p=0",
-                              "-read_intervals", "%+9", "-i", url], capture_output=True, timeout=timeout)
+    # Keyframe interval from a few seconds of packets (retried once: a short read
+    # can catch only one keyframe, and BlueIris leaves the first one's pts unset)
+    for _attempt in range(2):
+        try:
+            res = subprocess.run([ffprobe, *_rtsp_args(url), "-v", "error", "-select_streams", "v:0",
+                                  "-show_entries", "packet=pts_time,dts_time,flags", "-of", "csv=p=0",
+                                  "-read_intervals", "%+14", "-i", url], capture_output=True, timeout=timeout + 5)
+        except subprocess.TimeoutExpired:
+            continue
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("keyframe probe failed", exc_info=True)
+            continue
         times, all_times = [], []
         for line in res.stdout.decode(errors="replace").splitlines():
             parts = [p.strip() for p in line.split(",")]
-            if len(parts) < 2:
+            if len(parts) < 3:
                 continue
-            try:
-                t = float(parts[0])
-            except ValueError:
+            t = None
+            for value in parts[:2]:          # pts_time, else dts_time
+                try:
+                    t = float(value)
+                    break
+                except ValueError:
+                    continue
+            if t is None:
                 continue
             all_times.append(t)
-            if "K" in parts[1]:
+            if "K" in parts[2]:
                 times.append(t)
-        if len(times) >= 2:
-            gaps = [b - a for a, b in zip(times, times[1:])]
-            info["gop_s"] = round(max(gaps), 1)
-        elif all_times and max(all_times) - min(all_times) > 5:
-            info["gop_long"] = True       # fewer than two keyframes in the packets read
         # The stream's declared frame rate isn't reliable (BlueIris); measure it
         if len(all_times) > 10 and max(all_times) > min(all_times):
             info["fps"] = round((len(all_times) - 1) / (max(all_times) - min(all_times)), 1)
-    except subprocess.TimeoutExpired:
-        pass
-    except Exception:  # noqa: BLE001
-        _LOGGER.debug("keyframe probe failed", exc_info=True)
+        if len(times) >= 2:
+            gaps = sorted(b - a for a, b in zip(times, times[1:]))
+            info["gop_s"] = round(gaps[len(gaps) // 2], 1)      # typical gap
+            info["gop_max"] = round(gaps[-1], 1)
+            info.pop("gop_long", None)
+            break
+        if all_times and max(all_times) - min(all_times) > 8:
+            info["gop_long"] = True       # fewer than two keyframes in 8+ s of video
     return info
+
+
+def _gop_text(p):
+    if p.get("gop_max") and p["gop_max"] > p["gop_s"]:
+        return "{}-{}".format(p["gop_s"], p["gop_max"])
+    return str(p["gop_s"])
 
 
 def copy_check(p):
@@ -186,12 +204,14 @@ def copy_check(p):
     if p["fps"] > COPY_MAX_FPS:
         return False, "{} fps is above 30".format(p["fps"])
     if p["gop_s"] is None:
-        return False, ("keyframes more than 5 s apart" if p.get("gop_long")
+        return False, ("keyframes more than 8 s apart" if p.get("gop_long")
                        else "keyframe interval couldn't be measured")
     if p["gop_s"] > COPY_MAX_GOP_SECONDS:
         return False, "keyframe every {} s (needs 4 s or less)".format(p["gop_s"])
+    if p.get("gop_max", 0) > COPY_MAX_GOP_PEAK_SECONDS:
+        return False, "keyframes up to {} s apart (needs 8 s or less)".format(p["gop_max"])
     return True, "H.264 {} {:.1f}, {}x{} @ {} fps, keyframe every {} s".format(
-        p["profile"], p["level"] / 10, p["width"], p["height"], p["fps"], p["gop_s"])
+        p["profile"], p["level"] / 10, p["width"], p["height"], p["fps"], _gop_text(p))
 
 
 def describe_probe(label, p):
@@ -201,7 +221,7 @@ def describe_probe(label, p):
     audio = "{} {} Hz".format(p["audio_codec"], p["audio_rate"]) if p.get("audio_codec") else "no audio"
     return "{}: {} {}x{} @ {} fps, {} {:.1f}, keyframe {} - {}".format(
         label, p["codec"], p["width"], p["height"], p["fps"], p["profile"], p["level"] / 10,
-        "every {} s".format(p["gop_s"]) if p["gop_s"] is not None else ("over 5 s" if p.get("gop_long") else "unknown"),
+        "every {} s".format(_gop_text(p)) if p["gop_s"] is not None else ("over 8 s" if p.get("gop_long") else "unknown"),
         "copy OK" if ok else "can't copy: " + why) + ", " + audio
 
 
@@ -272,7 +292,7 @@ class Prebuffer:
         self.on_event = on_event or (lambda kind, detail=None: None)
         self.init_segment = None
         self.generation = 0            # bumps on each ffmpeg start; recordings can't span two
-        self.groups = collections.deque()   # (start, end, generation, bytes)
+        self.groups = collections.deque()   # keyframe fragments: (start, end, generation, bytes)
         self._pending = []
         self._pending_start = None
         self.subscribers = set()
@@ -388,33 +408,38 @@ class Prebuffer:
                 frag.append(box)
 
     def _add_fragment(self, data):
-        """Group keyframe fragments up to the hub's fragment length."""
+        """Keep each keyframe fragment for the prebuffer, and group live ones up to
+        the hub's fragment length for recordings in progress."""
         now = time.monotonic()
-        if self._pending_start is None:
-            # The first fragment's own length isn't known; count it as one fragment's worth
-            self._pending_start = now - self.fragment_s
-            self.groups_started = now
-        self._pending.append(data)
-        if now - self._pending_start >= self.fragment_s * 0.9 or sum(map(len, self._pending)) > 8 << 20:
-            self._flush(now)
-
-    def _flush(self, now=None):
-        if not self._pending:
-            return
-        now = now or time.monotonic()
-        group = (self._pending_start, now, self.generation, b"".join(self._pending))
-        self._pending, self._pending_start = [], now
-        self.groups.append(group)
+        last_end = self.groups[-1][1] if self.groups else None
+        # A fragment ends when the next keyframe arrives; the first one's length isn't known
+        start = last_end if last_end is not None else now - self.fragment_s
+        frag = (start, now, self.generation, data)
+        self.groups.append(frag)
         while self.groups and self.groups[0][1] < now - self.keep_s:
             self.groups.popleft()
-        for q in list(self.subscribers):
-            q.put_nowait(group)
+        if self._pending_start is None:
+            self._pending_start = start
+        self._pending.append(data)
+        if now - self._pending_start >= self.fragment_s * 0.9 or sum(map(len, self._pending)) > 8 << 20:
+            group = (self._pending_start, now, self.generation, b"".join(self._pending))
+            self._pending, self._pending_start = [], None
+            for q in list(self.subscribers):
+                q.put_nowait(group)
 
     def prebuffered(self, seconds):
-        """Groups covering the last `seconds`, including what's still being grouped."""
-        self._flush()
-        now = time.monotonic()
-        return [g for g in self.groups if g[1] >= now - seconds]
+        """The newest fragments covering at least `seconds`, as one group. Live groups
+        then start after them, so nothing is sent twice."""
+        picked, total = [], 0.0
+        for frag in reversed(self.groups):
+            picked.insert(0, frag)
+            total += frag[1] - frag[0]
+            if total >= seconds:
+                break
+        self._pending, self._pending_start = [], None
+        if not picked:
+            return None
+        return (picked[0][0], picked[-1][1], picked[-1][2], b"".join(f[3] for f in picked))
 
     def buffered_seconds(self):
         if not self.groups:
@@ -498,13 +523,13 @@ class RecordingSession:
             await self.conn.drain()
             seq = 1
             await self._send(pb.init_segment, True, seq, False)
-            pre = pb.prebuffered(r.prebuffer_s + 0.5)
-            for g in pre:
+            pre = pb.prebuffered(r.prebuffer_s)
+            if pre is not None:
                 seq += 1
-                await self._send(g[3], False, seq, False)
+                await self._send(pre[3], False, seq, False)
                 sent += 1
             _LOGGER.info("[%s] HKSV: recording to hub %s (%.1f s of prebuffer)", name,
-                         self.conn.peer[0] if self.conn.peer else "?", sum(g[1] - g[0] for g in pre))
+                         self.conn.peer[0] if self.conn.peer else "?", (pre[1] - pre[0]) if pre else 0.0)
             r.recording_started(self)
             clear_since = None
             last = False

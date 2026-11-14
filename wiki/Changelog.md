@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.23 — 2026-11-14
+
+### 🎥 HomeKit Secure Video — fixes from the first real recordings
+- A recording's pre-roll is now just the newest few seconds HomeKit asks for (it could be 13 s), and the start of the live video can no longer be sent twice
+- Stream check: the keyframe interval is measured over a longer stretch and retried, and copy is judged on the typical gap (4 s or less, none over 8 s). BlueIris streams whose frame rate varies are reported with their range, e.g. "keyframe every 3.3-6.8 s"
+
+---
+
 ## 0.8.22 — 2026-11-14
 
 ### 🎥 HomeKit Secure Video — recording

@@ -247,7 +247,7 @@ At bridge start the Recorder checks each of the camera's streams (BlueIris strea
 ```
 A stream is **copied** (no re-encoding, about 1–2 % CPU) when it is H.264, at most 1920×1080 and level 4.2, at most 30 fps, with a keyframe at least every 4 seconds. Otherwise the best stream is **re-encoded** to the format the hub chose, with VideoToolbox by default (measured 6–10 % CPU and ~150 MB for 1080p). Audio is always converted to AAC-LC, which costs very little.
 
-> To let a BlueIris camera be copied, give one of its streams (often stream 0) a size of 1920×1080 or less and a keyframe interval of 4 s or less.
+> To let a BlueIris camera be copied, give one of its streams (often stream 0) a size of 1920×1080 or less, a **fixed** frame rate (e.g. 15 fps) and a keyframe interval of 4 s or less. A stream whose frame rate drops (e.g. at night) also stretches the time between keyframes, so it may copy at one bridge start and re-encode at the next.
 
 ### The Recorder device
 | Setting | |
