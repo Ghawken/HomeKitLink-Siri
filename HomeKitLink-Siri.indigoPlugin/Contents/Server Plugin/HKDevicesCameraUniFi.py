@@ -42,19 +42,25 @@ _LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 
 UNIFI_DUROSITY_ID = "com.durosity.indigoplugin.unifi"
 UNIFI_KW123_ID = "com.karlwachs.uniFiAP"
+UNIFI_PACKAGE_TYPE = "protectPackageCamera"   ## Durosity: a G4 Doorbell Pro / G6 Entry's second (package) lens
 UNIFI_CAMERA_TYPES = {
-    UNIFI_DUROSITY_ID: ("protectCamera",),
+    UNIFI_DUROSITY_ID: ("protectCamera", UNIFI_PACKAGE_TYPE),
     UNIFI_KW123_ID: ("camera_protect",),
 }
 
 ## Durosity: True while that detection is active
 DUROSITY_MOTION_STATES = ("motionDetected", "personDetected", "vehicleDetected")
+DUROSITY_PACKAGE_MOTION_STATES = ("packageDetected", "motionDetected", "personDetected")
 ## kw123: "status" is "CONNECTED" when idle, else the event type(s), comma separated
 KW123_MOTION_EVENTS = {"motion", "event", "person", "vehicle", "animal", "package", "face", "licenseplate", "smartdetect"}
 
 
 def is_unifi_camera(dev):
     return dev.deviceTypeId in UNIFI_CAMERA_TYPES.get(dev.pluginId, ())
+
+
+def is_package_camera(dev):
+    return dev.pluginId == UNIFI_DUROSITY_ID and dev.deviceTypeId == UNIFI_PACKAGE_TYPE
 
 
 def _state(dev, key):
@@ -69,7 +75,9 @@ def stream_urls(dev):
     A "Stream URL" pasted into the HomeKitLink device config overrides High (kw123 cameras have no
     stream URL states, so it is the only source there)."""
     urls = {"high": "", "medium": "", "low": ""}
-    if dev.pluginId == UNIFI_DUROSITY_ID:
+    if is_package_camera(dev):
+        urls["high"] = str(_state(dev, "rtspUrlPackage") or "").strip()   ## the package lens has one stream
+    elif dev.pluginId == UNIFI_DUROSITY_ID:
         urls["high"] = str(_state(dev, "rtspUrlHigh") or "").strip()
         urls["medium"] = str(_state(dev, "rtspUrlMedium") or "").strip()
         urls["low"] = str(_state(dev, "rtspUrlLow") or "").strip()
@@ -96,10 +104,16 @@ def camera_model(dev):
 
 
 def is_doorbell(dev):
-    return "doorbell" in camera_model(dev).lower()
+    """A doorbell by model, or ticked "Treat as doorbell" in its HomeKitLink settings.
+    Never the package lens (the main lens is the doorbell)."""
+    if is_package_camera(dev):
+        return False
+    return "doorbell" in camera_model(dev).lower() or bool(dev.pluginProps.get("HomeKit_unifiDoorbell", False))
 
 
 def motion_active(dev):
+    if is_package_camera(dev):
+        return any(bool(_state(dev, key)) for key in DUROSITY_PACKAGE_MOTION_STATES)
     if dev.pluginId == UNIFI_DUROSITY_ID:
         return any(bool(_state(dev, key)) for key in DUROSITY_MOTION_STATES)
     status = str(_state(dev, "status") or "").lower().replace(" ", "")
@@ -118,7 +132,7 @@ def talkback_info(dev):
     """What the audio proxy needs to open a Protect talkback session (two-way audio):
     console host:port, Protect camera id and API key.  Durosity UniFi plugin only (uniFiAP
     keeps its credentials private).  Returns None if anything is missing."""
-    if dev.pluginId != UNIFI_DUROSITY_ID:
+    if dev.pluginId != UNIFI_DUROSITY_ID or is_package_camera(dev):
         return None
     camera_id = str(dev.ownerProps.get("cameraId", "") or "").strip()
     controller_id = int(dev.ownerProps.get("controllerId", 0) or 0)
@@ -140,7 +154,9 @@ def get_camera_options(plugin, dev):
     """HomeKitLink camera config for a UniFi Protect camera device, or None."""
     urls = stream_urls(dev)
     if not urls["high"]:
-        if dev.pluginId == UNIFI_DUROSITY_ID:
+        if is_package_camera(dev):
+            fix = "run the UniFi plugin action 'Enable RTSP Streaming' for the doorbell so its package lens has an rtspUrlPackage"
+        elif dev.pluginId == UNIFI_DUROSITY_ID:
             fix = "run the UniFi plugin action 'Enable RTSP Streaming' for this camera (High and Low)"
         else:
             fix = "enable RTSP for this camera in Protect (Settings > Advanced) and paste its URL into 'Stream URL' in this device's HomeKitLink settings"
@@ -165,6 +181,14 @@ def get_camera_options(plugin, dev):
         "unifi_urls": urls,
         "unifi_low_url": urls["low"] if urls["low"] != urls["high"] else "",
     }
+    if is_package_camera(dev):
+        config["UP_package"] = True
+    ## Portrait cameras (some doorbells): offer HomeKit portrait sizes, from the size the
+    ## startup stream check saw last time. Landscape cameras keep the standard sizes.
+    portrait = portrait_resolutions(dev.pluginProps.get("HomeKit_unifiStreamSize", ""))
+    if portrait:
+        config["custom_resolutions"] = portrait
+        config[CONF_MAX_WIDTH], config[CONF_MAX_HEIGHT] = portrait[0][0], portrait[0][1]
     if is_doorbell(dev):
         config["DoorBell_ID"] = dev.id  ## the camera is its own doorbell
     else:
@@ -175,7 +199,9 @@ def get_camera_options(plugin, dev):
     ## Two-way audio (talk) - opt-in per camera
     two_way = "no"
     if dev.pluginProps.get("HomeKit_unifiTwoWay", False):
-        if dev.pluginId != UNIFI_DUROSITY_ID:
+        if is_package_camera(dev):
+            plugin.logger.warning("[{}] Two-way audio isn't available on a package lens - use the doorbell's main camera.".format(dev.name))
+        elif dev.pluginId != UNIFI_DUROSITY_ID:
             plugin.logger.warning("[{}] Two-way audio needs the UniFi plugin (Durosity) - not available for uniFiAP cameras.".format(dev.name))
         elif not config[CONF_SUPPORT_AUDIO]:
             plugin.logger.warning("[{}] Two-way audio needs Support Audio turned on for this camera.".format(dev.name))
@@ -186,13 +212,50 @@ def get_camera_options(plugin, dev):
             config["speaker_service"] = True  ## HomeKit shows the talk button when the camera has a Speaker
             two_way = "yes"
     yes_no = lambda v: "yes" if v else "no"
-    plugin.logger.info("[{}] UniFi Protect camera ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}, two-way {}".format(
-        dev.name, "UniFi plugin" if dev.pluginId == UNIFI_DUROSITY_ID else "uniFiAP plugin", camera_model(dev) or "model unknown",
+    plugin.logger.info("[{}] UniFi Protect {} ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}, two-way {}{}".format(
+        dev.name, "package camera" if is_package_camera(dev) else "camera",
+        "UniFi plugin" if dev.pluginId == UNIFI_DUROSITY_ID else "uniFiAP plugin", camera_model(dev) or "model unknown",
         yes_no(urls["high"]), yes_no(urls["medium"]), yes_no(urls["low"]),
         yes_no(dev.pluginProps.get("HomeKit_unifiStreamURL")),
         "built in" if is_doorbell(dev) else ("linked" if "DoorBell_ID" in config else "no"),
-        yes_no(dev.pluginProps.get("HomeKit_motionEnabled", True)), yes_no(config[CONF_SUPPORT_AUDIO]), two_way))
+        yes_no(dev.pluginProps.get("HomeKit_motionEnabled", True)), yes_no(config[CONF_SUPPORT_AUDIO]), two_way,
+        ", portrait {}x{}".format(*portrait[0]) if portrait else ""))
     return config
+
+
+def portrait_resolutions(size_text):
+    """HomeKit sizes for a portrait stream "WxH" (taller than wide), largest first, or [].
+    Each keeps the stream's shape, with even sizes, up to 1080 wide."""
+    try:
+        w, h = (int(v) for v in str(size_text).lower().split("x"))
+    except (TypeError, ValueError):
+        return []
+    if w <= 0 or h <= w:
+        return []
+    out = []
+    for target_w in (1080, 720, 480, 360, 240):
+        tw = min(target_w, w)
+        th = int(round(h * tw / w / 2.0)) * 2
+        tw -= tw % 2
+        if (tw, th) not in out:
+            out.append((tw, th))
+    return out
+
+
+def remember_stream_size(dev, video):
+    """Save the stream size the startup check saw (used for portrait sizes at the next bridge start).
+    Returns True if it changed in a way that matters (portrait or not)."""
+    try:
+        size = "{}x{}".format(int(video["width"]), int(video["height"]))
+    except (KeyError, TypeError, ValueError):
+        return False
+    old = dev.pluginProps.get("HomeKit_unifiStreamSize", "")
+    if old == size:
+        return False
+    props = dev.pluginProps
+    props["HomeKit_unifiStreamSize"] = size
+    dev.replacePluginPropsOnServer(props)
+    return bool(portrait_resolutions(old)) != bool(portrait_resolutions(size))
 
 
 def choose_home_stream(cam, log):
@@ -218,6 +281,8 @@ def fetch_snapshot(plugin, camera, path, width, session):
         ok, why = _fetch_snapshot(plugin, camera, path, width, session)
     except Exception as e:
         ok, why = False, mask_url(e)
+    if not ok and why == _PACKAGE_NOT_READY:
+        return False      ## the first background grab is still running
     if ok != camera.get("_snapshot_ok"):
         if ok:
             plugin.logger.info("[{}] UniFi snapshots working".format(camera.get("cameraName")))
@@ -227,8 +292,46 @@ def fetch_snapshot(plugin, camera, path, width, session):
     return ok
 
 
+_package_grabs = set()   ## camera device ids with a frame grab running
+_PACKAGE_NOT_READY = "first package lens image not ready yet"
+
+
+def _package_snapshot(plugin, camera, path, width):
+    """Protect's snapshot API returns the main lens, so the package lens's snapshot is a frame
+    grabbed from its own stream - in a background thread, so the shared snapshot thread
+    never waits for it (up to 12 s). Returns the last grabbed image."""
+    import subprocess
+    import threading
+    dev_id = int(camera["UP_deviceId"])
+    if dev_id not in _package_grabs:
+        _package_grabs.add(dev_id)
+
+        def grab():
+            tmp = path + ".grab.jpg"
+            try:
+                width_px = max(320, min(int(width or 640), 1920))
+                r = subprocess.run([plugin.ffmpeg_command_line, "-hide_banner", "-loglevel", "error",
+                                    "-rtsp_transport", "tcp", "-i", camera.get(CONF_STREAM_SOURCE, ""),
+                                    "-frames:v", "1", "-vf", "scale={}:-2".format(width_px), "-q:v", "4",
+                                    "-y", "-f", "image2", tmp], capture_output=True, timeout=12)
+                if r.returncode == 0 and os.path.exists(tmp):
+                    os.replace(tmp, path)
+                else:
+                    camera["_package_error"] = mask_url((r.stderr or b"").decode(errors="replace").strip()[-160:]) or "no image"
+            except Exception as e:  # noqa: BLE001
+                camera["_package_error"] = mask_url(e)
+            finally:
+                _package_grabs.discard(dev_id)
+        threading.Thread(target=grab, daemon=True, name="HKLS-unifi-package-snap").start()
+    if os.path.exists(path):
+        return True, ""
+    return False, camera.get("_package_error") or _PACKAGE_NOT_READY
+
+
 def _fetch_snapshot(plugin, camera, path, width, session):
     dev = indigo.devices[int(camera["UP_deviceId"])]
+    if camera.get("UP_package"):
+        return _package_snapshot(plugin, camera, path, width)
     if dev.pluginId == UNIFI_DUROSITY_ID:
         url = _state(dev, "snapshotUrl")
         controller_id = int(dev.ownerProps.get("controllerId", 0) or 0)  ## ownerProps = the UniFi plugin's own props
@@ -284,6 +387,7 @@ class UniFiCamera(SecuritySpyCamera):
             _LOGGER.warning("[%s] Two-way audio: Protect details missing - talk is off for this stream", self.display_name)
             return None
         info["name"] = self.display_name
+        info["echo_suppress"] = bool(getattr(self.plugin, "talkEchoSuppress", True))
         _LOGGER.debug("[%s] Two-way audio enabled for this stream (console %s)", self.display_name, info["host"])
         return info
 

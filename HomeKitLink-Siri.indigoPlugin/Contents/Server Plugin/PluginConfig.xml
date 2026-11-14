@@ -151,6 +151,10 @@ We can't speed up requests, but we can slow them down if needed. Defaults to 30 
 This means the image can be kept updated on opening Home to whatever degree requested here.
         </Label>
     </Field>
+    <Field id="talkEchoSuppress" type="checkbox" defaultValue="true" tooltip="While you talk from the Home app, the camera's own audio is muted so you don't hear yourself back (like a walkie-talkie). The visitor's reply comes through as soon as you stop. UniFi two-way audio only.">
+        <Label/>
+        <Description>Two-way audio: mute the camera while you talk (reduces echo)</Description>
+    </Field>
     <Field id="separater24ab" type="separator" alwaysUseInDialogHeightCalc="true"/>
     <Field id="advanced" type="checkbox" tooltip="Enabling will show advanced options." alwaysUseInDialogHeightCalc="true">
         <Label>Use with care</Label>

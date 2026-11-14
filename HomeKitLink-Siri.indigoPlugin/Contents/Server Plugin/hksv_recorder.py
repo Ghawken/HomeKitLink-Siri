@@ -36,6 +36,7 @@ _LOGGER = logging.getLogger("Plugin.HomeKitSpawn.HKSV")
 MAX_CHUNK = 0x40000              # 256 KiB per dataSend packet (HAP-NodeJS)
 MAX_RECORDING_SECONDS = 300
 MIN_RECORDING_SECONDS = 10       # a doorbell press with little motion still gets a clip
+DOORBELL_EXTEND_SECONDS = 30     # a doorbell press keeps a recording going (a visitor standing still)
 RESTART_DELAY = 10
 USAGE_INTERVAL = 30
 PROBE_TIMEOUT = 15
@@ -545,7 +546,7 @@ class RecordingSession:
                     self._close_event(REASON_UNEXPECTED_FAILURE)
                     return
                 now = time.monotonic()
-                if r.motion_active():
+                if r.activity():
                     clear_since = None
                 elif clear_since is None:
                     clear_since = now
@@ -618,6 +619,18 @@ class Recorder:
         self.last_error = ""
         self._usage_task = None
         self._closed = False
+        self.doorbell_extends = True
+        self.last_doorbell = 0.0
+
+    def doorbell_pressed(self):
+        self.last_doorbell = time.monotonic()
+        _dbg("[%s] doorbell pressed", self.name)
+
+    def activity(self):
+        """Motion, or (if set) a doorbell press in the last 30 s, keeps a recording going."""
+        if self.motion_active():
+            return True
+        return self.doorbell_extends and time.monotonic() - self.last_doorbell < DOORBELL_EXTEND_SECONDS
 
     # ---------------------------------------------------------- stream check
     def start_probe(self):

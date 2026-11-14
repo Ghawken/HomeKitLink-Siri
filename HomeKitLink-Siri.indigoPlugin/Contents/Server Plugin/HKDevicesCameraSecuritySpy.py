@@ -189,6 +189,10 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             for w, h in RESOLUTIONS
             if w <= max_width and h <= max_height
         ]
+        ## A portrait camera (UniFi doorbells): offer its own shape, or HomeKit asks for
+        ## landscape video it never gets (PR #42)
+        if config.get("custom_resolutions"):
+            resolutions = [(w, h, max_fps) for w, h in config["custom_resolutions"]]
 
         video_options = {
             "codec": {

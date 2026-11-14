@@ -6,6 +6,18 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.25 — 2026-11-14
+
+### 📷 From PR #42 (thanks Durosity)
+- **UniFi package camera**: a G4 Doorbell Pro / G6 Entry's package lens (the UniFi plugin's *Protect Package Camera* device) can be published as its own HomeKit camera. Motion includes package detection; its snapshot is grabbed from its own stream in the background
+- **UniFi "Treat as a doorbell"** for models whose name doesn't say doorbell
+- **UniFi portrait cameras** are offered portrait sizes (from the stream size the startup check saw), so HomeKit doesn't ask for landscape video they never send
+- **HomeKit Secure Video**: a doorbell press keeps a recording going for 30 s (Recorder setting, on by default)
+- **Two-way audio**: muting the camera while you talk can now be turned off in the plugin Config
+- Not taken from the PR, for reasons in the PR review: the RTSP port 7447 rewrite, manual quality/size menus, renaming camera motion sensors, per-device new identities, hardware encoding for live view (VideoToolbox ignores HomeKit's remote bitrate limit) and a custom ffmpeg path. Virtual Doors & Windows waits for its companion plugin
+
+---
+
 ## 0.8.24 — 2026-11-14
 
 ### 🎥 HomeKit Secure Video

@@ -119,6 +119,13 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 			<Field id="unifiTwoWayLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
 				<Label>Talk from the Home app through doorbells and cameras with a speaker. UniFi plugin (Durosity) only; needs Support Audio on.</Label>
 			</Field>
+			<Field id="unifiDoorbell" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera" tooltip="Make this camera a HomeKit doorbell, rung by its own doorbell button.">
+				<Label/>
+				<Description>Treat as a doorbell</Description>
+			</Field>
+			<Field id="unifiDoorbellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
+				<Label>Cameras whose model contains "Doorbell" are doorbells already. Tick this for other models with a doorbell button. Restart the bridge after changing it.</Label>
+			</Field>
 			<Field id="unifiStreamURL" type="textfield" defaultValue="" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera">
 				<Label>Stream URL:</Label>
 			</Field>
@@ -245,6 +252,10 @@ Saving restarts the camera's bridge to add the recording services. Disabling thi
 			<Field id="hksvAllowCopy" type="checkbox" defaultValue="true">
 				<Label>Copy a suitable stream:</Label>
 				<Description>Record without re-encoding when a stream suits HomeKit</Description>
+			</Field>
+			<Field id="hksvDoorbellExtends" type="checkbox" defaultValue="true">
+				<Label>Doorbell presses:</Label>
+				<Description>Keep a recording going for 30 s after a press</Description>
 			</Field>
 			<Field id="hksvEncoder" type="menu" defaultValue="h264_videotoolbox">
 				<Label>When re-encoding, use:</Label>

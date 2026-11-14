@@ -121,6 +121,8 @@ UniFi Protect cameras and doorbells are published from the cameras another Indig
 | Motion (incl. person / vehicle) | ✅ | ✅ |
 | Doorbell | ✅ automatic for UniFi doorbells | ✅ automatic for UniFi doorbells |
 | Two-way audio (talk) | ✅ v0.8.17+, opt-in | ❌ |
+| Package camera (second lens) | ✅ v0.8.25+ | ❌ |
+| HomeKit Secure Video | ✅ v0.8.22+, with a Recorder device | ✅ v0.8.22+, with a Recorder device |
 
 ### Durosity UniFi plugin
 1. Run the UniFi plugin action **Enable RTSP Streaming** for each camera, with **High** and **Low** ticked
@@ -133,14 +135,22 @@ UniFi Protect cameras and doorbells are published from the cameras another Indig
 ### How it streams
 - **At home:** the High stream is passed straight through when it suits HomeKit (Medium is used if High is larger than 1920 wide)
 - **Away from home:** the Low stream (~640×360) is re-encoded to the bitrate HomeKit asks for. This only runs while you are watching
-- A camera whose model is a doorbell gets the HomeKit doorbell automatically; other cameras can still use **DoorBell Linked**
+- A camera whose model is a doorbell gets the HomeKit doorbell automatically. For another model with a doorbell button, tick **Treat as a doorbell** (v0.8.25+); other cameras can still use **DoorBell Linked**
+- **Portrait cameras** (some doorbells stream taller than wide): the startup check remembers each camera's stream size, and from the next bridge start a portrait camera is offered portrait sizes (e.g. 1080×1440) — otherwise HomeKit asks for landscape video it never gets. The log says when a restart is needed (v0.8.25+)
+
+### Package camera (v0.8.25+)
+A G4 Doorbell Pro or G6 Entry has a second lens looking down for packages. The UniFi plugin (Durosity) creates it as its own **Protect Package Camera** device; publish it like any other UniFi camera and it appears as a separate HomeKit camera:
+- its single package stream is used for live video
+- motion includes **package detected**, as well as motion and people
+- Protect's snapshot API only shows the main lens, so the package camera's snapshot is grabbed from its own stream, in the background (the first image can take a few seconds after startup)
+- it isn't a doorbell and has no talk — those belong to the main lens
 
 ### Two-way audio (v0.8.17+)
 Talk from the Home app through a UniFi doorbell or a camera with a speaker (UniFi plugin by Durosity only).
 1. In the camera's HomeKitLink settings, turn on **Support Audio** and **Two-way Audio (talk)**
 2. Save, then restart the bridge — the Home app shows the talk button on the camera
 
-While you talk, the camera's own audio is muted so your voice doesn't echo back. The log shows:
+While you talk, the camera's own audio is muted so your voice doesn't echo back (like a walkie-talkie; the visitor's reply comes through as soon as you stop). To hear both at once, untick **Two-way audio: mute the camera while you talk** in the plugin's Config (v0.8.25+). The log shows:
 ```
 Two-way audio: talking to Front Door (opus, 24000 Hz, …)
 Two-way audio: finished, 412 packets sent to Front Door
@@ -298,6 +308,7 @@ VideoToolbox is about five times cheaper than libx264 here. Apple Silicon Macs e
 | Setting | |
 |---|---|
 | **Copy a suitable stream** | On by default. Turn off to always re-encode |
+| **Doorbell presses** | On by default: a doorbell press keeps a recording going for 30 s, even if the visitor stands still and motion stops (v0.8.25+) |
 | **When re-encoding, use** | VideoToolbox (Mac hardware, low CPU) or libx264 (software, high CPU) |
 | **Disable** (Enable/Disable communication) | Stops recording and the prebuffer. The camera keeps its Home app recording settings |
 | **Delete** | Removes HKSV from the camera (its bridge restarts) and forgets its Home app recording settings |

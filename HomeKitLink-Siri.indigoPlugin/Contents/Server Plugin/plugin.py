@@ -299,6 +299,7 @@ class Plugin(indigo.PluginBase):
         self.debug10 = self.pluginPrefs.get('debug10', False)
         self.debug11 = self.pluginPrefs.get('debug11', False)
         self.debugHKSV = self.pluginPrefs.get('debugHKSV', False)
+        self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
 
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
@@ -464,6 +465,7 @@ class Plugin(indigo.PluginBase):
             self.debug10 = valuesDict.get('debug10', False)
             self.debug11 = valuesDict.get('debug11', False)
             self.debugHKSV = valuesDict.get('debugHKSV', False)
+            self.talkEchoSuppress = valuesDict.get('talkEchoSuppress', True)
             if "HKSV" in sys.modules:   ## only once an HKSV Recorder camera is running
                 sys.modules["HKSV"].set_debug(self.debugHKSV)
             self.logClientConnected = valuesDict.get("logClientConnected", True)
@@ -1149,7 +1151,8 @@ class Plugin(indigo.PluginBase):
     def _hksv_options(self, recorder):
         props = recorder.pluginProps
         return {"allow_copy": bool(props.get("hksvAllowCopy", True)),
-                "encoder": "libx264" if props.get("hksvEncoder", "") == "libx264" else "h264_videotoolbox"}
+                "encoder": "libx264" if props.get("hksvEncoder", "") == "libx264" else "h264_videotoolbox",
+                "doorbell_extends": bool(props.get("hksvDoorbellExtends", True))}
 
     def _hksv_update_states(self, recorder_id, states):
         """Push HKSV state to the Recorder device (only what changed)."""
@@ -4162,6 +4165,7 @@ class Plugin(indigo.PluginBase):
             values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", False)
             values_dict["unifiStreamURL"] = device.pluginProps.get("HomeKit_unifiStreamURL", "")
             values_dict["unifiTwoWay"] = device.pluginProps.get("HomeKit_unifiTwoWay", False)
+            values_dict["unifiDoorbell"] = device.pluginProps.get("HomeKit_unifiDoorbell", False)
 
             ## auto select correct subtype
             detecttype = self.detectHomeKitType(int(values_dict["deviceId"]))
@@ -4273,6 +4277,7 @@ class Plugin(indigo.PluginBase):
                 if values_dict.get("deviceSubtype") == "UniFiProtectCamera":
                     device_props["HomeKit_unifiStreamURL"] = str(values_dict.get("unifiStreamURL", "")).strip()
                     device_props["HomeKit_unifiTwoWay"] = bool(values_dict.get("unifiTwoWay", False))
+                    device_props["HomeKit_unifiDoorbell"] = bool(values_dict.get("unifiDoorbell", False))
 
                 if not device_props.get("HomeKit_publishDevice", False): publication_change = True
                 self.device_list.add(device.id)
@@ -4298,6 +4303,7 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_audioSelector"] = ""
                 device_props["HomeKit_unifiStreamURL"] = ""
                 device_props["HomeKit_unifiTwoWay"] = False
+                device_props["HomeKit_unifiDoorbell"] = False
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)
@@ -5262,6 +5268,14 @@ class Plugin(indigo.PluginBase):
             self._probe_remote_stream(cam, cam_name, ffprobe_bin, log)
 
             if "UP_name" in cam:
+                ## Remember the stream's size: a portrait camera is offered portrait sizes at the next bridge start
+                try:
+                    if cam.get("ffprobe_video") and HKDevicesCameraUniFi.remember_stream_size(indigo.devices[int(cam["UP_deviceId"])], cam["ffprobe_video"]):
+                        self.logger.info("[%s] UniFi stream is %sx%s - restart its bridge to offer HomeKit %s sizes",
+                                         cam_name, cam["ffprobe_video"].get("width"), cam["ffprobe_video"].get("height"),
+                                         "portrait" if cam["ffprobe_video"].get("height", 0) > cam["ffprobe_video"].get("width", 0) else "landscape")
+                except Exception:
+                    self.logger.debug("[%s] couldn't save the UniFi stream size", cam_name, exc_info=True)
                 if HKDevicesCameraUniFi.choose_home_stream(cam, log):
                     probe_list.append(cam)
                     continue

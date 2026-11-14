@@ -141,6 +141,25 @@ def register_resources(loader):
         loader.serv_types.setdefault(name, d)
 
 
+class _DoorbellTap:
+    """Stands in for a camera's doorbell characteristic so HKSV hears each press
+    (the plugin rings it with set_value). Everything else passes straight through."""
+
+    def __init__(self, char, on_press):
+        self._char = char
+        self._on_press = on_press
+
+    def set_value(self, *args, **kwargs):
+        try:
+            self._on_press()
+        except Exception:  # noqa: BLE001
+            pass
+        return self._char.set_value(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._char, name)
+
+
 class _WriterAwareChar(Characteristic):
     """Remembers which HAP connection last wrote it (the Data Stream keys come
     from that connection's session secret)."""
@@ -232,6 +251,10 @@ class HKSVRecording:
                                      lambda: bool(self.motion_char.value) if self.motion_char is not None else False,
                                      self._recorder_changed, allow_copy=options.get("allow_copy", True),
                                      encoder=options.get("encoder", "h264_videotoolbox"))
+            self.recorder.doorbell_extends = bool(options.get("doorbell_extends", True))
+            doorbell = getattr(accessory, "_char_doorbell_detected", None)
+            if doorbell is not None and not isinstance(doorbell, _DoorbellTap):
+                accessory._char_doorbell_detected = _DoorbellTap(doorbell, self.recorder.doorbell_pressed)
             self.recorder.start_probe()
         except Exception:
             _LOGGER.exception("[%s] HKSV: couldn't set up the recorder", self.name)
@@ -496,6 +519,7 @@ class HKSVRecording:
 
     def set_options(self, options):
         if self.recorder is not None:
+            self.recorder.doorbell_extends = bool(options.get("doorbell_extends", True))
             self._call_on_loop(self.recorder.set_options, options.get("allow_copy", True),
                                options.get("encoder", "h264_videotoolbox"))
 
