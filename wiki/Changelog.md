@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.28 — 2026-11-15
+
+### 🌫️ Air quality sensors
+- New HomeKit type **Air Quality Sensor**: the Home app's air quality tile, with any of PM2.5, PM10, VOC, NO2, ozone, CO2 and an air quality index (US AQI), each read from a state of the Indigo device
+- The overall rating (Excellent, Good, Fair, Inferior, Poor) is the worst of the readings, using the same bands as Home Assistant: US EPA AQI bands for PM, ozone and the index; WHO guidance for VOC and NO2. CO2 is shown but not rated
+- VOC, NO2 and ozone can be given in µg/m³ or ppb (converted for HomeKit)
+- Devices with states named like `pm25`, `pm10`, `voc`, `no2` or `aqi` are offered it automatically, with those states pre-selected; it's also offered for temperature and humidity sensors. Battery level is shown when the device has one
+
+---
+
 ## 0.8.27 — 2026-11-15
 
 ### 🤖 Robot vacuums and lawn mowers

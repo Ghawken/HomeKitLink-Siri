@@ -138,6 +138,44 @@ A UniFi doorbell is set up as a doorbell automatically.</Label>
 			<Field id="buttonsPublishLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Buttons">
 				<Label>A HomeKit Buttons device: Indigo presses its buttons with the action "Press a HomeKit Button", and the Home app decides what each press does. Set its buttons and names in its own settings.</Label>
 			</Field>
+			<Field id="aqPM25" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>PM2.5 (µg/m³):</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqPM10" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>PM10 (µg/m³):</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqVOC" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>VOC:</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqNO2" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>NO2:</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqO3" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>Ozone:</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqCO2" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>CO2 (ppm):</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqAQI" type="menu" defaultValue="none" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>Air quality index:</Label>
+				<List class="self" method="air_quality_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="aqGasUnit" type="menu" defaultValue="ugm3" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>VOC, NO2 and ozone are in:</Label>
+				<List>
+					<Option value="ugm3">µg/m³</Option>
+					<Option value="ppb">ppb (converted for HomeKit)</Option>
+				</List>
+			</Field>
+			<Field id="aqLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="AirQualitySensor">
+				<Label>Choose the device states that hold each reading; leave the others Not used. The Home app shows the readings and an overall air quality (Excellent to Poor), the worst of them. Air quality index: US AQI, 0-500.</Label>
+			</Field>
 			<Field id="robotStart" type="menu" defaultValue="default" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
 				<Label>Start:</Label>
 				<List class="self" filter="start" method="robot_actiongroup_list" dynamicReload="true"/>

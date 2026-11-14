@@ -251,8 +251,9 @@ class Plugin(indigo.PluginBase):
                                 "service_GarageDoorOpener": ["GarageDoor", "Door"],
                                 "service_MotionSensor": ["MotionSensor", "ContactSensor", "OccupancySensor"],
                                 "service_Thermostat": ["Thermostat"],
-                                "service_TemperatureSensor": ["TemperatureSensor"],
-                                "service_HumiditySensor": ["HumiditySensor"],
+                                "service_TemperatureSensor": ["TemperatureSensor", "AirQualitySensor"],
+                                "service_HumiditySensor": ["HumiditySensor", "AirQualitySensor"],
+                                "service_AirQuality": ["AirQualitySensor", "TemperatureSensor", "HumiditySensor", "CarbonDioxideSensor"],
                                 "service_Lightbulb": ["LightBulb", "LightBulb_switch"], #, "LightBulb_Adaptive"],
                                 "service_WindowCovering" : ["Blind"],
                                 "service_Window" : ["Window"],
@@ -980,6 +981,9 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.TemperatureSensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "LightSensor":
                         accessory = HomeKitDevices.LightSensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "AirQualitySensor":
+                        accessory = HomeKitDevices.AirQualitySensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID,
+                                                                    readings=self.air_quality_readings(indigodevice))
                     elif item['subtype'] == "HumiditySensor":
                         accessory = HomeKitDevices.HumiditySensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "SmokeSensor":
@@ -1202,6 +1206,82 @@ class Plugin(indigo.PluginBase):
 
     def robot_state_list(self, filter="", valuesDict=None, typeId="", targetId=0):
         items = [("default", "Its on/off state (default)"), ("-1", "%%separator%%")]
+        items.extend(self.devicestate_generator(filter, valuesDict or {}) or [])
+        return items
+
+    ###############################################################################
+    # Air quality sensors - one Home app air quality tile per published device, with
+    # any of these readings taken from the device's states. HomeKit wants densities in
+    # ug/m3 (gases given in ppb are converted) and an overall level 1 Excellent .. 5 Poor:
+    # the worst level of the readings (thresholds as Home Assistant: US EPA AQI bands
+    # for PM, ozone and AQI; WHO guidance for VOC and NO2). CO2 is shown but not graded.
+    ###############################################################################
+    AQ_READINGS = [   ## (publish field, HomeKit characteristic or None, label)
+        ("aqPM25", "PM2.5Density", "PM2.5"),
+        ("aqPM10", "PM10Density", "PM10"),
+        ("aqVOC", "VOCDensity", "VOC"),
+        ("aqNO2", "NitrogenDioxideDensity", "NO2"),
+        ("aqO3", "OzoneDensity", "Ozone"),
+        ("aqCO2", "CarbonDioxideLevel", "CO2"),
+        ("aqAQI", None, "AQI"),
+    ]
+    AQ_PPB_TO_UGM3 = {"aqVOC": 4.5, "aqNO2": 1.88, "aqO3": 1.96}   ## at 25 C; VOC assumes a typical indoor mix
+    AQ_GUESS = {"aqPM25": ("pm25", "pm2_5", "pm2.5"), "aqPM10": ("pm10",), "aqVOC": ("voc",),
+                "aqNO2": ("no2",), "aqCO2": ("co2",), "aqAQI": ("aqi",)}   ## no ozone: weather plugins' "ozone" is Dobson units
+
+    @staticmethod
+    def _aq_level(field, value):
+        bands = {"aqPM25": (9, 35.4, 55.4, 125.4), "aqPM10": (54, 154, 254, 354), "aqVOC": (250, 500, 1000, 3000),
+                 "aqNO2": (30, 60, 80, 90), "aqO3": (54 * 1.96, 70 * 1.96, 85 * 1.96, 105 * 1.96), "aqAQI": (50, 100, 150, 200)}
+        if field not in bands:
+            return 0
+        for level, limit in enumerate(bands[field], start=1):
+            if value <= limit:
+                return level
+        return 5
+
+    def _air_quality_guess(self, dev):
+        """Readings guessed from state names (e.g. pm25, voc, aqi) for a device not set up yet."""
+        guess = {}
+        try:
+            keys = [k for k in dev.states.keys() if not k.endswith(".ui")]
+        except Exception:
+            return guess
+        for field, words in self.AQ_GUESS.items():
+            match = next((k for k in keys if any(w in k.lower().replace(" ", "") for w in words)), None)
+            if match:
+                guess[field] = match
+        if not any(guess.get(f) for f in ("aqPM25", "aqPM10", "aqVOC", "aqNO2", "aqAQI")):
+            return {}   ## CO2 alone isn't an air quality sensor (it has its own type)
+        return guess
+
+    def air_quality_readings(self, dev):
+        """{HomeKit characteristic: value} for a device published as an Air Quality Sensor, plus 'AirQuality'."""
+        props = dev.pluginProps
+        ppb = props.get("HomeKit_aqGasUnit", "ugm3") == "ppb"
+        readings, levels = {}, []
+        for field, char, label in self.AQ_READINGS:
+            state = props.get("HomeKit_" + field, "")
+            if state in ("", "none", "-1"):
+                continue
+            value = HKutils.convert_to_float(dev.states.get(state)) if state in dev.states else None
+            if char is not None:
+                readings[char] = 0.0
+            if value is None:
+                continue
+            if ppb and field in self.AQ_PPB_TO_UGM3:
+                value = value * self.AQ_PPB_TO_UGM3[field]
+            levels.append(self._aq_level(field, value))
+            if char == "CarbonDioxideLevel":
+                readings[char] = round(min(max(value, 0), 100000), 0)
+            elif char is not None:
+                readings[char] = round(min(max(value, 0), 1000), 1)   ## HomeKit's range is 0-1000 ug/m3
+        graded = [lvl for lvl in levels if lvl]
+        readings["AirQuality"] = max(graded) if graded else 0
+        return readings
+
+    def air_quality_state_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        items = [("none", "Not used"), ("-1", "%%separator%%")]
         items.extend(self.devicestate_generator(filter, valuesDict or {}) or [])
         return items
 
@@ -2654,6 +2734,16 @@ class Plugin(indigo.PluginBase):
                             break
                     return
 
+                elif str(updateddevice_subtype) == "AirQualitySensor":
+                    accessory = self.device_list_internal[checkindex]["accessory"]
+                    accessory.update(self.air_quality_readings(updated_device))
+                    if "batteryLevel" in updated_device.states and getattr(accessory, "_char_battery", None):
+                        if updated_device.states["batteryLevel"] != original_device.states.get("batteryLevel"):
+                            batteryLevel = HKutils.convert_to_float(updated_device.states["batteryLevel"])
+                            if batteryLevel is not None:
+                                accessory._char_battery.set_value(batteryLevel)
+                                accessory._char_low_battery.set_value(1 if batteryLevel < self.low_battery_threshold else 0)
+                    return
                 elif str(updateddevice_subtype) in ("Vacuum", "LawnMower"):
                     running = self._robot_running(updated_device)
                     if running != self._robot_running(original_device):
@@ -4196,6 +4286,9 @@ class Plugin(indigo.PluginBase):
             if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkButtons":
                 return "service_Buttons"
 
+            if any(self._air_quality_guess(dev).values()):
+                return "service_AirQuality"
+
             if dev.pluginId == "com.perceptiveautomation.indigoplugin.zwave" and dev.deviceTypeId == "zwLockType":
                 return "service_LockMechanism"
 
@@ -4408,6 +4501,10 @@ class Plugin(indigo.PluginBase):
             values_dict["robotStop"] = device.pluginProps.get("HomeKit_robotStop", "") or "default"
             values_dict["robotState"] = device.pluginProps.get("HomeKit_robotState", "") or "default"
             values_dict["robotRunning"] = device.pluginProps.get("HomeKit_robotRunning", "")
+            guess = self._air_quality_guess(device) if not device.pluginProps.get("HomeKit_aqConfigured", False) else {}
+            for field, _, _ in self.AQ_READINGS:
+                values_dict[field] = device.pluginProps.get("HomeKit_" + field, "") or guess.get(field, "") or "none"
+            values_dict["aqGasUnit"] = device.pluginProps.get("HomeKit_aqGasUnit", "") or "ugm3"
 
             ## auto select correct subtype
             detecttype = self.detectHomeKitType(int(values_dict["deviceId"]))
@@ -4524,6 +4621,12 @@ class Plugin(indigo.PluginBase):
                     device_props["HomeKit_unifiTwoWay"] = bool(values_dict.get("unifiTwoWay", False))
                     device_props["HomeKit_unifiDoorbell"] = bool(values_dict.get("unifiDoorbell", False))
 
+                if values_dict.get("deviceSubtype") == "AirQualitySensor":
+                    for field, _, _ in self.AQ_READINGS:
+                        device_props["HomeKit_" + field] = str(values_dict.get(field, "none") or "none")
+                    device_props["HomeKit_aqGasUnit"] = str(values_dict.get("aqGasUnit", "ugm3") or "ugm3")
+                    device_props["HomeKit_aqConfigured"] = True
+
                 if values_dict.get("deviceSubtype") in ("Vacuum", "LawnMower"):
                     device_props["HomeKit_robotStart"] = str(values_dict.get("robotStart", "") or "")
                     device_props["HomeKit_robotStop"] = str(values_dict.get("robotStop", "") or "")
@@ -4562,6 +4665,10 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_robotStop"] = ""
                 device_props["HomeKit_robotState"] = ""
                 device_props["HomeKit_robotRunning"] = ""
+                for field, _, _ in self.AQ_READINGS:
+                    device_props["HomeKit_" + field] = ""
+                device_props["HomeKit_aqGasUnit"] = ""
+                device_props["HomeKit_aqConfigured"] = False
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)

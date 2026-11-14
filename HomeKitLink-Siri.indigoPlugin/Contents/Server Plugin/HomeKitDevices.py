@@ -268,6 +268,50 @@ class LightSensor(HomeAccessory):
         if self.plugin.debug6:
             logger.debug(f"{char_values}")
 
+class AirQualitySensor(HomeAccessory):
+    """Air quality: the Home app's air quality tile, with the readings chosen when publishing
+    (PM2.5, PM10, VOC, NO2, ozone, CO2, or an AQI). The plugin works out each value and the
+    overall level (Excellent..Poor, the worst of the readings) - see Plugin.air_quality_readings."""
+
+    category = CATEGORY_SENSOR
+
+    def __init__(self, driver, plugin, indigodeviceid, display_name, aid, readings=None):
+        super().__init__(driver, plugin, indigodeviceid, display_name, aid)
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        readings = readings or {"AirQuality": 0}
+        self._char_battery = None
+        self._char_charging = None
+        self._char_low_battery = None
+        batteryLevel = None
+        indigodevice = indigo.devices[indigodeviceid]
+        if indigodevice.ownerProps.get("SupportsBatteryLevel", False) and "batteryLevel" in indigodevice.states:
+            batteryLevel = HKutils.convert_to_float(indigodevice.states["batteryLevel"])
+        chars = [name for name in readings if name != "AirQuality"]
+        serv_air = self.add_preload_service('AirQualitySensor', chars)
+        self.chars = {"AirQuality": serv_air.configure_char('AirQuality', value=readings.get("AirQuality", 0))}
+        for name in chars:
+            self.chars[name] = serv_air.configure_char(name, value=readings[name])
+        if batteryLevel is not None:
+            serv_battery = self.add_preload_service("BatteryService")
+            self._char_battery = serv_battery.configure_char(CHAR_BATTERY_LEVEL, value=batteryLevel)
+            self._char_charging = serv_battery.configure_char("ChargingState", value=2)
+            self._char_low_battery = serv_battery.configure_char(
+                "StatusLowBattery", value=1 if batteryLevel < self.plugin.low_battery_threshold else 0)
+
+    async def run(self):
+        if self.plugin.debug6:
+            logger.debug("Air Quality Sensor Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def update(self, readings):
+        """New values from the Indigo device (only changed ones are sent to HomeKit)."""
+        for name, value in readings.items():
+            char = self.chars.get(name)
+            if char is not None and char.value != value:
+                char.set_value(value)
+
+
 class CarbonDioxideSensor(HomeAccessory):
     """Sensor Pushing results if changed"""
 

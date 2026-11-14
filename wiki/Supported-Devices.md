@@ -82,6 +82,22 @@ Binary smoke detected / not detected.
 ### Carbon Monoxide Sensor
 Binary CO detected / not detected.
 
+### Air Quality Sensor (v0.8.28+)
+The Home app's air quality tile, from any device that measures air quality (e.g. Awair, PurpleAir or AirVisual plugins). When publishing, choose the state that holds each reading the device has, and leave the rest **Not used**:
+
+| Reading | Units | Rated by |
+|---|---|---|
+| PM2.5, PM10 | µg/m³ | US EPA AQI bands |
+| VOC | µg/m³ or ppb | WHO indoor air guidance |
+| NO2 | µg/m³ or ppb | WHO guidance |
+| Ozone | µg/m³ or ppb | US EPA AQI bands |
+| CO2 | ppm | shown, not rated |
+| Air quality index | US AQI 0–500 | its own bands |
+
+The Home app shows each reading and an overall rating, **Excellent → Poor**, which is the worst of them (the same bands Home Assistant uses). Set **VOC, NO2 and ozone are in** to ppb if your device reports parts per billion; they're converted for HomeKit (VOC by a typical indoor factor of 4.5, so ratings are approximate).
+
+Devices with states named like `pm25`, `pm10`, `voc`, `no2` or `aqi` are offered Air Quality Sensor automatically with those states pre-selected; check them before saving. HomeKit shows densities up to 1000 µg/m³.
+
 ### Leak Sensor
 Binary leak detected / not detected.
 
