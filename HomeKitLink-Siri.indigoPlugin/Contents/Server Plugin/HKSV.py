@@ -255,14 +255,19 @@ class HKSVRecording:
             doorbell = getattr(accessory, "_char_doorbell_detected", None)
             if doorbell is not None and not isinstance(doorbell, _DoorbellTap):
                 accessory._char_doorbell_detected = _DoorbellTap(doorbell, self.recorder.doorbell_pressed)
-            self.recorder.start_probe()
+            if self.enabled:
+                self.recorder.start_probe()   ## a disabled Recorder checks nothing until enabled
         except Exception:
             _LOGGER.exception("[%s] HKSV: couldn't set up the recorder", self.name)
         self._update_recorder()
         if self.motion_char is None:
             _LOGGER.warning("[%s] HKSV: this camera has no motion sensor in HomeKit, so the hub will never "
                             "record it. Turn on the camera's motion sensor in its HomeKitLink settings", self.name)
-        _LOGGER.info("[%s] HomeKit Secure Video services added", self.name)
+        if self.enabled:
+            _LOGGER.info("[%s] HomeKit Secure Video services added", self.name)
+        else:
+            _LOGGER.info("[%s] HomeKit Secure Video services added, but its Recorder device is disabled: nothing is "
+                         "checked or recorded. Delete the Recorder to remove HKSV from this camera", self.name)
         self.log_offer()
         self.publish_state()
 
@@ -514,6 +519,8 @@ class HKSVRecording:
     def set_enabled(self, enabled):
         """From the Recorder device (Indigo's thread)."""
         self.enabled = bool(enabled)
+        if self.enabled and self.recorder is not None:
+            self.recorder.start_probe()
         self._update_recorder()
         self._call_on_loop(self.publish_state)
 
@@ -543,6 +550,13 @@ class HKSVRecording:
 
     # -------------------------------------------------------------- setters
     # The Home app re-writes these switches often; only log real changes.
+    def _info(self, msg, *args):
+        """Home app changes: logged while the Recorder is enabled; only in Debug HKSV while disabled."""
+        if self.enabled:
+            _LOGGER.info(msg, *args)
+        else:
+            _dbg(msg, *args)
+
     def _changed(self, key, value):
         last = getattr(self, "_last_values", None)
         if last is None:
@@ -556,7 +570,7 @@ class HKSVRecording:
         def setter(value):
             _dbg("[%s] wrote %s = %s", self.name, label, value)
             if self._changed(label, value):
-                _LOGGER.info("[%s] HKSV: %s set to %s", self.name, label, value)
+                self._info("[%s] HKSV: %s set to %s", self.name, label, value)
                 self._persist()
                 if label == "RecordingAudioActive":
                     self._update_recorder()
@@ -566,7 +580,7 @@ class HKSVRecording:
     def _on_streaming_active(self, value):
         _dbg("[%s] wrote RTP stream Active = %s", self.name, value)
         if self._changed("streaming", value):
-            _LOGGER.info("[%s] HKSV: live streaming %s", self.name, "allowed" if value else "turned off in the Home app")
+            self._info("[%s] HKSV: live streaming %s", self.name, "allowed" if value else "turned off in the Home app")
             self._persist()
 
     def _on_camera_active(self, value):
@@ -574,7 +588,7 @@ class HKSVRecording:
         if self.char_status_active is not None:
             self.char_status_active.set_value(bool(value))
         if self._changed("camera", value):
-            _LOGGER.info("[%s] HKSV: camera %s in the Home app", self.name, "on" if value else "off")
+            self._info("[%s] HKSV: camera %s in the Home app", self.name, "on" if value else "off")
             self._persist()
         self._update_recorder()
         self.publish_state()
@@ -583,7 +597,7 @@ class HKSVRecording:
         _dbg("[%s] wrote recording Active = %s", self.name, value)
         self.recording_active = bool(value)
         if self._changed("recording", value):
-            _LOGGER.info("[%s] HKSV: recording %s in the Home app%s", self.name, "allowed" if value else "turned off",
+            self._info("[%s] HKSV: recording %s in the Home app%s", self.name, "allowed" if value else "turned off",
                          "" if (not value or self.selected) else " (the hub hasn't chosen a recording format yet)")
             self._persist()
         self._update_recorder()
@@ -602,7 +616,7 @@ class HKSVRecording:
         self.selected_b64 = value
         self.selected = parsed
         if changed:
-            _LOGGER.info("[%s] HKSV: hub chose %s, fragments %d ms, triggers %s", self.name,
+            self._info("[%s] HKSV: hub chose %s, fragments %d ms, triggers %s", self.name,
                          describe_selected(parsed), parsed["fragment_ms"],
                          "+".join(n for b, n in ((1, "motion"), (2, "doorbell")) if parsed["event_triggers"] & b) or "none")
             self._persist()
@@ -700,6 +714,14 @@ class HKSVRecording:
             char.set_value(int(val))
         if self.char_status_active is not None:
             self.char_status_active.set_value(bool(self.char_camera_active.value))
-        _LOGGER.info("[%s] HKSV: restored Home app settings (recording %s%s)", self.name,
+        # The hub re-writes these after every restart: only a real change from what was saved is logged
+        self._last_values = {"recording": int(self.recording_active),
+                             "camera": int(self.char_camera_active.value or 0),
+                             "RecordingAudioActive": int(self.char_recording_audio.value or 0),
+                             "EventSnapshotsActive": int(self.char_event_snapshots.value or 0),
+                             "PeriodicSnapshotsActive": int(self.char_periodic_snapshots.value or 0)}
+        if state.get("streaming_active"):
+            self._last_values["streaming"] = int(state["streaming_active"][0])
+        self._info("[%s] HKSV: restored Home app settings (recording %s%s)", self.name,
                      "allowed" if self.recording_active else "off",
                      ", format chosen" if self.selected else "")

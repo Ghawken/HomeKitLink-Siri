@@ -40,6 +40,7 @@ except:
     pass
 
 import time as t
+import datetime
 import platform
 import sys
 
@@ -239,7 +240,7 @@ class Plugin(indigo.PluginBase):
 
         self.subTypesSupported = ["HueLightBulb", "Lock", "LightBulb", "MotionSensor", "GarageDoor", "Fan", "TemperatureSensor", "Switch", "Outlet", "OccupancySensor", "ContactSensor", "CarbonDioxideSensor", "BlueIrisCamera"]
 
-        self.homeKitSubTypes = {"service_Switch": [ "Switch", "Fan", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor","Door"],
+        self.homeKitSubTypes = {"service_Switch": [ "Switch", "Fan", "Outlet", "LightBulb", "Valve", "Irrigation", "Faucet", "Showerhead","GarageDoor","Door", "Vacuum", "LawnMower"],
                                 "service_Camera": ["BlueIrisCamera", "SecuritySpyCamera", "UniFiProtectCamera"],
                                 "service_LockMechanism": ["Lock"],
                                 "service_Fanv2": ["Fan"],
@@ -255,7 +256,8 @@ class Plugin(indigo.PluginBase):
                                 "service_Lightbulb": ["LightBulb", "LightBulb_switch"], #, "LightBulb_Adaptive"],
                                 "service_WindowCovering" : ["Blind"],
                                 "service_Window" : ["Window"],
-                                "service_Security" :["Security"]
+                                "service_Security" :["Security"],
+                                "service_Buttons": ["Buttons"]
                                 }
 
         self.driver_multiple = []
@@ -529,6 +531,11 @@ class Plugin(indigo.PluginBase):
         if self.debug8:
             self.logger.debug(u'Called getDeviceConfigUiValues(self, pluginProps, typeId, devId):')
             self.logger.debug('     ({0}, {1}, {2})'.format(pluginProps, typeId, devId))
+        if typeId == "hkButtons":
+            values, errors = super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
+            published = pluginProps.get("HomeKit_publishDevice", False)
+            values["publishBridge"] = str(pluginProps.get("HomeKit_bridgeUniqueID", "")) if published else "none"
+            return (values, errors)
         if typeId == "hksvRecorder":
             return super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
         valuesDict = pluginProps
@@ -560,6 +567,9 @@ class Plugin(indigo.PluginBase):
     def deviceStartComm(self, device):
         if device.deviceTypeId == "hksvRecorder":
             self._hksv_device_start(device)
+            return
+        if device.deviceTypeId == "hkButtons":
+            device.stateListOrDisplayStateIdChanged()
             return
         self.logger.debug(f"{device.name}: Starting {device.deviceTypeId} Device {device.id} ")
         device.stateListOrDisplayStateIdChanged()
@@ -606,6 +616,8 @@ class Plugin(indigo.PluginBase):
     def deviceStopComm(self, device):
         if device.deviceTypeId == "hksvRecorder":
             self._hksv_device_stop(device)
+            return
+        if device.deviceTypeId == "hkButtons":
             return
         try:
             self.logger.debug(f"{device.name}: Stopping {device.deviceTypeId} Device {device.id}")
@@ -717,6 +729,8 @@ class Plugin(indigo.PluginBase):
         self.logger.debug("ValidateDevice Config UI called {}".format(values_dict))
         if type_id == "hksvRecorder":
             return self._hksv_validate(values_dict, dev_id)
+        if type_id == "hkButtons":
+            return self._buttons_validate(values_dict, dev_id)
         return (True, values_dict)
 
     ########################################
@@ -972,6 +986,11 @@ class Plugin(indigo.PluginBase):
                         accessory = HomeKitDevices.SmokeSensor(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Switch":
                         accessory = HomeKitDevices.SwitchSimple(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] in ("Vacuum", "LawnMower"):
+                        accessory = HomeKitDevices.RobotSwitch(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
+                    elif item['subtype'] == "Buttons":
+                        accessory = HomeKitDevices.ProgrammableButtons(driver, self, item["deviceid"], item['devicename'], aid=deviceAID,
+                                                                       names=self.button_names(indigodevice))
                     elif item['subtype'] == "Security":
                         accessory = HKSecuritySystem.SecuritySystem(driver, self, item["deviceid"], item['devicename'], aid=deviceAID)
                     elif item['subtype'] == "Blind":
@@ -1118,6 +1137,192 @@ class Plugin(indigo.PluginBase):
         ##
 
     ###############################################################################
+    # Robot vacuums and lawn mowers - shown in HomeKit as a switch
+    ###############################################################################
+    def _robot_running(self, dev):
+        """Is the vacuum/mower running? The chosen state (and values), else its on/off state."""
+        try:
+            props = dev.pluginProps
+            state = props.get("HomeKit_robotState", "")
+            if state not in ("", "default", "-1") and state in dev.states:
+                value = dev.states[state]
+                wanted = [v.strip().lower() for v in str(props.get("HomeKit_robotRunning", "")).split(",") if v.strip()]
+                if wanted:
+                    return str(value).strip().lower() in wanted
+                if isinstance(value, (bool, int, float)):
+                    return bool(value)
+                return str(value).strip().lower() in ("true", "on", "yes", "1", "running", "cleaning", "mowing")
+            if "onOffState" in dev.states:
+                return bool(dev.states["onOffState"])
+        except Exception:
+            self.logger.debug("robot running check failed", exc_info=True)
+        return False
+
+    def robot_is_running(self, devid):
+        try:
+            return self._robot_running(indigo.devices[int(devid)])
+        except Exception:
+            return False
+
+    def robot_command(self, devid, start):
+        """HomeKit switched a vacuum/mower: on starts it, off sends it home."""
+        try:
+            if int(devid) in indigo.actionGroups:   ## an action group published as a vacuum: run it to start
+                if start:
+                    indigo.actionGroup.execute(int(devid))
+                return
+            dev = indigo.devices[int(devid)]
+            what = "start" if start else "stop / go home"
+            ag = dev.pluginProps.get("HomeKit_robotStart" if start else "HomeKit_robotStop", "")
+            if ag not in ("", None, "default", "-1"):
+                try:
+                    ag_name = indigo.actionGroups[int(ag)].name
+                except Exception:
+                    self.logger.warning("{}: HomeKit asked to {}, but its action group (id {}) no longer exists".format(dev.name, what, ag))
+                    return
+                self.logger.info("{}: HomeKit asked to {} - running action group '{}'".format(dev.name, what, ag_name))
+                indigo.actionGroup.execute(int(ag))
+            elif "onOffState" in dev.states:
+                self.logger.info("{}: HomeKit asked to {} - turning it {}".format(dev.name, what, "on" if start else "off"))
+                if start:
+                    indigo.device.turnOn(dev.id)
+                else:
+                    indigo.device.turnOff(dev.id)
+            else:
+                self.logger.warning("{}: HomeKit asked to {}, but the device has no on/off and no action group is chosen. "
+                                    "Choose its Start and Stop action groups in HomeKitLink".format(dev.name, what))
+        except Exception:
+            self.logger.exception("Robot command failed")
+
+    def robot_actiongroup_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        which = "Turn the device off (default)" if filter == "stop" else "Turn the device on (default)"
+        items = [("default", which), ("-1", "%%separator%%")]
+        items.extend(sorted(((str(ag.id), ag.name) for ag in indigo.actionGroups), key=lambda x: x[1].lower()))
+        return items
+
+    def robot_state_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        items = [("default", "Its on/off state (default)"), ("-1", "%%separator%%")]
+        items.extend(self.devicestate_generator(filter, valuesDict or {}) or [])
+        return items
+
+    ###############################################################################
+    # HomeKit Buttons - Indigo -> Home. A "hkButtons" device is published (like any
+    # device) as stateless programmable switches. It does nothing in Indigo: the
+    # "Press a HomeKit Button" action sends a single/double/long press to HomeKit, and
+    # the Home app runs whatever the user set for that press. (The other direction,
+    # Home -> Indigo, is an action group published as a switch.) Only these devices
+    # are offered the "Buttons" type: a physical remote is brought in by adding the
+    # action to its Indigo triggers, not by publishing the remote itself.
+    ###############################################################################
+    BUTTON_PRESSES = {0: "single press", 1: "double press", 2: "long press"}
+
+    def button_names(self, dev):
+        """Names for a Buttons device's buttons, from its settings."""
+        try:
+            count = max(1, min(10, int(dev.pluginProps.get("buttonCount", 1))))
+        except (TypeError, ValueError):
+            count = 1
+        given = [n.strip() for n in str(dev.pluginProps.get("buttonNames", "")).split(",")]
+        names = []
+        for i in range(count):
+            name = given[i] if i < len(given) and given[i] else "Button {}".format(i + 1)
+            names.append(HKutils.cleanup_name_for_homekit(name))
+        return names
+
+    def _buttons_validate(self, values_dict, dev_id):
+        errors = indigo.Dict()
+        names = [n.strip() for n in str(values_dict.get("buttonNames", "")).split(",") if n.strip()]
+        try:
+            count = int(values_dict.get("buttonCount", 1))
+        except (TypeError, ValueError):
+            count = 1
+        if len(names) > count:
+            errors["buttonNames"] = "{} names for {} button{}".format(len(names), count, "" if count == 1 else "s")
+        if len(errors):
+            return (False, values_dict, errors)
+        ## Publishing from the device itself writes the same props as the bridge's own settings, so either can change it
+        try:
+            dev = indigo.devices[dev_id]
+            old_props = dev.pluginProps
+        except Exception:
+            dev, old_props = None, {}
+        old_uid = str(old_props.get("HomeKit_bridgeUniqueID", "")) if old_props.get("HomeKit_publishDevice", False) else ""
+        new_uid = str(values_dict.get("publishBridge", "none") or "none")
+        new_uid = "" if new_uid in ("none", "-1") else new_uid
+        name = dev.name if dev is not None else "HomeKit Buttons"
+        if new_uid:
+            values_dict["HomeKit_publishDevice"] = True
+            values_dict["HomeKit_bridgeUniqueID"] = new_uid
+            values_dict["HomeKit_deviceSubtype"] = "Buttons"
+            if not values_dict.get("homekit-name"):
+                values_dict["homekit-name"] = HKutils.cleanup_name_for_homekit(name)
+            if dev is not None:
+                self.device_list.add(dev.id)
+        else:
+            values_dict["HomeKit_publishDevice"] = False
+            values_dict["HomeKit_bridgeUniqueID"] = ""
+            values_dict["HomeKit_deviceSubtype"] = ""
+            if dev is not None and old_uid:
+                self.device_list.discard(dev.id)
+                self.device_list_internal = [i for i in self.device_list_internal if i["deviceid"] != dev.id]
+                if dev.id in self.device_list_internal_idonly:
+                    self.device_list_internal_idonly.remove(dev.id)
+        buttons_changed = (str(old_props.get("buttonCount", "1")) != str(values_dict.get("buttonCount", "1")) or
+                           str(old_props.get("buttonNames", "")) != str(values_dict.get("buttonNames", "")))
+        if old_uid != new_uid:
+            if old_uid:
+                self._restart_bridge(*self._bridge_for_uid(old_uid), "to remove '{}'".format(name))
+            if new_uid:
+                bridge_dev, driver = self._bridge_for_uid(new_uid)
+                if not self._restart_bridge(bridge_dev, driver, "to add '{}'".format(name)):
+                    self.logger.info("'{}' will be added to HomeKit when bridge '{}' starts".format(
+                        name, bridge_dev.name if bridge_dev is not None else new_uid))
+        elif new_uid and buttons_changed:
+            self._restart_bridge(*self._bridge_for_uid(new_uid), "to update the buttons of '{}'".format(name))
+        return (True, values_dict)
+
+    def buttons_bridge_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        items = [("none", "Not published"), ("-1", "%%separator%%")]
+        for dev in indigo.devices.iter("self.homeKitBridgeDevice"):
+            uid = str(dev.pluginProps.get("bridgeUniqueID", ""))
+            if uid:
+                items.append((uid, dev.name if dev.enabled else "{} (disabled)".format(dev.name)))
+        return items
+
+    def button_number_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        try:
+            names = self.button_names(indigo.devices[int(targetId)])
+        except Exception:
+            names = ["Button 1"]
+        return [(str(i), "{} - {}".format(i, name)) for i, name in enumerate(names, start=1)]
+
+    def action_pressHomeKitButton(self, action, dev=None, callerWaitingForResult=None):
+        try:
+            dev = indigo.devices[action.deviceId]
+            button = int(action.props.get("button", 1) or 1)
+            press = int(action.props.get("pressType", 0) or 0)
+        except Exception:
+            self.logger.exception("Press a HomeKit Button: bad action settings")
+            return
+        names = self.button_names(dev)
+        label = names[button - 1] if 1 <= button <= len(names) else "button {}".format(button)
+        accessory = next((item["accessory"] for item in self.device_list_internal
+                          if item["deviceid"] == dev.id and item["accessory"] is not None), None)
+        if accessory is None or not hasattr(accessory, "press"):
+            self.logger.warning("{}: '{}' not sent - publish this Buttons device to a running HomeKitLink bridge".format(dev.name, label))
+            return
+        if not accessory.press(button, press):
+            self.logger.warning("{}: has no button {} in HomeKit - restart its bridge after changing the buttons".format(dev.name, button))
+            return
+        self.logger.info("{}: '{}' {} sent to HomeKit".format(dev.name, label, self.BUTTON_PRESSES.get(press, "press")))
+        dev.updateStatesOnServer([
+            {"key": "lastButton", "value": button},
+            {"key": "lastButtonName", "value": label},
+            {"key": "lastPress", "value": self.BUTTON_PRESSES.get(press, "press")},
+            {"key": "lastPressTime", "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+        ])
+
+    ###############################################################################
     # HomeKit Secure Video - "HKSV Recorder" devices (phase 1)
     # Nothing here runs unless an HKSV Recorder device exists: the camera accessory
     # only gets the recording services when a Recorder points at it.
@@ -1176,10 +1381,15 @@ class Plugin(indigo.PluginBase):
             camera = indigo.devices[int(camera_id)]
         except Exception:
             return None, None, None
+        bridge_dev, driver = self._bridge_for_uid(camera.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+        return camera, bridge_dev, driver
+
+    def _bridge_for_uid(self, uid):
+        """(bridge Indigo device, running driver) for a bridge's unique id; either may be None."""
         try:
-            uid = int(camera.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+            uid = int(uid)
         except (TypeError, ValueError):
-            uid = 99
+            return None, None
         bridge_dev = None
         for dev in indigo.devices.iter("self.homeKitBridgeDevice"):
             try:
@@ -1189,25 +1399,29 @@ class Plugin(indigo.PluginBase):
             except (TypeError, ValueError):
                 continue
         driver = next((d for d in self.driver_multiple if d is not None and str(d.indigodeviceid) == str(uid)), None)
-        return camera, bridge_dev, driver
+        return bridge_dev, driver
 
     def _hksv_restart_bridge(self, camera_id, why):
         camera, bridge_dev, driver = self._hksv_camera_bridge(camera_id)
+        return self._restart_bridge(bridge_dev, driver, why)
+
+    def _restart_bridge(self, bridge_dev, driver, why):
+        """Disable and re-enable a running bridge (in a thread) so it re-reads its accessories."""
         if bridge_dev is None or not bridge_dev.enabled or driver is None:
             return False
-        self.logger.info("HKSV: restarting bridge '{}' {}".format(bridge_dev.name, why))
+        self.logger.info("Restarting bridge '{}' {}".format(bridge_dev.name, why))
         if bridge_dev.id in self._hksv_restarting:
             return True   ## already restarting (e.g. a Recorder moved between two cameras on one bridge)
         self._hksv_restarting.add(bridge_dev.id)
 
         def restart(dev_id=bridge_dev.id):
             try:
-                t.sleep(1)
+                t.sleep(2)   ## let a just-saved device's settings reach the server first
                 indigo.device.enable(dev_id, value=False)
                 t.sleep(4)
                 indigo.device.enable(dev_id, value=True)
             except Exception:
-                self.logger.exception("HKSV: bridge restart failed")
+                self.logger.exception("Bridge restart failed")
             finally:
                 self._hksv_restarting.discard(dev_id)
         threading.Thread(target=restart, daemon=True, name="HKLS-hksv-restart").start()
@@ -2440,6 +2654,13 @@ class Plugin(indigo.PluginBase):
                             break
                     return
 
+                elif str(updateddevice_subtype) in ("Vacuum", "LawnMower"):
+                    running = self._robot_running(updated_device)
+                    if running != self._robot_running(original_device):
+                        if self.debug2:
+                            self.logger.debug(f"{updated_device.name}: {updateddevice_subtype} running is now {running}")
+                        self.device_list_internal[checkindex]["accessory"].char_on.set_value(running)
+                    return
                 elif str(updateddevice_subtype) in ("Valve","Irrigation","Showerhead","Faucet"):
                     # if type(original_device) == indigo.RelayDevice:
                     if updated_device.states['onOffState'] != original_device.states['onOffState']:
@@ -3885,6 +4106,20 @@ class Plugin(indigo.PluginBase):
                                 assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + str(device_name) + ":%%"))  ## disabled selection
                         else:
                             unassigned_device_list.append((device.id, device.name))
+            elif isdevorAG == "hk_buttons":
+                NametoUse = "HomeKitLink Buttons"
+                for device in indigo.devices.iter("self.hkButtons"):
+                    if device.id in self.device_list:
+                        try:
+                            bridgeassigned = int(device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+                        except ValueError:
+                            bridgeassigned = 99
+                        if int(bridgeassigned) == bridgeuniqueID:  ## device assigned to this bridge can access
+                            assigned_device_list.append((device.id, device.name))
+                        else:  ## assigned but by another Bridge.
+                            assigned_another_bridgelist.append((device.id, "%%disabled:" + "Bridge Id: " + str(bridgeassigned) + " " + device.name + ":%%"))
+                    else:
+                        unassigned_device_list.append((device.id, device.name))
             elif isdevorAG == "sensor":
                 NametoUse = "Sensors"
                 for device in indigo.devices:
@@ -3957,6 +4192,9 @@ class Plugin(indigo.PluginBase):
                 return "service_Switch"
 
             dev = indigo.devices[objId]
+
+            if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkButtons":
+                return "service_Buttons"
 
             if dev.pluginId == "com.perceptiveautomation.indigoplugin.zwave" and dev.deviceTypeId == "zwLockType":
                 return "service_LockMechanism"
@@ -4166,15 +4404,22 @@ class Plugin(indigo.PluginBase):
             values_dict["unifiStreamURL"] = device.pluginProps.get("HomeKit_unifiStreamURL", "")
             values_dict["unifiTwoWay"] = device.pluginProps.get("HomeKit_unifiTwoWay", False)
             values_dict["unifiDoorbell"] = device.pluginProps.get("HomeKit_unifiDoorbell", False)
+            values_dict["robotStart"] = device.pluginProps.get("HomeKit_robotStart", "") or "default"
+            values_dict["robotStop"] = device.pluginProps.get("HomeKit_robotStop", "") or "default"
+            values_dict["robotState"] = device.pluginProps.get("HomeKit_robotState", "") or "default"
+            values_dict["robotRunning"] = device.pluginProps.get("HomeKit_robotRunning", "")
 
             ## auto select correct subtype
             detecttype = self.detectHomeKitType(int(values_dict["deviceId"]))
             if self.debug8:
                 self.logger.debug("Detected Type:{}".format(detecttype))
-            if detecttype in self.homeKitSubTypes:
+            saved_subtype = device.pluginProps.get("HomeKit_deviceSubtype", "")
+            if saved_subtype and device.pluginProps.get("HomeKit_publishDevice", False):
+                values_dict["deviceSubtype"] = saved_subtype   ## the menu offers only the saved type for a published device
+            elif detecttype in self.homeKitSubTypes:
                 values_dict["deviceSubtype"] = self._default_subtype(int(values_dict["deviceId"]), detecttype)
             else:
-                values_dict["deviceSubtype"] = device.pluginProps.get("HomeKit_deviceSubtype", "")
+                values_dict["deviceSubtype"] = saved_subtype
 
             alt_name = self.get_alt_name(device)
             values_dict["altName"] = alt_name if alt_name != device.name else ""
@@ -4279,6 +4524,12 @@ class Plugin(indigo.PluginBase):
                     device_props["HomeKit_unifiTwoWay"] = bool(values_dict.get("unifiTwoWay", False))
                     device_props["HomeKit_unifiDoorbell"] = bool(values_dict.get("unifiDoorbell", False))
 
+                if values_dict.get("deviceSubtype") in ("Vacuum", "LawnMower"):
+                    device_props["HomeKit_robotStart"] = str(values_dict.get("robotStart", "") or "")
+                    device_props["HomeKit_robotStop"] = str(values_dict.get("robotStop", "") or "")
+                    device_props["HomeKit_robotState"] = str(values_dict.get("robotState", "") or "")
+                    device_props["HomeKit_robotRunning"] = str(values_dict.get("robotRunning", "") or "").strip()
+
                 if not device_props.get("HomeKit_publishDevice", False): publication_change = True
                 self.device_list.add(device.id)
                 ## this is fine - will be added to internal_list on device start - just not removed from it
@@ -4291,7 +4542,10 @@ class Plugin(indigo.PluginBase):
             else:
                 values_dict["enablePublishFields"] = False
                 if device_props.get("HomeKit_publishDevice", False): publication_change = True
-                device_props = {}  ##?
+                if getattr(device, "pluginId", None) == self.pluginId:
+                    device_props = {k: v for k, v in device_props.items() if not k.startswith("HomeKit_")}  ## own device (Buttons): keep its settings
+                else:
+                    device_props = {}  ##?
                 ## unpublished - delete all device props - not the Device/Bridge itself!
                 device_props["HomeKit_bridgeUniqueID"] = ""
                 device_props["HomeKit_deviceSubtype"] = ""
@@ -4304,6 +4558,10 @@ class Plugin(indigo.PluginBase):
                 device_props["HomeKit_unifiStreamURL"] = ""
                 device_props["HomeKit_unifiTwoWay"] = False
                 device_props["HomeKit_unifiDoorbell"] = False
+                device_props["HomeKit_robotStart"] = ""
+                device_props["HomeKit_robotStop"] = ""
+                device_props["HomeKit_robotState"] = ""
+                device_props["HomeKit_robotRunning"] = ""
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = next((i for i, item in enumerate(self.device_list_internal) if item["deviceid"] == device.id), None)

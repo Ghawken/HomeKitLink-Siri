@@ -634,6 +634,10 @@ class Recorder:
 
     # ---------------------------------------------------------- stream check
     def start_probe(self):
+        """Check the camera's streams (once). Not done while the Recorder device is disabled."""
+        if getattr(self, "_probe_started", False):
+            return
+        self._probe_started = True
         import threading
         threading.Thread(target=self._probe_thread, daemon=True, name="HKLS-hksv-probe").start()
 

@@ -893,61 +893,74 @@ class LightBulb(HomeAccessory):
             self.plugin.Plugin_setter_callback(self, "Hue", char_values)
 
 
-class Vacuum(HomeAccessory):
-    ## get has no value otherwise HomeKit crashes with no errors or at least that is what I am hoping will fix this particularly annoying error...
+class RobotSwitch(HomeAccessory):
+    """A robot vacuum or lawn mower, shown as a switch (as Home Assistant does: HomeKit
+    has no vacuum or mower service outside Matter). On starts it, off sends it home.
+    The plugin decides how: the device's on/off, or the action groups and running
+    state chosen when publishing (see Plugin.robot_*)."""
 
-    category = CATEGORY_OTHER
+    category = CATEGORY_SWITCH
 
-    def __init__(self, driver, plugin, indigodeviceid,  display_name, aid):
-        super().__init__( driver, plugin, indigodeviceid, display_name, aid)
+    def __init__(self, driver, plugin, indigodeviceid, display_name, aid):
+        super().__init__(driver, plugin, indigodeviceid, display_name, aid)
         self.plugin = plugin
         self.indigodeviceid = indigodeviceid
-        self.activate_only = self.is_activate(indigodeviceid)
         serv_switch = self.add_preload_service('Switch')
-        self.char_on = serv_switch.configure_char( 'On', value=False, getter_callback=self.get_switch)#, setter_callback=self.set_switch ) #setter_callback=self.set_bulb,
-        serv_switch.setter_callback = self.set_switch ## Setter for everything
+        self.char_on = serv_switch.configure_char('On', value=False, getter_callback=self.get_switch)
+        serv_switch.setter_callback = self.set_switch
 
-    ## The below runs once on creation of bridge/accessory to return the hook back to this accessory object
-    ##
     async def run(self):
         if self.plugin.debug6:
             logger.debug("Run called once, add callback to plugin")
         self.plugin.Plugin_addCallbacktoDeviceList(self)
 
-    def is_activate(self, deviceid):
-        """Check if entity is activate only."""
-        return self.plugin.check_activateOnly(deviceid)
-        # check for absence of onOffState or whether active group - probably reverse logic
-
     def set_switch(self, char_values):
         if self.plugin.debug6:
-            logger.debug(f"Set Switch Values:{char_values}")
-       # logger.debug("Switch value: %s", value)
-        if self.activate_only and char_values["On"]==0:
-            if self.plugin.debug6:
-                logger.debug("DeviceId: {}: Ignoring turn_off call as activate_only".format(self.indigodeviceid))
-            return
-        #value is Ture False here not a list
-        self.plugin.Plugin_setter_callback(self, "onOffState", char_values)
-        ## then set switch to False if activate only
-        if self.activate_only: ## Doesn't matter On or OFF is activate only, acbove has been run and then seto off immediatelly./ and char_values["On"]==0:
-            self.char_on.set_value(False)
+            logger.debug(f"Robot set values:{char_values}")
+        if "On" in char_values:
+            self.plugin.robot_command(self.indigodeviceid, bool(char_values["On"]))
 
     def get_switch(self):
-        # logger.debug("Bulb value: %s", value)
-        if self.activate_only:
-            #logger.debug("Active Only switch setting to False")
-            return False
-        value = self.plugin.Plugin_getter_callback(self, "onOffState")
-        return value
+        return self.plugin.robot_is_running(self.indigodeviceid)
 
 
-    def _set_chars(self, char_values):
-        """This will be called every time the value of one of the
-        characteristics on the service changes.
-        """
+class ProgrammableButtons(HomeAccessory):
+    """A HomeKit Buttons device (Indigo -> Home): one Stateless Programmable Switch per
+    button. Reads are always null (HAP); press() sends a single, double or long press
+    event, and the Home app runs what the user set for it. Presses only come from the
+    plugin's 'Press a HomeKit Button' action."""
+
+    category = CATEGORY_PROGRAMMABLE_SWITCH
+
+    def __init__(self, driver, plugin, indigodeviceid, display_name, aid, names=None):
+        super().__init__(driver, plugin, indigodeviceid, display_name, aid)
+        self.plugin = plugin
+        self.indigodeviceid = indigodeviceid
+        names = names or ["Button 1"]
+        self.char_events = []
+        if len(names) > 1:
+            # Several buttons: a Service Label numbers them (namespace 1 = arabic numerals)
+            serv_label = self.add_preload_service('ServiceLabel')
+            serv_label.configure_char('ServiceLabelNamespace', value=1)
+        for index, name in enumerate(names, start=1):
+            serv = self.add_preload_service('StatelessProgrammableSwitch', ['Name', 'ConfiguredName', 'ServiceLabelIndex'],
+                                            unique_id="button{}".format(index))
+            serv.configure_char('Name', value=name)
+            serv.configure_char('ConfiguredName', value=name)
+            serv.configure_char('ServiceLabelIndex', value=index)
+            self.char_events.append(serv.configure_char('ProgrammableSwitchEvent'))
+
+    async def run(self):
         if self.plugin.debug6:
-            logger.debug(f"{char_values}")
+            logger.debug("Run called once, add callback to plugin")
+        self.plugin.Plugin_addCallbacktoDeviceList(self)
+
+    def press(self, button, press_type):
+        """button: 1-based; press_type: 0 single, 1 double, 2 long. Returns True if sent."""
+        if not 1 <= button <= len(self.char_events):
+            return False
+        self.char_events[button - 1].set_value(press_type)
+        return True
 
 
 class SwitchSimple(HomeAccessory):

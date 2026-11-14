@@ -137,6 +137,63 @@ Valve-type accessories supporting on/off. Tested and working; there is a known o
 
 ---
 
+## Robot Vacuum / Lawn Mower (v0.8.27+)
+
+HomeKit has no vacuum or mower tile for bridged devices (Apple's robot vacuum support is for Matter devices only), so these show as a **switch**, as Home Assistant does: **on starts it, off sends it home**. Siri: "turn on the vacuum".
+
+When publishing, choose type **Vacuum** or **LawnMower**, then:
+
+| Setting | Use |
+|---|---|
+| **Start** | An action group to start it, or leave as *turn the device on* |
+| **Stop / go home** | An action group to send it home, or leave as *turn the device off* |
+| **Running when** / **is one of** | The state that shows it's working and its values, separated by commas (e.g. `status` is one of `cleaning, spotCleaning`). Leave blank to use the device's on/off |
+
+---
+
+## HomeKit Buttons (v0.8.27+)
+
+**Indigo → Home.** A HomeKit Buttons device lets Indigo start things in the Home app. It does nothing in Indigo itself: it appears in the Home app as a button accessory (like a wireless remote), and **the Home app decides what each press does**.
+
+Use it to reach what only the Home app controls (Matter or Apple-only devices, music on HomePods, Home scenes) from any Indigo trigger, schedule, action group or Control Page.
+
+> The other direction, **Home → Indigo**, is an action group (or device) published as a **switch**.
+
+### Setting it up
+
+1. **Create** a new device: Type *HomeKitLink Siri*, Model **HomeKit Buttons**. Choose how many buttons (1–10) and, optionally, their names separated by commas (`Arrive, Leave, Movie`).
+2. **Publish** it, either way:
+   - in the device itself: **Publish to bridge** → choose the bridge, then Save (the bridge restarts to add it), or
+   - in the bridge's settings like any other device: **Select Type to List** → **HomeKitLink Buttons**, then pick it.
+
+   Both change the same setting, so you can later move or unpublish it from either place.
+3. **In the Home app**, open the new accessory. Each button has a **single**, **double** and **long press**: choose the scenes or accessories each one runs. Until you do, pressing it does nothing.
+4. **In Indigo**, press a button with the action **Press a HomeKit Button** (under HomeKitLink Siri actions): choose the device, the button and the press.
+
+The log shows each press sent (`Hall Buttons: 'Movie' single press sent to HomeKit`), and the device's states show the last button, press and time, for use in Indigo triggers or Control Pages. Changing the number of buttons or their names restarts its bridge.
+
+### A physical remote or wall switch in the Home app
+
+The remote itself isn't published to HomeKit. Indigo already decodes its presses and turns them into **Indigo triggers**, for example the Z-Wave triggers "button 2 pressed received" or "button 2 double tap received" on a WallMote or Fibaro Button. A HomeKit Buttons device passes those presses on to the Home app.
+
+1. **Make a HomeKit Buttons device** with one button per remote button: a 4-button WallMote Quad gets 4 buttons, a single Fibaro Button gets 1. Name them to match (e.g. `Top left, Top right, Bottom left, Bottom right`) so they're easy to recognise in the Home app.
+2. **Publish it** to a bridge.
+3. **For each press you want in Home**, open the remote's Indigo trigger (or create one: a Z-Wave *Command Received* trigger for the remote and that press) and add the action **Press a HomeKit Button**, choosing this Buttons device, the matching button and the press:
+
+   | On the remote (Indigo trigger) | Press a HomeKit Button |
+   |---|---|
+   | button pressed | Single press |
+   | double tap | Double press |
+   | held | Long press |
+
+4. **In the Home app**, open the Buttons accessory and choose what each press does.
+
+You only need triggers for the presses you actually use. The same trigger can still do things in Indigo as well; the action just adds the Home app on top.
+
+HomeKit buttons have only single, double and long presses, so a triple tap (or more) can't be passed on; keep those for Indigo-only actions. The same approach works for any remote Indigo understands (Z-Wave, Insteon keypads and remotes, or a plugin's button devices), as long as each press can start an Indigo trigger.
+
+---
+
 ## Outlet
 
 Same as Switch but displayed with an outlet icon in HomeKit.

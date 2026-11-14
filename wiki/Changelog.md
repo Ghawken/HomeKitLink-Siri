@@ -6,6 +6,26 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.27 — 2026-11-15
+
+### 🤖 Robot vacuums and lawn mowers
+- New HomeKit types **Vacuum** and **LawnMower** for any device. HomeKit has no vacuum or mower tile outside Matter, so, as in Home Assistant, they show as a switch: on starts, off sends it home. "Hey Siri, turn on the vacuum" works
+- Uses the device's on/off, or choose **Start** and **Stop / go home** action groups and the state that shows it's running (e.g. `status` is one of `cleaning, spotCleaning`)
+
+### 🔘 HomeKit Buttons: Indigo starts Home app automations
+- New device type **HomeKit Buttons** (1–10 named buttons), published from its own settings (**Publish to bridge**) or from a bridge (**Select Type to List → HomeKitLink Buttons**). It does nothing in Indigo: it appears in the Home app as a button accessory, and the Home app decides what each single, double and long press does
+- New action **Press a HomeKit Button** presses one from any Indigo trigger, schedule, action group or Control Page. This reaches what only the Home app controls: Matter or Apple-only devices, HomePod music, Home scenes
+- A physical remote (e.g. a WallMote) is brought into Home the same way: give a Buttons device matching buttons and add the action to the remote's Indigo triggers
+- States: last button, last press and when
+
+### 🎥 HomeKit Secure Video
+- A disabled Recorder no longer checks the camera's streams at every bridge start, and logs one line saying it's disabled. The Home app's routine re-writes after a restart are only logged when something actually changed
+
+### 🛠️ Fixes
+- Reopening an already-published device in a bridge's settings now shows its saved HomeKit type (and that type's settings), not the type HomeKitLink would detect
+
+---
+
 ## 0.8.26 — 2026-11-14
 
 ### 📷 Cameras

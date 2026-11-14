@@ -18,6 +18,7 @@
 				    <Option value="BI_camera">Blue Iris Camera</Option>
 				 	<Option value="SS_camera">Security Spy Camera</Option>
 				 	<Option value="UP_camera">UniFi Protect Camera</Option>
+				 	<Option value="hk_buttons">HomeKitLink Buttons</Option>
                 </List>
 				  <CallbackMethod>menuChanged</CallbackMethod>
 			</Field>
@@ -134,6 +135,29 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 uniFiAP plugin (kw123): paste the RTSPS URL from Protect (camera > Settings > Advanced > RTSP, High).
 A UniFi doorbell is set up as a doorbell automatically.</Label>
 			</Field>
+			<Field id="buttonsPublishLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Buttons">
+				<Label>A HomeKit Buttons device: Indigo presses its buttons with the action "Press a HomeKit Button", and the Home app decides what each press does. Set its buttons and names in its own settings.</Label>
+			</Field>
+			<Field id="robotStart" type="menu" defaultValue="default" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
+				<Label>Start:</Label>
+				<List class="self" filter="start" method="robot_actiongroup_list" dynamicReload="true"/>
+			</Field>
+			<Field id="robotStop" type="menu" defaultValue="default" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
+				<Label>Stop / go home:</Label>
+				<List class="self" filter="stop" method="robot_actiongroup_list" dynamicReload="true"/>
+			</Field>
+			<Field id="robotState" type="menu" defaultValue="default" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
+				<Label>Running when:</Label>
+				<List class="self" method="robot_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="robotRunning" type="textfield" defaultValue="" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
+				<Label>is one of:</Label>
+			</Field>
+			<Field id="robotLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Vacuum,LawnMower">
+				<Label>HomeKit has no vacuum or mower tile (Apple's are for Matter devices only), so it shows as a switch: on starts it, off sends it home. Siri: "turn on the vacuum".
+Start and Stop: action groups to run, or the default: turn the device on / off.
+Running when: the state that shows it's working, and its values separated by commas (e.g. cleaning, spotCleaning). The default uses the device's on/off.</Label>
+			</Field>
 			<Field id="deviceSensor" type="menu" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="showALL" visibleBindingValue="true">
 				<Label>Device State:</Label>
 				<List class="self" method="devicestate_generator" dynamicReload="true"/>
@@ -231,6 +255,78 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 </States>
 	</Device>
 
+
+	<Device type="custom" id="hkButtons">
+		<Name>HomeKit Buttons</Name>
+		<ConfigUI>
+			<Field id="buttonsIntro" type="label" fontSize="small">
+				<Label>Lets Indigo start things in the Home app. This device does nothing in Indigo itself: it appears in the Home app as a button accessory (like a wireless remote), and the Home app decides what each press does.
+
+Use it to reach what only the Home app controls (Matter or Apple-only devices, HomePod music, Home scenes) from any Indigo trigger, schedule, action group or Control Page.
+
+1. Choose the buttons, their names and the bridge to publish them to.
+2. In the Home app, open the new accessory: each button has a single, double and long press. Choose what each one runs.
+3. In Indigo, press a button with the action "Press a HomeKit Button" (HomeKitLink Siri actions).
+
+A physical remote or wall switch can be passed on to the Home app too: see the wiki (Supported Devices > HomeKit Buttons).
+
+The other direction (the Home app running something in Indigo) is not this device: publish an action group or device as a switch instead.
+
+Changing the number of buttons or their names restarts its bridge.</Label>
+			</Field>
+			<Field id="buttonCount" type="menu" defaultValue="1">
+				<Label>Buttons:</Label>
+				<List>
+					<Option value="1">1</Option>
+					<Option value="2">2</Option>
+					<Option value="3">3</Option>
+					<Option value="4">4</Option>
+					<Option value="5">5</Option>
+					<Option value="6">6</Option>
+					<Option value="7">7</Option>
+					<Option value="8">8</Option>
+					<Option value="9">9</Option>
+					<Option value="10">10</Option>
+				</List>
+			</Field>
+			<Field id="buttonNames" type="textfield" defaultValue="">
+				<Label>Names:</Label>
+			</Field>
+			<Field id="buttonNamesLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>Optional, separated by commas (e.g. Arrive, Leave, Movie). Blank names are Button 1, Button 2...</Label>
+			</Field>
+			<Field id="publishBridge" type="menu" defaultValue="none">
+				<Label>Publish to bridge:</Label>
+				<List class="self" method="buttons_bridge_list" dynamicReload="true"/>
+			</Field>
+			<Field id="publishBridgeLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>Saving restarts the bridge to add (or remove) these buttons. You can also publish it from the bridge's own settings: Select Type to List > HomeKitLink Buttons.</Label>
+			</Field>
+		</ConfigUI>
+		<UiDisplayStateId>lastPress</UiDisplayStateId>
+		<States>
+			<State id="lastButton">
+				<ValueType>Integer</ValueType>
+				<TriggerLabel>Last button</TriggerLabel>
+				<ControlPageLabel>Last button</ControlPageLabel>
+			</State>
+			<State id="lastButtonName">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last button name</TriggerLabel>
+				<ControlPageLabel>Last button name</ControlPageLabel>
+			</State>
+			<State id="lastPress">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last press</TriggerLabel>
+				<ControlPageLabel>Last press</ControlPageLabel>
+			</State>
+			<State id="lastPressTime">
+				<ValueType>String</ValueType>
+				<TriggerLabel>Last press time</TriggerLabel>
+				<ControlPageLabel>Last press time</ControlPageLabel>
+			</State>
+		</States>
+	</Device>
 
 	<Device type="custom" id="hksvRecorder">
 		<Name>HomeKit Secure Video Recorder</Name>

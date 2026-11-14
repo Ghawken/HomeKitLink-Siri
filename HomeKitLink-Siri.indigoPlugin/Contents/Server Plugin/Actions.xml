@@ -22,5 +22,26 @@
 			</Field>
         </ConfigUI>
     </Action>
+    <Action id="pressHomeKitButton" deviceFilter="self.hkButtons">
+        <Name>Press a HomeKit Button</Name>
+        <CallbackMethod>action_pressHomeKitButton</CallbackMethod>
+        <ConfigUI>
+			<Field id="button" type="menu" defaultValue="1">
+				<Label>Button:</Label>
+				<List class="self" method="button_number_list" dynamicReload="true"/>
+			</Field>
+			<Field id="pressType" type="menu" defaultValue="0">
+				<Label>Press:</Label>
+				<List>
+					<Option value="0">Single press</Option>
+					<Option value="1">Double press</Option>
+					<Option value="2">Long press</Option>
+				</List>
+			</Field>
+			<Field id="pressLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>Presses this button in the Home app, which runs whatever the Home app has set for this press. Nothing happens in Indigo itself.</Label>
+			</Field>
+        </ConfigUI>
+    </Action>
 </Actions>
 
