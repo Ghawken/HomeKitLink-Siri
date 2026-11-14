@@ -237,7 +237,9 @@ HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doo
 1. **Plugins → Devices → New Device**, type **HomeKit Secure Video Recorder**
 2. Choose the camera, then Save
 3. HomeKitLink restarts that camera's bridge to add the recording services
-4. **If the camera was already in the Home app**, it must be re-added, as HomeKit only offers recording for a camera that has it when it is first added: unpublish the camera from its bridge, save, wait for it to disappear from the Home app, then publish it again. Only that camera is affected (its room, name, notifications and automations need setting again); the bridge doesn't need re-pairing. The Home app then shows a "Secure Video" welcome
+4. **If Recording Options don't appear** (or recordings don't show on an iPhone), the Home app is still using what it knew about the camera:
+   - first, **force-close the Home app** (swipe it away) on each iPhone/iPad and open it again. The Home app should then show a "Secure Video" welcome for the camera
+   - if that doesn't do it, **re-add the camera**: unpublish it from its bridge, save, wait for it to disappear from the Home app, then publish it again. Only that camera is affected (its room, name, notifications and automations need setting again); the bridge doesn't need re-pairing
 5. In the Home app, open the camera's settings → **Recording Options**, and choose when to record (e.g. Stream & Allow Recording when away). The Home app may say "There was an error updating the setting" the first time; the setting is saved regardless
 
 ### How it records
@@ -263,15 +265,15 @@ HKSV is built very differently from live view, and that is why it is opt-in per 
 - **Only while needed.** The prebuffer runs only while the Home app allows recording for the camera (and the Recorder is enabled). With "Stream" when home and "Stream & Allow Recording" when away, nothing runs while you're home.
 - **Measured, not guessed.** The Recorder shows its ffmpeg's actual CPU, memory and data rate, so you can see the cost of each camera.
 
-**Measured on a Mac with one 1080p BlueIris camera:**
+**Measured with one 1080p BlueIris camera** (re-encoding to the 1920×1080 the hub asked for, on an Intel i7-8700B Mac mini):
 
-| | CPU | Memory | Network (from the NVR) |
+| | CPU (of one core) | Memory | Network (from the NVR) |
 |---|---|---|---|
-| Copy | ~1–2 % of one core | ~20–35 MB | the stream's own rate, ~0.5–1 Mbps |
-| Re-encode (VideoToolbox) | ~6–10 % | ~150 MB | the source stream's rate |
-| Re-encode (libx264) | one or more cores | ~200 MB+ | the source stream's rate |
+| Copy | ~1–2 % | ~20–35 MB | the stream's own rate, ~0.5–1 Mbps |
+| Re-encode, VideoToolbox | ~13 % | ~150 MB | the source stream's rate |
+| Re-encode, libx264 | ~65 % | ~165 MB | the source stream's rate |
 
-These apply **all the time** while recording is allowed, not just while recording.
+VideoToolbox is about five times cheaper than libx264 here. Apple Silicon Macs encode H.264 in a dedicated media engine, so VideoToolbox should be cheaper still there — check the Recorder's `ffmpegCpuPercent` on your own Mac. These costs apply **all the time** while recording is allowed, not just while recording.
 
 **Risks with many cameras.** Every Recorder camera adds, continuously:
 - **one more connection to the NVR** (BlueIris, SecuritySpy or Protect), on top of its own recording and any live viewers. NVRs and some cameras limit simultaneous streams;
