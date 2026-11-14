@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.26 — 2026-11-14
+
+### 📷 Cameras
+- UniFi **G6 Entry** is now a HomeKit doorbell automatically (its model name doesn't say "doorbell")
+- Wiki: Blue Iris 6 notes from its change log — 6.0.9.16 or later for remote viewing, keep HomeKit streams H.264, keyframe rate, and web server IP bans
+
+---
+
 ## 0.8.25 — 2026-11-14
 
 ### 📷 From PR #42 (thanks Durosity)

@@ -61,6 +61,14 @@ HKLS uses **Stream 2** from Blue Iris for HomeKit. Optimal settings for zero-tra
 
 > **Tip:** After changing Blue Iris stream settings, run **Plugins → HomeKitLink Siri → Check or Update Camera Streams for Compatibility** to update how HKLS processes the stream.
 
+### Blue Iris 6 notes
+From the Blue Iris 6 change log, things that matter for HomeKit:
+- **Use 6.0.9.16 or later.** Earlier 6.0 builds didn't honour the `&kbps=` limit on RTSP streams, which remote viewing relies on (see below).
+- **Keep HomeKit streams H.264.** Since 6.0.1.12 the Blue Iris RTSP server can send **H.265** (including direct-to-wire). HomeKit only accepts H.264, so an H.265 stream is re-encoded by HKLS for every live view and for HomeKit Secure Video, costing CPU.
+- **Keyframes:** since 6.1.4.4 Blue Iris warns ("Check FPS and key frame rate") when a camera's key frame rate drops below 0.20/s (one every 5 s), and the camera's **FPS/key** display shows it. For HomeKit Secure Video to copy a stream it needs a keyframe at least every 4 s (key ≥ 0.25), and live view starts faster with ≤ 2 s (key ≥ 0.5).
+- **Web server security (6.0.3.x):** requests must carry Host and User-Agent headers (HKLS's do), and Blue Iris can permanently ban an IP address. If snapshots and streams suddenly stop with connections refused, check **Settings → Web server → Advanced** for a ban on the Indigo Mac, and add its IP with `^` or `=` to exempt it.
+- Blue Iris's two-way audio (talk) is only from its own console and apps to the cameras; there is still no way for HomeKitLink to send it audio.
+
 ---
 
 ## Remote / Mobile Viewing — Blue Iris (v0.8.09+)
@@ -137,6 +145,9 @@ UniFi Protect cameras and doorbells are published from the cameras another Indig
 - **Away from home:** the Low stream (~640×360) is re-encoded to the bitrate HomeKit asks for. This only runs while you are watching
 - A camera whose model is a doorbell gets the HomeKit doorbell automatically. For another model with a doorbell button, tick **Treat as a doorbell** (v0.8.25+); other cameras can still use **DoorBell Linked**
 - **Portrait cameras** (some doorbells stream taller than wide): the startup check remembers each camera's stream size, and from the next bridge start a portrait camera is offered portrait sizes (e.g. 1080×1440) — otherwise HomeKit asks for landscape video it never gets. The log says when a restart is needed (v0.8.25+)
+
+### G6 Entry (v0.8.26+)
+The UniFi **G6 Entry** is recognised as a doorbell automatically (its model name doesn't contain "Doorbell"). Its package lens can be published as a [package camera](#package-camera-v0825), talk works with two-way audio, and HomeKit Secure Video works with a Recorder. If you have Protect's **Enhanced Encoding** (H.265) turned on for a camera, its RTSP streams may be H.265, which HomeKit can't use directly: HKLS then re-encodes them, at a CPU cost. The camera's startup check and the Recorder's stream check show the codec.
 
 ### Package camera (v0.8.25+)
 A G4 Doorbell Pro or G6 Entry has a second lens looking down for packages. The UniFi plugin (Durosity) creates it as its own **Protect Package Camera** device; publish it like any other UniFi camera and it appears as a separate HomeKit camera:

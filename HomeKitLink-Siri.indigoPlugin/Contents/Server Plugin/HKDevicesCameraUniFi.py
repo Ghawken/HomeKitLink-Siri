@@ -42,6 +42,8 @@ _LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 
 UNIFI_DUROSITY_ID = "com.durosity.indigoplugin.unifi"
 UNIFI_KW123_ID = "com.karlwachs.uniFiAP"
+## Doorbells whose model name doesn't say "doorbell" (not just "entry", which isn't specific enough)
+DOORBELL_MODELS = ("g6 entry",)
 UNIFI_PACKAGE_TYPE = "protectPackageCamera"   ## Durosity: a G4 Doorbell Pro / G6 Entry's second (package) lens
 UNIFI_CAMERA_TYPES = {
     UNIFI_DUROSITY_ID: ("protectCamera", UNIFI_PACKAGE_TYPE),
@@ -108,7 +110,9 @@ def is_doorbell(dev):
     Never the package lens (the main lens is the doorbell)."""
     if is_package_camera(dev):
         return False
-    return "doorbell" in camera_model(dev).lower() or bool(dev.pluginProps.get("HomeKit_unifiDoorbell", False))
+    model = camera_model(dev).lower()
+    return ("doorbell" in model or any(m in model for m in DOORBELL_MODELS)
+            or bool(dev.pluginProps.get("HomeKit_unifiDoorbell", False)))
 
 
 def motion_active(dev):
