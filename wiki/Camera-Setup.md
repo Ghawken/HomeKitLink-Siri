@@ -331,6 +331,24 @@ In the log, look for `hub chose …`, `prebuffer started - …`, `recording to h
 
 ## Camera Performance Tuning
 
+### Hardware encoding (VideoToolbox)
+Most camera video is **copied** to HomeKit without re-encoding, which costs almost nothing. When a stream does have to be re-encoded:
+
+| | Encoder |
+|---|---|
+| HomeKit Secure Video recording | **VideoToolbox** (the Mac's hardware encoder) by default; libx264 can be chosen on the Recorder |
+| Live view (e.g. UniFi remote viewing from the Low stream, or a stream that can't be copied) | libx264 |
+
+Measured on an Intel Mac mini (i7-8700B) with a 1080p camera:
+
+| Re-encode | libx264 | VideoToolbox |
+|---|---|---|
+| HKSV recording, 1920×1080 at 2 Mbps | ~65 % CPU | ~13 % CPU |
+| Remote live view, 640×360 at 132 kbps | ~16 % CPU | ~15 % CPU |
+
+For HKSV the hardware encoder is a large saving. For remote live view it isn't: the picture is small, so most of the work is **decoding** the camera's stream, which ffmpeg does in software either way. Both encoders kept close to HomeKit's remote bitrate (worst second ~185–190 kbps for 132 kbps asked). Apple Silicon Macs encode in a dedicated media engine, so VideoToolbox should be cheaper still there.
+
+
 Configure camera performance in **Plugin Config** (Plugins → HomeKitLink Siri → Configure…):
 
 | Setting | Default | Effect |
