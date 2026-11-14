@@ -14,7 +14,7 @@ Complete version history for HomeKitLink Siri.
 - **UniFi portrait cameras** are offered portrait sizes (from the stream size the startup check saw), so HomeKit doesn't ask for landscape video they never send
 - **HomeKit Secure Video**: a doorbell press keeps a recording going for 30 s (Recorder setting, on by default)
 - **Two-way audio**: muting the camera while you talk can now be turned off in the plugin Config
-- Not taken from the PR, for reasons in the PR review: the RTSP port 7447 rewrite, manual quality/size menus, renaming camera motion sensors, per-device new identities, hardware encoding for live view (VideoToolbox ignores HomeKit's remote bitrate limit) and a custom ffmpeg path. Virtual Doors & Windows waits for its companion plugin
+- Not taken from the PR, for reasons in the PR review: the RTSP port 7447 rewrite, manual quality/size menus, renaming camera motion sensors, per-device new identities, hardware encoding for live view (measured: for the small remote-viewing re-encode it saves no CPU, as decoding the camera's stream is most of the cost) and a custom ffmpeg path. Virtual Doors & Windows waits for its companion plugin
 
 ---
 
