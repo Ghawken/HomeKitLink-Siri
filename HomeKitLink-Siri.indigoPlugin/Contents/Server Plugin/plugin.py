@@ -1419,10 +1419,13 @@ class Plugin(indigo.PluginBase):
             keys = [k for k in dev.states.keys() if not k.endswith(".ui")]
         except Exception:
             return guess
+        skip = ("batt", "unit", "alarm", "status", "max", "min")   ## e.g. Ecowitt's pm25Batt1 is the sensor's battery
         for field, words in self.AQ_GUESS.items():
-            match = next((k for k in keys if any(w in k.lower().replace(" ", "") for w in words)), None)
-            if match:
-                guess[field] = match
+            found = [k for k in keys if any(w in k.lower().replace(" ", "") for w in words)
+                     and not any(s in k.lower() for s in skip)]
+            if found:   ## the live reading before averages (pm25Ch1 before pm25Ch1Avg24h), then the shortest name
+                found.sort(key=lambda k: ("avg" in k.lower() or "24h" in k.lower(), len(k)))
+                guess[field] = found[0]
         if not any(guess.get(f) for f in ("aqPM25", "aqPM10", "aqVOC", "aqNO2", "aqAQI")):
             return {}   ## CO2 alone isn't an air quality sensor (it has its own type)
         return guess

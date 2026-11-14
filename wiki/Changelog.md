@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.32 — 2026-11-15
+
+### 🌫️ Air quality sensors
+- The automatic state choice no longer picks a sensor's battery (e.g. Ecowitt's `pm25Batt1`) and prefers the live reading over a 24-hour average (`pm25Ch1` before `pm25Ch1Avg24h`)
+
+---
+
 ## 0.8.31 — 2026-11-15
 
 ### ❄️ Heater-Cooler

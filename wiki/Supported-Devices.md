@@ -96,7 +96,7 @@ The Home app's air quality tile, from any device that measures air quality (e.g.
 
 The Home app shows each reading and an overall rating, **Excellent → Poor**, which is the worst of them (the same bands Home Assistant uses). Set **VOC, NO2 and ozone are in** to ppb if your device reports parts per billion; they're converted for HomeKit (VOC by a typical indoor factor of 4.5, so ratings are approximate).
 
-Devices with states named like `pm25`, `pm10`, `voc`, `no2` or `aqi` are offered Air Quality Sensor automatically with those states pre-selected; check them before saving. HomeKit shows densities up to 1000 µg/m³.
+Devices with states named like `pm25`, `pm10`, `voc`, `no2` or `aqi` are offered Air Quality Sensor automatically with those states pre-selected (live readings rather than averages or batteries); check them before saving. Example: an **Ecowitt gateway** with a PM2.5 sensor: PM2.5 = `pm25Ch1`, everything else Not used. HomeKit shows densities up to 1000 µg/m³.
 
 ### Leak Sensor
 Binary leak detected / not detected.
