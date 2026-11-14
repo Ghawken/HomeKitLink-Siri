@@ -226,6 +226,8 @@ Any HKLS camera can have a **Doorbell** device associated with it:
 
 HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doorbell events to iCloud, with the Home app's timeline, face recognition and activity zones. It is **per camera and opt-in**: cameras without an HKSV Recorder device are unchanged.
 
+> HKSV is here thanks to **Durosity**, whose PR #42 worked out the HomeKit recording services and the encrypted HomeKit Data Stream they use. HomeKitLink's version builds on that work, with the changes described under [Approach and costs](#approach-and-costs).
+
 ### What you need
 - The **home owner** needs an iCloud+ plan. Without one the Home app shows no Recording Options. The plan sets how many cameras can record: 1 on 50 GB, 5 on 200 GB, unlimited on 2 TB and up
 - A home hub: Apple TV or HomePod
@@ -235,7 +237,8 @@ HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doo
 1. **Plugins → Devices → New Device**, type **HomeKit Secure Video Recorder**
 2. Choose the camera, then Save
 3. HomeKitLink restarts that camera's bridge to add the recording services
-4. In the Home app, open the camera's settings → **Recording Options**, and choose when to record (e.g. Stream & Allow Recording when away)
+4. **If the camera was already in the Home app**, it must be re-added, as HomeKit only offers recording for a camera that has it when it is first added: unpublish the camera from its bridge, save, wait for it to disappear from the Home app, then publish it again. Only that camera is affected (its room, name, notifications and automations need setting again); the bridge doesn't need re-pairing. The Home app then shows a "Secure Video" welcome
+5. In the Home app, open the camera's settings → **Recording Options**, and choose when to record (e.g. Stream & Allow Recording when away). The Home app may say "There was an error updating the setting" the first time; the setting is saved regardless
 
 ### How it records
 HomeKit wants each recording to start a few seconds **before** the motion, so while the Home app allows recording, one ffmpeg keeps the last few seconds of the camera in memory (the prebuffer). It only runs while recording is allowed: if the Home app is set to Stream or Off (for example while you're home), nothing runs.
@@ -248,6 +251,46 @@ At bridge start the Recorder checks each of the camera's streams (BlueIris strea
 A stream is **copied** (no re-encoding, about 1–2 % CPU) when it is H.264, at most 1920×1080 and level 4.2, at most 30 fps, with a keyframe at least every 4 seconds. Otherwise the best stream is **re-encoded** to the format the hub chose, with VideoToolbox by default (measured 6–10 % CPU and ~150 MB for 1080p). Audio is always converted to AAC-LC, which costs very little.
 
 > To let a BlueIris camera be copied, give one of its streams (often stream 0) a size of 1920×1080 or less, a **fixed** frame rate (e.g. 15 fps) and a keyframe interval of 4 s or less. A stream whose frame rate drops (e.g. at night) also stretches the time between keyframes, so it may copy at one bridge start and re-encode at the next.
+
+### Approach and costs
+HKSV is built very differently from live view, and that is why it is opt-in per camera.
+
+**Why it can't simply use the live stream.** Live view only runs while someone is watching. HKSV recordings must start a few seconds **before** the motion that triggers them, so the camera has to be watched all the time while recording is allowed, keeping the last few seconds in memory. When the home hub sees motion, it opens an encrypted HomeKit Data Stream to the plugin and asks for the recording: the plugin sends those seconds, then the live video, until the motion has stopped. The hub then analyses the clip (people, animals, vehicles, faces) and stores it in iCloud.
+
+**What HomeKitLink does to keep that cheap:**
+- **One camera at a time, by choice.** Only cameras with a Recorder device get the recording services; nothing changes for the rest.
+- **Copy before re-encode.** Each of the camera's streams is checked once at bridge start; if one already suits HomeKit it is passed through untouched. PR #42 always re-encoded.
+- **Only while needed.** The prebuffer runs only while the Home app allows recording for the camera (and the Recorder is enabled). With "Stream" when home and "Stream & Allow Recording" when away, nothing runs while you're home.
+- **Measured, not guessed.** The Recorder shows its ffmpeg's actual CPU, memory and data rate, so you can see the cost of each camera.
+
+**Measured on a Mac with one 1080p BlueIris camera:**
+
+| | CPU | Memory | Network (from the NVR) |
+|---|---|---|---|
+| Copy | ~1–2 % of one core | ~20–35 MB | the stream's own rate, ~0.5–1 Mbps |
+| Re-encode (VideoToolbox) | ~6–10 % | ~150 MB | the source stream's rate |
+| Re-encode (libx264) | one or more cores | ~200 MB+ | the source stream's rate |
+
+These apply **all the time** while recording is allowed, not just while recording.
+
+**Risks with many cameras.** Every Recorder camera adds, continuously:
+- **one more connection to the NVR** (BlueIris, SecuritySpy or Protect), on top of its own recording and any live viewers. NVRs and some cameras limit simultaneous streams;
+- **one more ffmpeg** in the Indigo Mac, with the CPU and memory above. Ten copied cameras is modest; ten re-encoded ones is a real load, and VideoToolbox has a limit on simultaneous hardware sessions;
+- **a constant stream over the network** if the NVR is on another machine;
+- **more work for the home hub**, which analyses every motion clip from every camera. An Apple TV or HomePod handling many busy cameras becomes the bottleneck;
+- **iCloud limits**: 1 camera on 50 GB, 5 on 200 GB, unlimited on 2 TB and up;
+- **the same footage recorded twice** — once by your NVR, once in iCloud.
+
+**Recommendations**
+- Start with one or two cameras where it matters (the front door, a doorbell, so the rest of the family can see clips), and watch the Recorder's CPU and memory.
+- Make sure those cameras **copy**: give the NVR stream used a size of 1920×1080 or less, a fixed frame rate and a keyframe every 4 s or less. Check `recordMode` and `streamCheck`.
+- Use the Home app's modes so recording is only allowed when it's useful (e.g. when away).
+- Prefer the NVR's own recording and alerts for everything else.
+
+**Known limitations**
+- Tested with BlueIris and an Apple TV hub. SecuritySpy and UniFi Protect use the same code with their own streams, but haven't yet been tried with a real hub.
+- A camera whose keyframe interval varies (BlueIris re-encoded streams at a variable frame rate) may copy at one bridge start and re-encode at the next.
+- The stream check takes about 10–15 s per stream at bridge start; recording can't start before it finishes.
 
 ### The Recorder device
 | Setting | |

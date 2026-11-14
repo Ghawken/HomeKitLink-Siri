@@ -12,6 +12,7 @@ Complete version history for HomeKitLink Siri.
 - A recording that starts soon after the camera stream (re)starts now waits up to 8 s for its first few seconds of video, so it begins with the pre-roll instead of none
 - Checked with SecuritySpy and UniFi Protect cameras as well as BlueIris: each camera's own streams are checked (SecuritySpy full size and resized; UniFi High, Medium and Low) and the best one is copied or re-encoded
 - Debug HKSV shows how much video was held when each recording started
+- Wiki: HomeKit Secure Video now explains how recording works, what it costs per camera, the risks of many cameras, and how to add HKSV to a camera already in the Home app (it must be re-added). With thanks to Durosity, whose PR #42 made this possible
 
 ---
 
