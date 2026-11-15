@@ -8,21 +8,28 @@
 
 Each **HomeKitLink Bridge** device has a config dialog with all the tools needed to manage published accessories.
 
-### Device Selection Filters
+### Finding a device
 
 ![Device Config 1](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/DeviceConfig1.png?raw=true)
 
-The first dropdown in the config dialog is a device category filter:
+The top of the bridge dialog finds the device to publish (or edit):
 
-| Filter | Shows |
-|---|---|
-| **All Indigo Devices** | Every device in Indigo |
-| **Lights** | Dimmer and relay devices likely to be lights |
-| **Sensors** | Sensor-type devices |
-| **Cameras** | BlueIris / SecuritySpy camera devices |
-| *(others)* | Category-specific subsets |
+1. **Select Type to List** narrows the list:
 
-These filters only affect the list — all are duplicated in the "All" list. Use them to make searching easier when you have hundreds of devices.
+   | Entry | Lists |
+   |---|---|
+   | **all Indigo Devices** | Every device (except HomeKitLink's own bridges and HKSV Recorders, which can't be published) |
+   | **Indigo Action Groups** | Action groups |
+   | **Indigo Lights / Relay Devices / Sensor Devices** | Dimmers and lights, relays, sensors |
+   | **Indigo Thermostats / Fans (Speed Control) / Sprinklers** | Those device kinds |
+   | **Plugin Devices** | Every third-party plugin's devices, under a heading per plugin |
+   | **Cameras (all)** | Blue Iris, SecuritySpy and UniFi Protect cameras, under a heading each (each also has its own entry) |
+   | **HomeKitLink Buttons and Sensors** | HomeKitLink's own [HomeKit Buttons and HomeKitLink Sensor devices](HomeKitLink-Devices) |
+
+2. **Search**: type part of a name, or several words in any order, and press **Find**; the list shows only matching devices. **Clear** shows them all again. (Pressing Return in the box is the dialog's Save: it applies the search and keeps the dialog open; press Save again to save and close.)
+3. **Device to Publish**: the list, in three parts: devices available to publish, devices on **this** bridge, and devices on **other** bridges (greyed out, with the bridge's name: edit that bridge to change them). Each part is sorted by name, ignoring capitals and with numbers in order.
+
+A device's options (Publish, HomeKit name, type and the type's settings) appear once a device is chosen.
 
 ---
 
@@ -65,6 +72,17 @@ When publishing a sensor device, HKLS asks which **device state** to use as the 
 - Temperature / humidity: must be a plain number — `22.1`, not `"22.1°C"`
 
 If a device sends the wrong type, HKLS will display `0` or may cause the bridge to stall. Fix by unpublishing the device (uncheck Publish, Save) and reconfiguring.
+
+> One device with several readings (e.g. a weather gateway)? Publish the device once, and use a [HomeKitLink Sensor](HomeKitLink-Devices#homekitlink-sensor-v0837) for each extra reading.
+
+---
+
+### Saving, and what's stored on your devices
+
+- Changes to a device are saved with **Save Device**. Closing the bridge dialog with its own Save doesn't save the device you were editing.
+- HomeKitLink stores a device's publishing settings on the device itself: published, bridge, HomeKit type, HomeKit name, and only the settings its HomeKit type uses (v0.8.36+). Changing a device's type drops the old type's settings.
+- **Unpublishing** a device (untick Publish, **Save Device**) removes all of HomeKitLink's settings from it.
+- **Deleting or disabling a bridge** doesn't change its devices: they keep their settings, and can be moved to another bridge with the plugin menu **Move Accessories**.
 
 ---
 

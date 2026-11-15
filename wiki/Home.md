@@ -18,6 +18,7 @@
 | ⚡ [Quick Start](Quick-Start) | Add your first bridge & device |
 | ⚙️ [Setup & Configuration](Setup-and-Configuration) | Full device setup guide |
 | 📱 [Supported Devices](Supported-Devices) | All supported HomeKit device types |
+| 🧩 [HomeKitLink Devices](HomeKitLink-Devices) | HomeKitLink Sensor, HomeKit Buttons and HKSV Recorder |
 | 🎥 [Camera Setup](Camera-Setup) | BlueIris, SecuritySpy & UniFi Protect configuration |
 | 🔧 [Plugin Menu Items](Plugin-Menu-Items) | All plugin menu actions explained |
 | 🆘 [Troubleshooting](Troubleshooting) | **Run menu items 1, 2 & 3 first!** |

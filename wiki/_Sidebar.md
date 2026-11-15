@@ -13,6 +13,7 @@
 
 **Features**
 - [📱 Supported Devices](Supported-Devices)
+- [🧩 HomeKitLink Devices](HomeKitLink-Devices)
 - [🎥 Camera Setup](Camera-Setup)
 - [🔧 Plugin Menu Items](Plugin-Menu-Items)
 

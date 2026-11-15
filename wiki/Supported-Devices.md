@@ -200,6 +200,8 @@ When publishing, choose type **Vacuum** or **LawnMower**, then:
 
 ## HomeKitLink Sensor (v0.8.37+)
 
+> Full details and screenshots: [HomeKitLink Devices](HomeKitLink-Devices#homekitlink-sensor-v0837).
+
 Publishes **one state of another Indigo device as a HomeKit sensor of its own**: its own name, room and bridge. Use it when one device holds several readings, for example a weather gateway (Ecowitt, Tempest, Netatmo) with outdoor temperature, humidity, light and rain. HomeKitLink publishes each Indigo device once; a HomeKitLink Sensor per reading gives each its own tile in the Home app. **Nothing is changed on the device it mirrors.**
 
 1. Create a new device: Type *HomeKitLink Siri*, Model **HomeKitLink Sensor**.
@@ -222,6 +224,8 @@ It's an ordinary Indigo sensor that follows its source state, so you can use it 
 ---
 
 ## HomeKit Buttons (v0.8.27+)
+
+> Full details and screenshots: [HomeKitLink Devices](HomeKitLink-Devices#homekit-buttons-v0827).
 
 **Indigo → Home.** A HomeKit Buttons device lets Indigo start things in the Home app. It does nothing in Indigo itself: it appears in the Home app as a button accessory (like a wireless remote), and **the Home app decides what each press does**.
 
