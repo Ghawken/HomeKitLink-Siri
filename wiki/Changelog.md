@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.39 — 2026-11-15
+
+### 🧾 Quieter camera logging
+- **Repeated short live views** (e.g. a Home widget that refreshes a camera's picture by opening a stream for a second or two, all day) are logged once: when the same device asks for the same size again within 10 minutes and its last view lasted under 5 seconds, that stream's lines go to debug level, with one line saying so. Normal logging resumes once the device has been quiet for 10 minutes. Real viewing (5 seconds or more) is always logged
+- With **Debug HomeKit Camera** on, each snapshot is one debug line instead of eight
+
+---
+
 ## 0.8.38 — 2026-11-15
 
 ### 📷 Blue Iris: faster live view start

@@ -346,3 +346,47 @@ def _find_next_available_port(start_port: int, exclude_ports: set) -> int:
                 raise
             continue
     raise RuntimeError("Unreachable")
+
+class RepeatedViews:
+    """Quieter logging for repeated short live views of one camera, e.g. a Home widget that refreshes its
+    picture by opening a stream for a second or two, over and over. The first view from a device at a size
+    is logged as usual; when the same device asks for the same size again within WINDOW seconds and its last
+    view lasted under SHORT seconds, that stream's lines go to debug (one INFO line says so). Normal logging
+    resumes once the device has been quiet for WINDOW seconds. Real viewing (longer views) is always logged."""
+    WINDOW = 600
+    SHORT = 5.0
+
+    def __init__(self):
+        self._last_start = {}      # key -> monotonic time of the last view's start
+        self._last_length = {}     # key -> length of the last finished view (seconds)
+        self._sessions = {}        # session id -> (key, start, quiet)
+        self._announced = set()
+
+    def start(self, logger, name, address, width, height, session_id):
+        """Log level for this session's lines (logging.INFO or logging.DEBUG)."""
+        import time as _time
+        key = (str(address), width, height)
+        now = _time.monotonic()
+        last = self._last_start.get(key)
+        quiet = (last is not None and now - last < self.WINDOW and self._last_length.get(key, 999) < self.SHORT)
+        self._last_start[key] = now
+        if quiet and key not in self._announced:
+            self._announced.add(key)
+            logger.info("[%s] Repeated short live views from %s at %sx%s (for example a Home widget refreshing its "
+                        "picture): logged at debug level until they stop for %d minutes",
+                        name, address, width, height, self.WINDOW // 60)
+        elif not quiet:
+            self._announced.discard(key)
+        self._sessions[str(session_id)] = (key, now, quiet)
+        return logging.DEBUG if quiet else logging.INFO
+
+    def stop(self, session_id):
+        """Log level for this session's closing line; records how long it lasted."""
+        import time as _time
+        key, start, quiet = self._sessions.pop(str(session_id), (None, None, False))
+        if key is not None:
+            length = _time.monotonic() - start
+            self._last_length[key] = length
+            if length >= self.SHORT:
+                return logging.INFO   ## a real view: its end is always logged, even if its start went to debug
+        return logging.DEBUG if quiet else logging.INFO

@@ -8,6 +8,7 @@ from homekit_audio_proxy import AudioProxy
 from typing import Any
 from HKutils import pid_is_alive
 from HKutils import SimpleIntervalScheduler
+from HKutils import RepeatedViews
 import time as t
 import datetime
 from typing import Callable
@@ -597,6 +598,10 @@ class Camera(HomeAccessory,  PyhapCamera):
                 stream_config.get("a_packet_time"),
                 stream_config.get("address"),
             )
+            ## A widget refreshing its picture repeats short views all day: those go to debug (see RepeatedViews)
+            view_level = self.__dict__.setdefault("_repeated_views", RepeatedViews()).start(
+                _LOGGER, self.display_name, stream_config.get("address"), stream_config.get("width"),
+                stream_config.get("height"), session_info["id"])
             # ============================================================
             # Resolve copy vs transcode
             # ============================================================
@@ -634,7 +639,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                 strategy["input_extra"] = ""
                 strategy["source_resolution"] = (req_width, req_height)
                 strategy["source_codec"] = "BlueIris Stream " + str(remote_stream)
-                _LOGGER.info(
+                _LOGGER.log(view_level,
                     "[%s] Remote / low-bandwidth request (%sx%s @ %sk): using BlueIris Stream %s (re-encoded by BlueIris)",
                     self.display_name, req_width, req_height, req_bitrate, remote_stream,
                 )
@@ -646,7 +651,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                 min_br = strategy.get("min_bitrate_kbps", 0)
                 actual_br = stream_config.get("v_max_bitrate", 0)
                 if min_br > 0 and actual_br < min_br:
-                    _LOGGER.info(
+                    _LOGGER.log(view_level,
                         "[%s] HomeKit requested %dk bitrate but minimum for %sx%s transcode is %dk — overriding",
                         self.display_name, actual_br,
                         strategy["target_resolution"][0],
@@ -657,7 +662,7 @@ class Camera(HomeAccessory,  PyhapCamera):
 
             # Log the decision
             if strategy["use_copy"]:
-                _LOGGER.info(
+                _LOGGER.log(view_level,
                     "[%s] Video: COPY passthrough (%sx%s %s)",
                     self.display_name,
                     strategy["source_resolution"][0],
@@ -665,7 +670,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                     strategy["source_codec"],
                 )
             else:
-                _LOGGER.info(
+                _LOGGER.log(view_level,
                     "[%s] Video: TRANSCODE %s %sx%s → libx264 %sx%s — %s",
                     self.display_name,
                     strategy["source_codec"],
@@ -861,7 +866,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                     await audio_proxy.async_stop()
                 return False
 
-            _LOGGER.info(
+            _LOGGER.log(view_level,
                 "[%s] Started video stream process - PID %d",
                 session_info["id"],
                 stream.process.pid,
@@ -1448,7 +1453,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             return
 
         ffmpeg_pid = stream.process.pid
-        _LOGGER.info("[%s] close video stream", session_id)
+        _LOGGER.log(self.__dict__.setdefault("_repeated_views", RepeatedViews()).stop(session_id), "[%s] close video stream", session_id)
         await stream.close()  ## kills ffmpeg itself on timeout/broken pipe, then clears its process handle
         if pid_is_alive(ffmpeg_pid):
             _LOGGER.info("[%s] kill video stream", session_id)
@@ -1476,22 +1481,12 @@ class Camera(HomeAccessory,  PyhapCamera):
             else:
                 ## or default saved to plugin packages
                 path = self.plugin.pluginPath + "/cameras/snapshot.jpg"
-            if debug_function:
-                _LOGGER.debug(f"Entering file read for: {path}")
 
             try:
-                if debug_function:
-                    _LOGGER.debug("Before open()")
                 with open(path, 'rb') as fp:
-                    if debug_function:
-                        _LOGGER.debug("After open(), before read()")
                     data = fp.read()
                     if debug_function:
-                        _LOGGER.debug("After read()")
-                        _LOGGER.debug(f"Data type: {type(data)}")
-                        _LOGGER.debug(f"Data length: {len(data)}")
-                        _LOGGER.debug(f"First 32 bytes: {data[:32]!r}")
-                        _LOGGER.debug(f"get_snapshot returning bytes len={len(data)} header={data[:8]!r}")
+                        _LOGGER.debug(f"[{self.display_name}] snapshot: {len(data)} bytes from {path}")
                     return data
             except Exception as e:
                 _LOGGER.debug(f"Exception during file read: {e}")
