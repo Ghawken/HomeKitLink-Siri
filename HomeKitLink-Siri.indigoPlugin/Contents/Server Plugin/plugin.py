@@ -2862,6 +2862,10 @@ class Plugin(indigo.PluginBase):
                             battery_accessory._char_low_battery.set_value(is_low_battery)
                             if self.debug2:
                                 self.logger.debug( "{}: Updated battery level to {}".format(updated_device.name, batteryLevel) )
+            # This sensor has its own state, handled above: done. Only a sensor with no state of its own (a relay
+            # or plain on/off device) falls through to the onOffState step below, which is its update.
+            if self.device_list_internal[checkindex]["devicesensor"] in updated_device.states:
+                return
 
         elif str(updateddevice_subtype) == "Lock" :  ## example of one way sesnor
             # if type(original_device) == indigo.RelayDevice:
@@ -2989,6 +2993,7 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                     self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
                     return
+            return   ## a camera has no on/off tile: the onOffState step below doesn't apply
 
         elif str(updateddevice_subtype) == "UniFiProtectCamera":
             accessory = self.device_list_internal[checkindex]["accessory"]
@@ -3021,6 +3026,7 @@ class Plugin(indigo.PluginBase):
                             self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
                         self.device_list_internal[checkindex]["accessory"].char_motion_detected.set_value(newstate)
                         return
+            return   ## a camera has no on/off tile: the onOffState step below doesn't apply
 
         elif str(updateddevice_subtype) == "Fan":
             ## Fan device has a brightnessLevel below, likely dimmer update Rotation speed with that.

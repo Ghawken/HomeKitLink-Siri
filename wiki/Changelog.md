@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.35 — 2026-11-15
+
+### 🛠️ Device updates
+- On/off sensors (Contact, Motion, Occupancy, Leak, Smoke, CO, CO2) published with a state of their own (e.g. a chosen `motion` state, or an analog `sensorValue`) now follow only that state: a change of the device's on/off state no longer overwrites them, and they're no longer written twice. Relays and on/off devices published as sensors still follow their on/off state, as before
+- Blue Iris and SecuritySpy cameras no longer try to apply an on/off change (a camera has no on/off tile), which could log a "Nonetype error" line
+
+---
+
 ## 0.8.34 — 2026-11-15
 
 ### 📋 Bridge settings: finding devices
