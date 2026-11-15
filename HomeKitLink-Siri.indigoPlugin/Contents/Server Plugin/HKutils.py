@@ -347,6 +347,98 @@ def _find_next_available_port(start_port: int, exclude_ports: set) -> int:
             continue
     raise RuntimeError("Unreachable")
 
+## ---------------------------------------------------------------------------------------------------------------
+## Improved live view (plugin setting "liveImproved", on by default; off = live view as before 0.8.44). What other
+## HomeKit projects do (Home Assistant, homebridge-unifi-protect, Scrypted, homebridge-camera-ffmpeg), mainly for
+## Apple TV and hub-relayed (remote) viewing. Three parts, all on together:
+##   ports  - send video from the port we tell HomeKit we send from (pyhap echoes the viewer's port back in
+##            SetupEndpoints), so its RTCP reports reach us. Home Assistant: &localrtpport=<port>. Copy and re-encode.
+##   encode - re-encoded streams only: one slice per frame (zerolatency's sliced threads split each frame), a keyframe
+##            every 4 s instead of 0.5 s, 2x buffer, the level and frame rate HomeKit asked for. All streams: 1200-byte
+##            packets (fits relayed and IPv6 paths).
+##   scale  - re-encoded streams only: scale down to the size HomeKit asked for, never up, keeping the shape.
+## (live_tuning can also limit them to listed viewer IPs; the setting applies them to every viewer.)
+## Copied (passthrough) streams keep the camera's picture; only ports and packet size apply to them.
+## ---------------------------------------------------------------------------------------------------------------
+LIVE_TUNING_LEVELS = {0: "3.1", 1: "3.2", 2: "4.0"}
+
+def live_tuning(plugin, address):
+    """The live view tuning that applies to a viewer at address: a set of 'ports', 'encode', 'scale' (may be empty)."""
+    on = {name for name, attr in (("ports", "liveTuningPorts"), ("encode", "liveTuningEncode"), ("scale", "liveTuningScale"))
+          if getattr(plugin, attr, False)}
+    if on and getattr(plugin, "liveTuningScope", "listed") == "listed" and str(address) not in getattr(plugin, "liveTuningViewers", set()):
+        return set()
+    return on
+
+def _udp_ports_free(*ports):
+    socks = []
+    try:
+        for port in ports:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socks.append(s)
+            s.bind(("", port))
+        return True
+    except OSError:
+        return False
+    finally:
+        for s in socks:
+            s.close()
+
+def presumed_upgrade(plugin, stream_config):
+    """Improved live view: start a mid-size request (640-1279 wide, e.g. 640x360 @ 132k for a remote view) at
+    1280x720 and at least 299k. HomeKit nearly always asks for that a few seconds later (a reconfigure), which
+    HKLS can't follow on a running stream, so the view used to stay at the low size. Smaller requests (Apple Watch)
+    and larger ones are unchanged. Changes stream_config; returns a note for the log, or None."""
+    if not getattr(plugin, "liveTuningEncode", False):
+        return None
+    width = int(stream_config.get("width", 0) or 0)
+    height = int(stream_config.get("height", 0) or 0)
+    bitrate = int(stream_config.get("v_max_bitrate", 0) or 0)
+    if not 640 <= width < 1280:
+        return None
+    stream_config["width"], stream_config["height"] = 1280, 720
+    stream_config["v_max_bitrate"] = max(bitrate, 299)
+    stream_config["presumed_upgrade"] = True   ## still a remote / low-bandwidth view: use the camera's remote stream
+    return f"started at 1280x720 @ {stream_config['v_max_bitrate']}k (HomeKit asked {width}x{height} @ {bitrate}k and usually raises it to this)"
+
+def tune_live_video(video_output, tuning, stream_config, copy):
+    """Apply the live view tuning to the formatted video part of an ffmpeg command. Returns (command, notes)."""
+    import re
+    notes = []
+    out = video_output
+    v_port = int(stream_config.get("v_port", 0) or 0)
+    if "ports" in tuning and v_port:
+        ## ffmpeg sends RTP from v_port and RTCP from v_port + 1 (unless localrtcpport is given)
+        if _udp_ports_free(v_port, v_port + 1):
+            out = re.sub(r"(srtp://\S+?\?\S*?)(pkt_size=)", r"\g<1>localrtpport={}&\g<2>".format(v_port), out, count=1)
+            notes.append(f"ports: sending from {v_port}")
+        else:
+            notes.append(f"ports: {v_port} in use here, sending from a random port as before")
+    if "encode" in tuning:
+        out = re.sub(r"pkt_size=\d+", "pkt_size=1200", out, count=1)
+        notes.append("1200-byte packets")
+        if not copy:
+            fps = int(stream_config.get("fps", 0) or 0) or 30
+            gop = fps * 4
+            out = out.replace("-tune zerolatency ", "-tune zerolatency -x264-params sliced-threads=0:slices=1 ", 1)
+            out = re.sub(r"-g \d+ -keyint_min \d+ ", f"-g {gop} -keyint_min {gop} ", out, count=1)
+            out = re.sub(r"-r \d+(\.\d+)? ", f"-r {fps} ", out, count=1)
+            bitrate = int(stream_config.get("v_max_bitrate", 0) or 0)
+            if bitrate:
+                out = re.sub(r"-bufsize \d+k ", f"-bufsize {bitrate * 2}k ", out, count=1)
+            level_raw = stream_config.get("v_level")
+            level = LIVE_TUNING_LEVELS.get(int.from_bytes(level_raw, "big") if isinstance(level_raw, (bytes, bytearray)) else level_raw)
+            if level:
+                out = out.replace("-bf 0 ", f"-bf 0 -level:v {level} ", 1)
+            notes.append(f"single slice, keyframe every 4 s (-g {gop}), 2x buffer, {fps} fps" + (f", level {level}" if level else ""))
+    if "scale" in tuning and not copy:
+        width, height = int(stream_config.get("width", 0) or 0), int(stream_config.get("height", 0) or 0)
+        if width and height:
+            scale = (f"-vf scale=w='min(iw\\,{width})':h='min(ih\\,{height})':force_original_aspect_ratio=decrease:force_divisible_by=2 ")
+            out = out.replace("-pix_fmt yuv420p ", scale + "-pix_fmt yuv420p ", 1)
+            notes.append(f"scaled to fit {width}x{height}")
+    return out, notes
+
 class RepeatedViews:
     """Quieter logging for repeated short live views of one camera, e.g. a Home widget that refreshes its
     picture by opening a stream for a second or two, over and over. The first view from a device at a size

@@ -304,6 +304,7 @@ class Plugin(indigo.PluginBase):
         self.debug11 = self.pluginPrefs.get('debug11', False)
         self.debugHKSV = self.pluginPrefs.get('debugHKSV', False)
         self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
+        self._set_live_tuning(self.pluginPrefs)
         self._hc_zones = {}   ## main thermostat id -> Heater-Cooler zone device ids (zones show the main unit's mode)
         self._search_refused = {}   ## bridge dialog: search text a Save was refused for (refused once only)
         self._mirrors = {}   ## source device id -> HomeKitLink Sensor (mirror) device ids
@@ -474,6 +475,7 @@ class Plugin(indigo.PluginBase):
             self.debug11 = valuesDict.get('debug11', False)
             self.debugHKSV = valuesDict.get('debugHKSV', False)
             self.talkEchoSuppress = valuesDict.get('talkEchoSuppress', True)
+            self._set_live_tuning(valuesDict)
             if "HKSV" in sys.modules:   ## only once an HKSV Recorder camera is running
                 sys.modules["HKSV"].set_debug(self.debugHKSV)
             self.logClientConnected = valuesDict.get("logClientConnected", True)
@@ -2041,7 +2043,7 @@ class Plugin(indigo.PluginBase):
             # Probe all camera streams in their own background thread (debug-level output).
             # It takes ~15s+ per camera, and run here it held up every snapshot fetch, so the
             # Home app only got the default images until it finished.
-            threading.Thread(target=self._run_ffprobe, kwargs={"debug_only": True}, daemon=True, name="HKLS-ffprobe").start()
+            threading.Thread(target=self._probe_cameras_background, daemon=True, name="HKLS-ffprobe").start()
             session = requests.Session()
             cameracheck = {}
             while True:
@@ -2381,6 +2383,9 @@ class Plugin(indigo.PluginBase):
             if len(self.listofenabledcameras) > 0:
                 self.logger.debug("Camera Accessory Found, checking single thread is alive to manage images.")
                 self.start_CameraSnapshots()
+                ## cameras on a bridge started (or restarted) after startup: probe the ones not probed yet
+                if not self.pluginStartingUp:
+                    threading.Thread(target=self._probe_cameras_background, daemon=True, name="HKLS-ffprobe-new").start()
         except:
             self.logger.exception("Exception in single Bridge Startup")
             device.updateStateOnServer(key="Status", value="Error")
@@ -2690,6 +2695,15 @@ class Plugin(indigo.PluginBase):
             if self._ip_address_is_external(adapter):
                 list_adapters.append(adapter)
 ###
+
+    def _set_live_tuning(self, prefs):
+        """Improved live view (plugin setting, on by default): matching video ports, 1200-byte packets, and re-encoded
+        video sized and tuned for the request (see HKutils.live_tuning). Off: live view exactly as before 0.8.44."""
+        on = bool(prefs.get("liveImproved", True))
+        self.liveTuningPorts = self.liveTuningEncode = self.liveTuningScale = on
+        self.liveTuningScope = "all"
+        self.liveTuningViewers = set()
+        self.logger.info(f"Live view: {'improved (matching ports, HomeKit-sized re-encoding)' if on else 'previous settings (Improved live view is off)'}.")
 
     def _migrate_durosity_build(self):
         """Devices set up with Durosity's development build (unifi-hksv-twoway), changed once at startup:
@@ -5865,8 +5879,32 @@ class Plugin(indigo.PluginBase):
         """Menu callback: probe all enabled camera streams with ffprobe and log codec compatibility."""
         self._run_ffprobe(debug_only=False)
 
-    def _run_ffprobe(self, debug_only=False):
+    def _probe_cameras_background(self):
+        """Probe, in the background, every published camera that hasn't been probed yet (no "ffprobe_video" key).
+        Runs once startup has finished, and again whenever a bridge starts later: cameras on a bridge that started
+        after a probe began used to be missed, and then had no stream data and no remote stream (remote viewing
+        copied the full stream, which can't fit a 5G request)."""
+        lock = self.__dict__.setdefault("_probe_lock", threading.Lock())
+        if not lock.acquire(blocking=False):
+            self._probe_again = True   ## a probe is running: it checks for new cameras again when it's done
+            return
+        try:
+            while self.pluginStartingUp:
+                t.sleep(1)
+            while True:
+                self._probe_again = False
+                if any("ffprobe_video" not in cam for cam in list(self.listofenabledcameras)):
+                    self._run_ffprobe(debug_only=True, only_new=True)
+                if not self._probe_again:
+                    break
+        except Exception:
+            self.logger.debug("Background camera probe failed", exc_info=True)
+        finally:
+            lock.release()
+
+    def _run_ffprobe(self, debug_only=False, only_new=False):
         """Probe all enabled camera streams with ffprobe and log codec compatibility.
+        only_new: only cameras not probed yet.
 
         :param debug_only: If True, all output uses debug level logging except one
             info summary line. If False, uses info level for results.
@@ -5891,6 +5929,8 @@ class Plugin(indigo.PluginBase):
             log("=" * 100)
 
         probe_list = list(self.listofenabledcameras)  ## a UniFi camera may be added again to probe its Medium stream
+        if only_new:
+            probe_list = [cam for cam in probe_list if "ffprobe_video" not in cam]
         for cam in probe_list:
             stream_source = cam.get("stream_source", "")
             cam_name = cam.get("cameraName", cam.get("BI_name", cam.get("SS_name", "Unknown")))

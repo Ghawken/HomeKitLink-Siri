@@ -205,6 +205,27 @@ HomeKitLink Siri   [Deck Camera]   Config encoder: libopus — will transcode fr
 
 ---
 
+## Improved Live View (v0.8.44+)
+
+**Plugin Config → Live view: Improved live view**, **on by default**. It does what other HomeKit projects do (Home Assistant, homebridge-unifi-protect, Scrypted, homebridge-camera-ffmpeg), mainly for **Apple TV** and **remote viewing** (which your home hub relays):
+
+| Part | What it does | Applies to |
+|---|---|---|
+| **Matching video ports** | Video is sent from the port HKLS tells HomeKit it sends from, so the viewer's reports come back. Before, it was sent from a random port. | All streams |
+| **1200-byte packets** | Fit relayed and IPv6 paths. | All streams |
+| **HomeKit-sized re-encoding** | Re-encoded video is scaled down to the size HomeKit asked for (never up, keeping the shape), one slice per frame, a keyframe every 4 s (instead of 0.5 s), a 2× buffer, and HomeKit's level and frame rate. | Re-encoded streams only |
+| **Remote views start at 720p** | HomeKit starts a remote view small (e.g. 640×360 @ 132k) and nearly always asks for 1280×720 @ 299k a few seconds later, which HKLS can't follow on a running stream. So a 640–1279 wide request starts at 1280×720 and at least 299k. Blue Iris and UniFi still use their remote stream (Blue Iris then sizes it to 720p). Smaller requests (Apple Watch) are unchanged. | Remote / mid-size requests |
+
+**Copied (passthrough) streams keep the camera's picture**, e.g. Blue Iris sending its full stream: only the ports and packet size change for them.
+
+Each stream logs what was applied, e.g. `Deck Camera: improved live view for 192.168.1.143 (re-encode): ports: sending from 63215; 1200-byte packets; single slice, keyframe every 4 s (-g 120), 2x buffer, 30 fps, level 4.0; scaled to fit 640x360`.
+
+**If live view is worse with it on**, untick it (the previous behaviour, exactly) and please report it on the forum with the camera, the viewer (iPhone, Apple TV, remote) and that log line.
+
+> ℹ️ HKLS doesn't follow HomeKit's later quality changes on a running stream (it would mean restarting ffmpeg mid-view), so a view stays at the size it started with.
+
+---
+
 ## Opus Audio (v0.7.10+)
 
 ### The Problem

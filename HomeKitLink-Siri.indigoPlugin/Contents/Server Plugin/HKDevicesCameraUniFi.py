@@ -399,7 +399,7 @@ class UniFiCamera(SecuritySpyCamera):
         req_width = stream_config.get("width", 0) or 0
         req_bitrate = stream_config.get("v_max_bitrate", 0) or 0
         low_url = self.config.get("unifi_low_url")
-        if low_url and ((0 < req_width < 1280) or (0 < req_bitrate < 299)):
+        if low_url and ((0 < req_width < 1280) or (0 < req_bitrate < 299) or stream_config.get("presumed_upgrade")):
             _LOGGER.info("[%s] Remote / low-bandwidth request (%sx%s @ %sk): using the Protect Low stream, re-encoded",
                          self.display_name, req_width, stream_config.get("height"), req_bitrate)
             return low_url, self.config.get("ffprobe_low"), "libx264"

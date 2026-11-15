@@ -11,6 +11,7 @@ from typing import Any
 from HKutils import pid_is_alive
 from HKutils import SimpleIntervalScheduler
 from HKutils import RepeatedViews
+from HKutils import live_tuning, tune_live_video, presumed_upgrade
 import time as t
 import datetime
 from typing import Callable
@@ -383,6 +384,9 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
             view_level = self.__dict__.setdefault("_repeated_views", RepeatedViews()).start(
                 _LOGGER, self.display_name, stream_config.get("address"), stream_config.get("width"),
                 stream_config.get("height"), session_info["id"])
+            upgrade_note = presumed_upgrade(self.plugin, stream_config)   ## improved live view: start remote views at 720p
+            if upgrade_note:
+                _LOGGER.log(view_level, "[%s] %s: %s", session_info["id"], self.display_name, upgrade_note)
 
             # ============================================================
             # Resolve copy vs transcode
@@ -566,6 +570,13 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                 output = VIDEO_OUTPUT_COPY.format(**output_vars)
             else:
                 output = VIDEO_OUTPUT_TRANSCODE.format(**output_vars)
+
+            ## Improved live view (plugin setting, on by default; HKutils.live_tuning)
+            tuning = live_tuning(self.plugin, stream_config.get("address"))
+            if tuning:
+                output, tuning_notes = tune_live_video(output, tuning, stream_config, strategy["use_copy"])
+                _LOGGER.log(view_level, "[%s] %s: improved live view for %s (%s): %s", session_info["id"], self.display_name,
+                             stream_config.get("address"), "copy" if strategy["use_copy"] else "re-encode", "; ".join(tuning_notes))
 
             if self.config[CONF_SUPPORT_AUDIO]:
                 output = output + " " + AUDIO_OUTPUT.format(**output_vars)

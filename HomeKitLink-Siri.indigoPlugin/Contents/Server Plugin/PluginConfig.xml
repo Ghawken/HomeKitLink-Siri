@@ -155,6 +155,12 @@ This means the image can be kept updated on opening Home to whatever degree requ
         <Label/>
         <Description>Two-way audio: mute the camera while you talk (reduces echo)</Description>
     </Field>
+    <Field id="sepLiveTuning" type="separator" alwaysUseInDialogHeightCalc="true"/>
+    <Field id="liveImproved" type="checkbox" defaultValue="true" alwaysUseInDialogHeightCalc="true"
+           tooltip="Live view as other HomeKit projects do it: video is sent from the port HomeKit is told about (so its reports come back), 1200-byte packets, and re-encoded video is sized and tuned for what HomeKit asked for (one slice per frame, a keyframe every 4 s, its level and frame rate). Copied streams, e.g. Blue Iris passthrough, keep the camera's picture. Untick for the previous behaviour.">
+        <Label>Live view:</Label>
+        <Description>Improved live view (matching ports, HomeKit-sized re-encoding)</Description>
+    </Field>
     <Field id="separater24ab" type="separator" alwaysUseInDialogHeightCalc="true"/>
     <Field id="advanced" type="checkbox" tooltip="Enabling will show advanced options." alwaysUseInDialogHeightCalc="true">
         <Label>Use with care</Label>

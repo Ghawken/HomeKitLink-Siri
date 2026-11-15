@@ -6,6 +6,23 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.44 — 2026-11-15
+
+### 📷 Improved live view (on by default)
+New setting **Plugin Config → Live view: Improved live view**, on by default; untick it for the previous behaviour, exactly. It does what Home Assistant, homebridge-unifi-protect, Scrypted and homebridge-camera-ffmpeg do, mainly for **Apple TV** and **remote viewing** that a home hub relays:
+- **Matching video ports:** video is sent from the port HomeKit is told we send from, so the viewer's reports come back. Until now it was sent from a random port; every other project keeps these the same
+- **1200-byte packets**, which fit relayed and IPv6 paths
+- **Re-encoded video is sized and tuned for the request:** scaled down to the size HomeKit asked for (never up, keeping the shape), one slice per frame, a keyframe every 4 s instead of 0.5 s, a 2x buffer, and HomeKit's level and frame rate
+- **Remote views start at 720p:** HomeKit starts a remote view small (e.g. 640x360 @ 132k) and nearly always asks for 1280x720 @ 299k a few seconds later, a change HKLS can't follow on a running stream, so remote views stayed low quality. A 640-1279 wide request now starts at 1280x720 and at least 299k; Blue Iris and UniFi still use their remote stream. Apple Watch-size requests are unchanged
+- **Copied streams keep the camera's picture**: e.g. Blue Iris passthrough only gets the ports and packet size
+- Each stream logs what was applied. See [Camera Setup → Improved Live View](Camera-Setup#improved-live-view-v0844)
+
+### 📷 Camera fixes
+- **Cameras on more than one bridge are all checked.** The background stream check ran once, after the first bridge started, so cameras on bridges that started later (or were restarted) were never checked: no stream data and no remote stream, so a 5G view copied the full stream and never played. Unchecked cameras are now checked once startup has finished and whenever a bridge starts
+- **No stream data yet: re-encode.** A camera not checked yet is re-encoded instead of copied, since copying passes on whatever the camera sends, which may not suit what HomeKit asked for. Once checked, its usual setting (e.g. copy) applies
+
+---
+
 ## 0.8.43 — 2026-11-15
 
 ### 🔌 Saved bridge ports: safer
