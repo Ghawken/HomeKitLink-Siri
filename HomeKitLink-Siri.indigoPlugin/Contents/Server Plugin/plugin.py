@@ -2269,6 +2269,43 @@ class Plugin(indigo.PluginBase):
 
     ####################################################################################################################
 
+    ## Each bridge keeps its port. Ports used to be handed out in start order, so a new bridge (or any change in
+    ## start order) moved every later bridge to the next port. Home apps and hubs remember a bridge's port, so they
+    ## then reached the wrong bridge, failed to verify, and showed its accessories as "No Response" until they
+    ## looked the bridge up again. Ports are saved in bridge_ports.json in the plugin's preferences folder.
+    def _bridge_ports_file(self):
+        return os.path.join(self.pluginprefDirectory, "bridge_ports.json")
+
+    def _load_bridge_ports(self):
+        import json
+        try:
+            with open(self._bridge_ports_file()) as f:
+                return {str(k): int(v) for k, v in json.load(f).items()}
+        except FileNotFoundError:
+            return {}
+        except Exception:
+            self.logger.debug("Could not read saved bridge ports", exc_info=True)
+            return {}
+
+    def _bridge_port(self, uniqueID):
+        """The port bridge uniqueID used before when it's free, else the next free port no other bridge has used."""
+        import json
+        saved = self._load_bridge_ports()
+        uid = str(uniqueID)
+        port = saved.get(uid)
+        if port is None or port < self.startingPortNumber or port in self.portsinUse or not HKutils._port_is_available(port):
+            if port is not None:
+                self.logger.warning(f"Bridge {uid}: its usual port {port} isn't free, so it moves to another. Home apps may show its accessories as No Response until they find it again.")
+            reserved = {p for k, p in saved.items() if k != uid}   ## other bridges' ports, kept for them even while they're stopped
+            port = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse | reserved))
+            saved[uid] = port
+            try:
+                with open(self._bridge_ports_file(), "w") as f:
+                    json.dump(saved, f, indent=1, sort_keys=True)
+            except Exception:
+                self.logger.debug("Could not save bridge ports", exc_info=True)
+        return port
+
     def startsingleBridge(self, device, uniqueID):
         try:
             self.logger.debug(f"Attempting to start a single Bridge:  Bridge {device.name} and ID {uniqueID}")
@@ -2277,7 +2314,7 @@ class Plugin(indigo.PluginBase):
             persist_file_location = os.path.join(self.pluginprefDirectory, 'busy_home_' + str(uniqueID) + '.state')
             # add port in use check
             # currentPortNumber - has now become starting portNumber - shoudl
-            nextport = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
+            nextport = self._bridge_port(uniqueID)
             self.logger.debug("Next Port available:{}".format(nextport))
            # self.zc = IndigoZeroconf(ip_version=self.select_ip_version, interfaces=self.select_interfaces, apple_p2p=self.apple_2p2)
            # self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")

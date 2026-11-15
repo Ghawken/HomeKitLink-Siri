@@ -6,6 +6,15 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.40 — 2026-11-15
+
+### 🔌 Bridges keep their port (fixes "No Response" after adding a bridge)
+- **Each bridge now keeps the same port** every time it starts. Ports used to be handed out in start order, so adding a bridge, or a change in the order bridges start, moved other bridges to the next port. Home apps and hubs remember each bridge's port, so they reached the wrong bridge, couldn't verify, and showed that bridge's accessories as **No Response** (even though they still worked from Indigo) until they looked the bridge up again
+- Ports are saved in `bridge_ports.json` in the plugin's preferences folder. The first start after updating saves the ports bridges have now. A new bridge gets a port no other bridge has used
+- If a bridge's usual port is taken by something else, it moves to a free one and the log warns that Home apps may show it as No Response for a while
+
+---
+
 ## 0.8.39 — 2026-11-15
 
 ### 🧾 Quieter camera logging
