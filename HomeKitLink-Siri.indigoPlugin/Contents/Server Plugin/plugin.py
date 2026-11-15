@@ -306,6 +306,8 @@ class Plugin(indigo.PluginBase):
         self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
         self._hc_zones = {}   ## main thermostat id -> Heater-Cooler zone device ids (zones show the main unit's mode)
         self._search_refused = {}   ## bridge dialog: search text a Save was refused for (refused once only)
+        self._mirrors = {}   ## source device id -> HomeKitLink Sensor (mirror) device ids
+        self._name_refused = set()   ## HomeKitLink devices whose Save was refused once for an empty HomeKit name
 
         logging.getLogger("zeroconf").setLevel(self.fileloglevel)
 
@@ -535,10 +537,13 @@ class Plugin(indigo.PluginBase):
         if self.debug8:
             self.logger.debug(u'Called getDeviceConfigUiValues(self, pluginProps, typeId, devId):')
             self.logger.debug('     ({0}, {1}, {2})'.format(pluginProps, typeId, devId))
-        if typeId == "hkButtons":
+        if typeId in ("hkButtons", "hkSensor"):
             values, errors = super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
             published = pluginProps.get("HomeKit_publishDevice", False)
             values["publishBridge"] = str(pluginProps.get("HomeKit_bridgeUniqueID", "")) if published else "none"
+            values["homekitName"] = pluginProps.get("homekit-name", "") or pluginProps.get("homekitName", "")
+            if typeId == "hkSensor":   ## °F can also be set in a bridge's settings: show the current one
+                values["mirrorFahrenheit"] = bool(pluginProps.get("HomeKit_tempSelector", False))
             return (values, errors)
         if typeId == "hksvRecorder":
             return super(Plugin, self).getDeviceConfigUiValues(pluginProps, typeId, devId)
@@ -577,6 +582,9 @@ class Plugin(indigo.PluginBase):
             return
         if device.deviceTypeId == "hkButtons":
             device.stateListOrDisplayStateIdChanged()
+            return
+        if device.deviceTypeId == "hkSensor":
+            self._mirror_start(device)
             return
         self.logger.debug(f"{device.name}: Starting {device.deviceTypeId} Device {device.id} ")
         device.stateListOrDisplayStateIdChanged()
@@ -625,6 +633,9 @@ class Plugin(indigo.PluginBase):
             self._hksv_device_stop(device)
             return
         if device.deviceTypeId == "hkButtons":
+            return
+        if device.deviceTypeId == "hkSensor":
+            self._mirror_stop(device)
             return
         try:
             self.logger.debug(f"{device.name}: Stopping {device.deviceTypeId} Device {device.id}")
@@ -721,6 +732,8 @@ class Plugin(indigo.PluginBase):
             return self._hksv_validate(values_dict, dev_id)
         if type_id == "hkButtons":
             return self._buttons_validate(values_dict, dev_id)
+        if type_id == "hkSensor":
+            return self._mirror_validate(values_dict, dev_id)
         if type_id == "homeKitBridgeDevice":
             ## Return in the Search box presses the dialog's default button (Save). If the search text hasn't
             ## been applied with Find, apply it and keep the dialog open instead of closing it - but only ONCE
@@ -1466,6 +1479,174 @@ class Plugin(indigo.PluginBase):
         return items
 
     ###############################################################################
+    # HomeKitLink Sensor - mirrors one state of another Indigo device as an Indigo sensor
+    # device of its own, so one device (e.g. a weather gateway) can give several HomeKit
+    # sensors, each with its own ID, name, room and bridge. Nothing is stored on the source
+    # device; each mirror is an ordinary published sensor, so no shared update or lookup
+    # code changes. Mirrors copy the source state when the source changes (deviceUpdated)
+    # and when they start.
+    ###############################################################################
+    ## kind: (HomeKit type, detection service, numeric?, Indigo state image, unit shown in Indigo)
+    MIRROR_KINDS = {
+        "temperature": ("TemperatureSensor", "service_TemperatureSensor", True, "TemperatureSensor", ""),
+        "humidity": ("HumiditySensor", "service_HumiditySensor", True, "HumiditySensor", " %"),
+        "light": ("LightSensor", "service_LightSensor", True, "LightSensor", " lux"),
+        "contact": ("ContactSensor", "service_MotionSensor", False, None, ""),
+        "motion": ("MotionSensor", "service_MotionSensor", False, None, ""),
+        "occupancy": ("OccupancySensor", "service_MotionSensor", False, None, ""),
+        "leak": ("LeakSensor", "service_LeakSensor", False, None, ""),
+        "smoke": ("SmokeSensor", "service_SmokeSensor", False, None, ""),
+        "co": ("CarbonMonoxideSensor", "service_SmokeSensor", False, None, ""),
+        "co2": ("CarbonDioxideSensor", "service_SmokeSensor", False, None, ""),
+    }
+
+    MIRROR_KIND_NAMES = {"temperature": "Temperature", "humidity": "Humidity", "light": "Light", "contact": "Contact",
+                         "motion": "Motion", "occupancy": "Occupancy", "leak": "Leak", "smoke": "Smoke",
+                         "co": "Carbon Monoxide", "co2": "Carbon Dioxide"}
+
+    def _own_device_name_check(self, values_dict, dev_id, suggestion):
+        """A HomeKitLink device being published needs a HomeKit name from its own settings. If it's empty, fill in
+        a suggestion and refuse this Save once, so the name can be checked. A second Save always goes through
+        (with the suggestion if the field is still empty), whatever the dialog does with the returned values."""
+        published = str(values_dict.get("publishBridge", "none") or "none") not in ("none", "-1")
+        if not published or str(values_dict.get("homekitName", "") or "").strip():
+            self._name_refused.discard(dev_id)
+            return None
+        suggested = HKutils.cleanup_name_for_homekit(suggestion.strip()) or "HomeKitLink"
+        values_dict["homekitName"] = suggested
+        if dev_id in self._name_refused:
+            self._name_refused.discard(dev_id)
+            return None
+        self._name_refused.add(dev_id)
+        errors = indigo.Dict()
+        errors["homekitName"] = "Check the name HomeKit will use (suggested), then Save again"
+        return (False, values_dict, errors)
+
+    def _mirror_kind(self, dev):
+        return self.MIRROR_KINDS.get(str(dev.pluginProps.get("sensorKind", "")), None)
+
+    def _mirror_value(self, mirror, source):
+        """The mirror's value from its source: (value, error text or None). Numbers for numeric kinds, else on/off."""
+        props = mirror.pluginProps
+        state = props.get("sourceState", "")
+        if state not in source.states:
+            return None, "'{}' has no state '{}'".format(source.name, state)
+        raw = source.states[state]
+        kind = self._mirror_kind(mirror)
+        if kind is None:
+            return None, "no sensor kind chosen"
+        if kind[2]:
+            value = HKutils.convert_to_float(raw)
+            return (value, None) if value is not None else (None, "'{}' isn't a number ({})".format(state, raw))
+        when = props.get("onWhen", "true")
+        if when == "equals":
+            return str(raw).strip().lower() == str(props.get("onValue", "")).strip().lower(), None
+        truthy = raw if isinstance(raw, bool) else (raw > 0 if isinstance(raw, (int, float)) else
+                                                    str(raw).strip().lower() in ("true", "on", "yes", "1", "open", "detected", "wet"))
+        return (truthy if when == "true" else not truthy), None
+
+    def _mirror_sync(self, mirror, source=None):
+        """Copy the source state into the mirror device (only when it changed)."""
+        try:
+            if source is None:
+                source = indigo.devices[int(mirror.pluginProps.get("sourceDevice", 0))]
+        except Exception:
+            mirror.setErrorStateOnServer("no source")
+            return
+        value, error = self._mirror_value(mirror, source)
+        if error:
+            if mirror.errorState != "error":
+                self.logger.warning("{}: {}".format(mirror.name, error))
+            mirror.setErrorStateOnServer("error")
+            return
+        kind = self._mirror_kind(mirror)
+        if kind[2]:
+            if mirror.states.get("sensorValue") != value or mirror.errorState:
+                unit = "°F" if mirror.pluginProps.get("HomeKit_tempSelector", False) else ("°C" if kind[0] == "TemperatureSensor" else "")
+                mirror.updateStateOnServer("sensorValue", value=value, uiValue="{}{}{}".format(round(value, 1), kind[4], unit), decimalPlaces=1)
+                if kind[3]:
+                    mirror.updateStateImageOnServer(getattr(indigo.kStateImageSel, kind[3]))
+        elif mirror.states.get("onOffState") != value or mirror.errorState:
+            mirror.updateStateOnServer("onOffState", value=bool(value))
+        if mirror.errorState:
+            mirror.setErrorStateOnServer(None)
+
+    def _mirror_start(self, mirror):
+        mirror.stateListOrDisplayStateIdChanged()
+        try:
+            source_id = int(mirror.pluginProps.get("sourceDevice", 0))
+        except (TypeError, ValueError):
+            source_id = 0
+        for ids in self._mirrors.values():
+            ids.discard(mirror.id)
+        if source_id:
+            self._mirrors.setdefault(source_id, set()).add(mirror.id)
+        self._mirror_sync(mirror)
+
+    def _mirror_stop(self, mirror):
+        for ids in self._mirrors.values():
+            ids.discard(mirror.id)
+
+    def _mirror_source_changed(self, source):
+        for mirror_id in list(self._mirrors.get(source.id, ())):
+            try:
+                mirror = indigo.devices[mirror_id]
+            except Exception:
+                continue
+            if mirror.enabled:
+                self._mirror_sync(mirror, source)
+
+    def _mirror_validate(self, values_dict, dev_id):
+        errors = indigo.Dict()
+        if str(values_dict.get("sourceDevice", "")) in ("", "-1", "0"):
+            errors["sourceDevice"] = "Choose the device to mirror"
+        if str(values_dict.get("sourceState", "")) in ("", "-1"):
+            errors["sourceState"] = "Choose the state to mirror"
+        kind = self.MIRROR_KINDS.get(str(values_dict.get("sensorKind", "")))
+        if kind is None:
+            errors["sensorKind"] = "Choose what kind of sensor it is"
+        if len(errors):
+            return (False, values_dict, errors)
+        try:
+            suggestion = "{} {}".format(indigo.devices[int(values_dict.get("sourceDevice", 0))].name, self.MIRROR_KIND_NAMES.get(values_dict.get("sensorKind"), ""))
+        except Exception:
+            suggestion = "HomeKitLink Sensor"
+        refused = self._own_device_name_check(values_dict, dev_id, suggestion)
+        if refused:
+            return refused
+        values_dict["SupportsSensorValue"] = kind[2]   ## an Indigo sensor with a value, or an on/off sensor
+        values_dict["SupportsOnState"] = not kind[2]
+        values_dict["SupportsStatusRequest"] = False
+        values_dict["HomeKit_deviceSensor"] = "sensorValue"   ## numeric: its value; on/off: falls through to its on/off
+        if kind[0] == "TemperatureSensor":
+            values_dict["HomeKit_tempSelector"] = bool(values_dict.get("mirrorFahrenheit", False))
+        else:
+            values_dict["mirrorFahrenheit"] = False
+        try:
+            old = indigo.devices[dev_id].pluginProps
+            changed = old.get("sensorKind", "") != values_dict.get("sensorKind", "")
+        except Exception:
+            changed = False
+        return self._own_device_publish(values_dict, dev_id, kind[0], "HomeKitLink Sensor",
+                                        "to update the sensor type of '{}'" if changed else None)
+
+    def mirror_source_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """Devices a HomeKitLink Sensor can mirror: any device except HomeKitLink's own."""
+        items = [(str(d.id), d.name) for d in indigo.devices if d.pluginId != self.pluginId]
+        return sorted(items, key=lambda x: self._natural_key(x[1]))
+
+    def mirror_state_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        try:
+            source = indigo.devices[int((valuesDict or {}).get("sourceDevice", 0))]
+        except Exception:
+            return [("-1", "%%disabled:Choose the device first%%")]
+        items = [(key, "{}  ({})".format(key, value)) for key, value in source.states.items() if not key.endswith(".ui")]
+        return sorted(items, key=lambda x: self._natural_key(x[0]))
+
+    def mirror_source_changed(self, valuesDict, typeId="", devId=0):
+        return valuesDict
+
+    ###############################################################################
     # HomeKit Buttons - Indigo -> Home. A "hkButtons" device is published (like any
     # device) as stateless programmable switches. It does nothing in Indigo: the
     # "Press a HomeKit Button" action sends a single/double/long press to HomeKit, and
@@ -1500,7 +1681,22 @@ class Plugin(indigo.PluginBase):
             errors["buttonNames"] = "{} names for {} button{}".format(len(names), count, "" if count == 1 else "s")
         if len(errors):
             return (False, values_dict, errors)
-        ## Publishing from the device itself writes the same props as the bridge's own settings, so either can change it
+        refused = self._own_device_name_check(values_dict, dev_id, "HomeKit Buttons")
+        if refused:
+            return refused
+        try:
+            old_props = indigo.devices[dev_id].pluginProps
+        except Exception:
+            old_props = {}
+        changed = (str(old_props.get("buttonCount", "1")) != str(values_dict.get("buttonCount", "1")) or
+                   str(old_props.get("buttonNames", "")) != str(values_dict.get("buttonNames", "")))
+        return self._own_device_publish(values_dict, dev_id, "Buttons", "HomeKit Buttons",
+                                        "to update the buttons of '{}'" if changed else None)
+
+    def _own_device_publish(self, values_dict, dev_id, subtype, default_name, changed_reason=None):
+        """'Publish to bridge' in a HomeKitLink device's own settings (Buttons, Sensor). Writes the same props as a
+        bridge's own settings, so either place can publish, move or unpublish it. Restarts the bridge(s) concerned.
+        changed_reason: when set, the device changed in a way HomeKit must re-read (restarts its bridge)."""
         try:
             dev = indigo.devices[dev_id]
             old_props = dev.pluginProps
@@ -1509,13 +1705,18 @@ class Plugin(indigo.PluginBase):
         old_uid = str(old_props.get("HomeKit_bridgeUniqueID", "")) if old_props.get("HomeKit_publishDevice", False) else ""
         new_uid = str(values_dict.get("publishBridge", "none") or "none")
         new_uid = "" if new_uid in ("none", "-1") else new_uid
-        name = dev.name if dev is not None else "HomeKit Buttons"
+        homekit_name = HKutils.cleanup_name_for_homekit(str(values_dict.get("homekitName", "") or "").strip())
+        name = homekit_name or (dev.name if dev is not None else default_name)
         if new_uid:
             values_dict["HomeKit_publishDevice"] = True
             values_dict["HomeKit_bridgeUniqueID"] = new_uid
-            values_dict["HomeKit_deviceSubtype"] = "Buttons"
-            if not values_dict.get("homekit-name"):
-                values_dict["homekit-name"] = HKutils.cleanup_name_for_homekit(name)
+            values_dict["HomeKit_deviceSubtype"] = subtype
+            ## The HomeKit name from this dialog: a new device is still "new device N" here (Indigo applies the
+            ## name typed in its main dialog afterwards), and HomeKit keeps the name an accessory is added with.
+            if homekit_name and values_dict.get("homekit-name") != homekit_name:
+                values_dict["homekit-name"] = homekit_name
+                if old_uid == new_uid and old_uid:
+                    changed_reason = changed_reason or "to rename '{}' (the Home app keeps names it already has)"
             if dev is not None:
                 self.device_list.add(dev.id)
         else:
@@ -1526,8 +1727,7 @@ class Plugin(indigo.PluginBase):
                 self.device_list_internal = [i for i in self.device_list_internal
                                              if i["deviceid"] != dev.id or i["subtype"] == self.LINKED_DOORBELL]
                 self._sync_internal_ids()
-        buttons_changed = (str(old_props.get("buttonCount", "1")) != str(values_dict.get("buttonCount", "1")) or
-                           str(old_props.get("buttonNames", "")) != str(values_dict.get("buttonNames", "")))
+        old_subtype = old_props.get("HomeKit_deviceSubtype", "")
         if old_uid != new_uid:
             if old_uid:
                 self._restart_bridge(*self._bridge_for_uid(old_uid), "to remove '{}'".format(name))
@@ -1536,16 +1736,23 @@ class Plugin(indigo.PluginBase):
                 if not self._restart_bridge(bridge_dev, driver, "to add '{}'".format(name)):
                     self.logger.info("'{}' will be added to HomeKit when bridge '{}' starts".format(
                         name, bridge_dev.name if bridge_dev is not None else new_uid))
-        elif new_uid and buttons_changed:
-            self._restart_bridge(*self._bridge_for_uid(new_uid), "to update the buttons of '{}'".format(name))
+        elif new_uid and (changed_reason or old_subtype != subtype):
+            self._restart_bridge(*self._bridge_for_uid(new_uid), (changed_reason or "to update '{}'").format(name))
         return (True, values_dict)
 
-    def buttons_bridge_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+    def own_bridge_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """'Publish to bridge' menu of a HomeKitLink device. A bridge it's published to that no longer exists
+        stays listed (and selected), so saving its settings never unpublishes it by accident."""
         items = [("none", "Not published"), ("-1", "%%separator%%")]
+        known = set()
         for dev in indigo.devices.iter("self.homeKitBridgeDevice"):
             uid = str(dev.pluginProps.get("bridgeUniqueID", ""))
             if uid:
+                known.add(uid)
                 items.append((uid, dev.name if dev.enabled else "{} (disabled)".format(dev.name)))
+        current = str((valuesDict or {}).get("publishBridge", "") or "")
+        if current not in ("", "none", "-1") and current not in known:
+            items.append((current, "Bridge ID {} (deleted - move it, or choose a bridge)".format(current)))
         return items
 
     def button_number_list(self, filter="", valuesDict=None, typeId="", targetId=0):
@@ -2464,15 +2671,22 @@ class Plugin(indigo.PluginBase):
         if deleted_device.pluginId == self.pluginId and deleted_device.deviceTypeId == "hksvRecorder":
             self._hksv_device_deleted(deleted_device)
             return
+        for mirror_id in list(self._mirrors.pop(deleted_device.id, ())):   ## its HomeKitLink Sensors lose their source
+            try:
+                mirror = indigo.devices[mirror_id]
+                self.logger.warning("{}: the device it mirrors ('{}') was deleted".format(mirror.name, deleted_device.name))
+                mirror.setErrorStateOnServer("no source")
+            except Exception:
+                pass
 
         try:
             if deleted_device.id in self.device_list_internal_idonly:
                 # It's one we care about
                 for item in [i for i in self.device_list_internal if i["deviceid"] == deleted_device.id]:   ## its own and any linked-doorbell entries
-                    self.logger.info("Deleting item:{}".format(item))
+                    self.logger.debug("Deleting item:{}".format(item))
                 self.device_list_internal = [i for i in self.device_list_internal if i["deviceid"] != deleted_device.id]
                 self._sync_internal_ids()
-                self.logger.error("Device: {}, just deleted, was published and has an active accessory within HomeKit currently (!)".format(deleted_device.name))
+                self.logger.warning("{} was deleted while published to HomeKit: its bridge restarts to remove it from the Home app".format(deleted_device.name))
                 try:
                     bridgeID = int(deleted_device.pluginProps.get("HomeKit_bridgeUniqueID", 99))
                 except ValueError:
@@ -2515,6 +2729,8 @@ class Plugin(indigo.PluginBase):
                 return
             if original_device.id in self._hc_zones:   ## a main unit changed: its Heater-Cooler zones show its mode
                 self._hc_refresh_zones(original_device.id)
+            if original_device.id in self._mirrors:   ## a mirrored device changed: its HomeKitLink Sensors copy it
+                self._mirror_source_changed(updated_device)
             if original_device.id not in self.device_list_internal_idonly:
                 return
 
@@ -4300,7 +4516,7 @@ class Plugin(indigo.PluginBase):
         """(device, sub-header or None) for a 'Select Type to List' entry. HomeKitLink's own bridges and
         HKSV Recorders are never listed (they can't be published); its Buttons devices are."""
         def publishable(dev):
-            return not (dev.pluginId == self.pluginId and dev.deviceTypeId != "hkButtons")
+            return not (dev.pluginId == self.pluginId and dev.deviceTypeId not in ("hkButtons", "hkSensor"))
         if list_type == "device":
             return [(d, None) for d in indigo.devices if publishable(d)]   ## no sub-headers: one sorted list is easiest to search
         if list_type == "plugin":
@@ -4340,8 +4556,8 @@ class Plugin(indigo.PluginBase):
             "SS_camera": self._is_ss_camera,
             "UP_camera": HKDevicesCameraUniFi.is_unifi_camera,
         }
-        if list_type == "hk_buttons":
-            return [(d, None) for d in indigo.devices.iter("self.hkButtons")]
+        if list_type == "hk_buttons":   ## HomeKitLink's own publishable devices
+            return [(d, None) for d in indigo.devices.iter("self") if d.deviceTypeId in ("hkButtons", "hkSensor")]
         rule = rules.get(list_type)
         return [(d, None) for d in indigo.devices if rule(d)] if rule else []
 
@@ -4357,7 +4573,7 @@ class Plugin(indigo.PluginBase):
             names = {"device": "Devices", "action_group": "Action Groups", "lights": "Lights", "switch": "Relays",
                      "sensor": "Sensors", "thermostat": "Thermostats", "fan": "Fans", "sprinkler": "Sprinklers",
                      "cameras": "Cameras", "BI_camera": "Blue Iris Cameras", "SS_camera": "Security Spy Cameras",
-                     "UP_camera": "UniFi Protect Cameras", "hk_buttons": "HomeKitLink Buttons", "plugin": "Plugin devices"}
+                     "UP_camera": "UniFi Protect Cameras", "hk_buttons": "HomeKitLink Buttons and Sensors", "plugin": "Plugin devices"}
             NametoUse = names.get(list_type, "Devices")
             bridge_names = {}
             for bridge in indigo.devices.iter("self.homeKitBridgeDevice"):
@@ -4435,7 +4651,13 @@ class Plugin(indigo.PluginBase):
 
     def _default_subtype(self, deviceid, detecttype):
         """First subtype for the detected type - except cameras, which follow the camera's plugin,
-        and air conditioners, which default to Heater-Cooler."""
+        and air conditioners, which default to Heater-Cooler, and HomeKitLink Sensors, which use their kind."""
+        try:
+            dev = indigo.devices[deviceid]
+            if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkSensor" and self._mirror_kind(dev):
+                return self._mirror_kind(dev)[0]
+        except Exception:
+            pass
         if detecttype == "service_Thermostat":
             try:
                 if indigo.devices[deviceid].pluginId in self.HEATER_COOLER_PLUGINS:
@@ -4462,6 +4684,9 @@ class Plugin(indigo.PluginBase):
 
             if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkButtons":
                 return "service_Buttons"
+            if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkSensor":
+                kind = self._mirror_kind(dev)
+                return kind[1] if kind else "service_TemperatureSensor"
 
             if any(self._air_quality_guess(dev).values()):
                 return "service_AirQuality"
@@ -4872,7 +5097,7 @@ class Plugin(indigo.PluginBase):
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = self._own_index(device.id)   ## only its own entry: a camera may still use it as its doorbell
                     if checkindex != None:
-                        self.logger.info("Deleting item:{}".format(self.device_list_internal[checkindex]))
+                        self.logger.debug("Deleting item:{}".format(self.device_list_internal[checkindex]))
                         del self.device_list_internal[checkindex]
                         self._sync_internal_ids()
                     self.logger.info("Given just unpublished device to HomeKit, Bridge will need to be restarted for changes to take effect")

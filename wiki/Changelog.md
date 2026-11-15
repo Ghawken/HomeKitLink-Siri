@@ -6,6 +6,23 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.37 — 2026-11-15
+
+### 🌡️ HomeKitLink Sensor
+- New device type **HomeKitLink Sensor**: publishes one state of another Indigo device as a HomeKit sensor of its own (Temperature, Humidity, Light, Contact, Motion, Occupancy, Leak, Smoke, CO or CO2), with its own name, room and bridge. Make one per reading, e.g. a weather gateway's outdoor temperature, humidity and rain, each as its own tile. Nothing is changed on the device it mirrors
+- It's an ordinary Indigo sensor that follows its source state, so it can also be used in Indigo triggers and Control Pages
+- On/off sensors are "detected" when the state is true, false, or equals a value you give (e.g. `rain`)
+- Publish it from its own settings (**Publish to bridge** and **HomeKit name**) or from a bridge (**Select Type to List → HomeKitLink Buttons and Sensors**)
+- HomeKitLink Sensors and HomeKit Buttons have a **HomeKit name** in their own settings, used when publishing from there. Before, they were published under the Indigo name at that moment, which for a new device is still "new device N". Left empty, a name is suggested for you to check
+
+### 🔘 HomeKit Buttons
+- If the bridge a HomeKit Buttons (or Sensor) device is published to is deleted, its **Publish to bridge** menu now keeps showing it as deleted instead of switching to "Not published", so saving its settings doesn't unpublish it by accident
+
+### 🧾 Logging
+- Deleting a published device now logs a plain warning ("… was deleted while published to HomeKit: its bridge restarts …") instead of an error with code line numbers; the internal "Deleting item" details are debug only
+
+---
+
 ## 0.8.36 — 2026-11-15
 
 ### 🧹 Fewer settings stored on your devices

@@ -198,6 +198,29 @@ When publishing, choose type **Vacuum** or **LawnMower**, then:
 
 ---
 
+## HomeKitLink Sensor (v0.8.37+)
+
+Publishes **one state of another Indigo device as a HomeKit sensor of its own**: its own name, room and bridge. Use it when one device holds several readings, for example a weather gateway (Ecowitt, Tempest, Netatmo) with outdoor temperature, humidity, light and rain. HomeKitLink publishes each Indigo device once; a HomeKitLink Sensor per reading gives each its own tile in the Home app. **Nothing is changed on the device it mirrors.**
+
+1. Create a new device: Type *HomeKitLink Siri*, Model **HomeKitLink Sensor**.
+2. Choose the **Device to mirror**, its **State**, and the **Sensor type**:
+
+   | Sensor type | The state should be | In HomeKit |
+   |---|---|---|
+   | Temperature | a number (tick °F if it's Fahrenheit) | Temperature |
+   | Humidity | a number, % | Humidity |
+   | Light | a number, lux | Light level |
+   | Contact, Motion, Occupancy, Leak, Smoke, CO, CO2 | on/off, true/false, or a value | Detected / not detected (Contact: on = open) |
+
+   For the on/off types, **Detected when the state** is true/on, false/off, or **equals a value** you type (e.g. `rain`, `open`).
+3. **Publish to bridge**: choose the bridge, and give it a **HomeKit name**, the name it's added to the Home app with. Leave it empty and HomeKitLink suggests one (e.g. "Ecowitt Weather Humidity") for you to check before saving again. Or publish it from a bridge's settings (**Select Type to List → HomeKitLink Buttons and Sensors**).
+
+> The HomeKit name is separate from the Indigo device name: a new device is still called "new device N" while its settings are open, so the HomeKit name is set here. Once added, the Home app keeps its own copy of the name; rename it there too if you change it later.
+
+It's an ordinary Indigo sensor that follows its source state, so you can use it in Indigo triggers and Control Pages too. If the mirrored device is deleted, or the state disappears or isn't a number, the sensor shows an error and the log says why.
+
+---
+
 ## HomeKit Buttons (v0.8.27+)
 
 **Indigo → Home.** A HomeKit Buttons device lets Indigo start things in the Home app. It does nothing in Indigo itself: it appears in the Home app as a button accessory (like a wireless remote), and **the Home app decides what each press does**.

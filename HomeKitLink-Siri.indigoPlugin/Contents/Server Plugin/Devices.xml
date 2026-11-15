@@ -23,7 +23,7 @@
 				    <Option value="BI_camera">Blue Iris Camera</Option>
 				 	<Option value="SS_camera">Security Spy Camera</Option>
 				 	<Option value="UP_camera">UniFi Protect Camera</Option>
-				 	<Option value="hk_buttons">HomeKitLink Buttons</Option>
+				 	<Option value="hk_buttons">HomeKitLink Buttons and Sensors</Option>
                 </List>
 				  <CallbackMethod>menuChanged</CallbackMethod>
 			</Field>
@@ -327,6 +327,69 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 	</Device>
 
 
+	<Device type="sensor" id="hkSensor">
+		<Name>HomeKitLink Sensor</Name>
+		<ConfigUI>
+			<Field id="mirrorIntro" type="label" fontSize="small">
+				<Label>Publishes one state of another Indigo device to HomeKit as a sensor of its own, with its own name, room and bridge. Use it when one device holds several readings (e.g. a weather gateway: outdoor temperature, humidity, light, rain): make one HomeKitLink Sensor per reading. Nothing is changed on the device it mirrors.</Label>
+			</Field>
+			<Field id="sourceDevice" type="menu" defaultValue="">
+				<Label>Device to mirror:</Label>
+				<List class="self" method="mirror_source_list" dynamicReload="true"/>
+				<CallbackMethod>mirror_source_changed</CallbackMethod>
+			</Field>
+			<Field id="sourceState" type="menu" defaultValue="">
+				<Label>State:</Label>
+				<List class="self" method="mirror_state_list" dynamicReload="true"/>
+			</Field>
+			<Field id="sensorKind" type="menu" defaultValue="temperature">
+				<Label>Sensor type:</Label>
+				<List>
+					<Option value="temperature">Temperature</Option>
+					<Option value="humidity">Humidity</Option>
+					<Option value="light">Light (lux)</Option>
+					<Option value="-1">%%separator%%</Option>
+					<Option value="contact">Contact (on = open)</Option>
+					<Option value="motion">Motion</Option>
+					<Option value="occupancy">Occupancy</Option>
+					<Option value="leak">Leak</Option>
+					<Option value="smoke">Smoke</Option>
+					<Option value="co">Carbon Monoxide</Option>
+					<Option value="co2">Carbon Dioxide</Option>
+				</List>
+			</Field>
+			<Field id="mirrorFahrenheit" type="checkbox" defaultValue="false" visibleBindingId="sensorKind" visibleBindingValue="temperature">
+				<Label>Temperature in:</Label>
+				<Description>°F (unticked: °C)</Description>
+			</Field>
+			<Field id="onWhen" type="menu" defaultValue="true" visibleBindingId="sensorKind" visibleBindingValue="contact,motion,occupancy,leak,smoke,co,co2">
+				<Label>Detected when the state:</Label>
+				<List>
+					<Option value="true">is true / on</Option>
+					<Option value="false">is false / off</Option>
+					<Option value="equals">equals a value</Option>
+				</List>
+			</Field>
+			<Field id="onValue" type="textfield" defaultValue="" visibleBindingId="onWhen" visibleBindingValue="equals">
+				<Label>Value:</Label>
+			</Field>
+			<Field id="mirrorSep" type="separator"/>
+			<Field id="publishBridge" type="menu" defaultValue="none">
+				<Label>Publish to bridge:</Label>
+				<List class="self" method="own_bridge_list" dynamicReload="true"/>
+			</Field>
+			<Field id="homekitName" type="textfield" defaultValue="">
+				<Label>HomeKit name:</Label>
+			</Field>
+			<Field id="homekitNameLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>The name it's added to the Home app with (needed to publish; a suggestion is filled in if empty). Renaming the Indigo device doesn't change it. Once added, the Home app keeps its own copy of the name: rename it there too.</Label>
+			</Field>
+			<Field id="mirrorPublishLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>Saving restarts the bridge to add (or remove) it. It can also be published or edited in a bridge's own settings: Select Type to List > HomeKitLink Buttons and Sensors.</Label>
+			</Field>
+		</ConfigUI>
+	</Device>
+
 	<Device type="custom" id="hkButtons">
 		<Name>HomeKit Buttons</Name>
 		<ConfigUI>
@@ -335,7 +398,7 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 
 Use it to reach what only the Home app controls (Matter or Apple-only devices, HomePod music, Home scenes) from any Indigo trigger, schedule, action group or Control Page.
 
-1. Choose the buttons, their names and the bridge to publish them to.
+1. Choose the buttons, their names, the bridge to publish them to and their HomeKit name.
 2. In the Home app, open the new accessory: each button has a single, double and long press. Choose what each one runs.
 3. In Indigo, press a button with the action "Press a HomeKit Button" (HomeKitLink Siri actions).
 
@@ -368,10 +431,16 @@ Changing the number of buttons or their names restarts its bridge.</Label>
 			</Field>
 			<Field id="publishBridge" type="menu" defaultValue="none">
 				<Label>Publish to bridge:</Label>
-				<List class="self" method="buttons_bridge_list" dynamicReload="true"/>
+				<List class="self" method="own_bridge_list" dynamicReload="true"/>
+			</Field>
+			<Field id="homekitName" type="textfield" defaultValue="">
+				<Label>HomeKit name:</Label>
+			</Field>
+			<Field id="homekitNameLabelB" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
+				<Label>The name it's added to the Home app with (needed to publish; a suggestion is filled in if empty). Renaming the Indigo device doesn't change it. Once added, the Home app keeps its own copy of the name: rename it there too.</Label>
 			</Field>
 			<Field id="publishBridgeLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true">
-				<Label>Saving restarts the bridge to add (or remove) these buttons. You can also publish it from the bridge's own settings: Select Type to List > HomeKitLink Buttons.</Label>
+				<Label>Saving restarts the bridge to add (or remove) these buttons. You can also publish it from a bridge's own settings: Select Type to List > HomeKitLink Buttons and Sensors.</Label>
 			</Field>
 		</ConfigUI>
 		<UiDisplayStateId>lastPress</UiDisplayStateId>
