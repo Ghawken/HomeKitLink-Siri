@@ -976,6 +976,14 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug(f"Item :{item} exists for this bridge {bridge}")
                     indigodevice = self.return_deviceorAG(item["deviceid"])
                     deviceAID = int(str(bridgenumber) + str(item["deviceid"]))
+                    ## Durosity's development build: "New HomeKit identity" put a generation number into the AID. Keep
+                    ## those AIDs exactly as that build made them, or Home would add the accessory again as a new one.
+                    try:
+                        aid_gen = int(indigodevice.pluginProps.get("HomeKit_aidGeneration", 0) or 0)
+                    except Exception:
+                        aid_gen = 0
+                    if aid_gen > 0:
+                        deviceAID = int(str(bridgenumber) + str(aid_gen) + str(item["deviceid"]))
                     if self.debug1:
                         self.logger.debug("Adding Accessory Name: {},  ID  {} , Type: {}".format(item['devicename'], deviceAID, item['subtype']))
                     if item['subtype'] == "LightBulb":
@@ -2277,31 +2285,47 @@ class Plugin(indigo.PluginBase):
         return os.path.join(self.pluginprefDirectory, "bridge_ports.json")
 
     def _load_bridge_ports(self):
+        """(saved ports {bridge id: port}, error). error is None when the file is fine or not there yet; otherwise
+        it says why the file can't be used, and the file is then never overwritten (it may be the only record)."""
         import json
         try:
             with open(self._bridge_ports_file()) as f:
-                return {str(k): int(v) for k, v in json.load(f).items()}
+                data = json.load(f)
+            ports = {str(k): int(v) for k, v in data.items()}
+            bad = [k for k, v in ports.items() if not 1 <= v <= HKutils.MAX_PORT]
+            if bad:
+                return {}, f"port out of range for bridge {', '.join(bad)}"
+            return ports, None
         except FileNotFoundError:
-            return {}
-        except Exception:
-            self.logger.debug("Could not read saved bridge ports", exc_info=True)
-            return {}
+            return {}, None
+        except Exception as error:
+            return {}, str(error) or type(error).__name__
 
     def _bridge_port(self, uniqueID):
         """The port bridge uniqueID used before when it's free, else the next free port no other bridge has used."""
         import json
-        saved = self._load_bridge_ports()
+        saved, error = self._load_bridge_ports()
         uid = str(uniqueID)
         port = saved.get(uid)
-        if port is None or port < self.startingPortNumber or port in self.portsinUse or not HKutils._port_is_available(port):
-            if port is not None:
-                self.logger.warning(f"Bridge {uid}: its usual port {port} isn't free, so it moves to another. Home apps may show its accessories as No Response until they find it again.")
+        if error:
+            if not getattr(self, "_bridge_ports_error_logged", False):
+                self._bridge_ports_error_logged = True
+                self.logger.warning(f"{os.path.basename(self._bridge_ports_file())} can't be read ({error}), so bridges get free ports without them being saved, and may move. Run Troubleshoot 4 to fix it.")
+            return int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse))
+        if port is None or not self.startingPortNumber <= port <= HKutils.MAX_PORT or port in self.portsinUse or not HKutils._port_is_available(port):
             reserved = {p for k, p in saved.items() if k != uid}   ## other bridges' ports, kept for them even while they're stopped
-            port = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse | reserved))
+            new_port = int(HKutils._find_next_available_port(self.startingPortNumber, self.portsinUse | reserved))
+            if port is not None:
+                self.logger.warning(f"Bridge {uid}: its usual port {port} isn't free, so it moves to {new_port}. Home apps may show its accessories as No Response until they find it again (restart your home hub if they don't).")
+                self.__dict__.setdefault("_bridge_port_moves", {})[uid] = (port, new_port)   ## for Troubleshoot 4
+            port = new_port
             saved[uid] = port
             try:
-                with open(self._bridge_ports_file(), "w") as f:
+                ## write a temp file and swap it in, so a crash mid-write can't leave a half-written file
+                temp = self._bridge_ports_file() + ".tmp"
+                with open(temp, "w") as f:
                     json.dump(saved, f, indent=1, sort_keys=True)
+                os.replace(temp, self._bridge_ports_file())
             except Exception:
                 self.logger.debug("Could not save bridge ports", exc_info=True)
         return port
@@ -2667,6 +2691,36 @@ class Plugin(indigo.PluginBase):
                 list_adapters.append(adapter)
 ###
 
+    def _migrate_durosity_build(self):
+        """Devices set up with Durosity's development build (unifi-hksv-twoway), changed once at startup:
+        - its UniFi camera type "UniFiCamera" becomes ours, "UniFiProtectCamera" (otherwise the camera isn't
+          published and Home drops it). The accessory ID doesn't change, so Home keeps it as the same accessory.
+        - it switched HKSV on with a camera setting (HomeKit_unifiHKSV); here HKSV needs a HomeKit Secure Video
+          Recorder device for the camera: say so once, and remove the old setting.
+        - it switched two-way audio on by itself for doorbells and cameras with a speaker; here it's the camera's
+          Two-way audio setting: say so once."""
+        for dev in indigo.devices:
+            try:
+                props = dev.pluginProps
+                hksv_on = props.get("HomeKit_unifiHKSV", None) is not None
+                old_unifi = props.get("HomeKit_deviceSubtype", "") == "UniFiCamera"
+                if not (hksv_on or old_unifi):
+                    continue
+                if old_unifi:
+                    props["HomeKit_deviceSubtype"] = "UniFiProtectCamera"
+                    self.logger.info(f"{dev.name}: UniFi camera set up with Durosity's development build, now a 'UniFi Protect Camera' here.")
+                    if not props.get("HomeKit_unifiTwoWay", False):
+                        self.logger.info(f"{dev.name}: two-way audio (talk from the Home app) is off. If this camera or doorbell has a speaker, tick 'Two-way audio' in its HomeKit settings.")
+                if hksv_on:
+                    if props.get("HomeKit_unifiHKSV", False) and self._hksv_recorder_for(dev.id) is None:
+                        self.logger.warning(f"{dev.name}: HomeKit Secure Video was on for this camera in Durosity's development build. Here it needs its own device: "
+                                            f"create a 'HomeKit Secure Video Recorder' device (New Device → HomeKitLink Siri) and choose this camera.")
+                    props.pop("HomeKit_unifiHKSV", None)
+                    props.pop("HomeKit_hksvReady", None)
+                dev.replacePluginPropsOnServer(props)
+            except Exception:
+                self.logger.debug(f"Durosity build migration failed for {getattr(dev, 'name', dev)}", exc_info=True)
+
     def startup(self):
         self.debugLog(u"Starting Plugin. startup() method called.")
         self.device_list = set()  ## NB this is list of devices wished to be seen in HomeKit, self_device_list_internal - is list of Devices actually published
@@ -2681,6 +2735,7 @@ class Plugin(indigo.PluginBase):
         self.cameraimagePath = camerapath
 
         self.logger.debug("Saving Camera Snapshots to:{}".format(self.cameraimagePath))
+        self._migrate_durosity_build()
         self.update_deviceList()
         indigo.devices.subscribeToChanges()
         self.create_deviceList_internal()
@@ -4447,6 +4502,15 @@ class Plugin(indigo.PluginBase):
                 return []
         except:
             self.logger.debug("Caught Exception action device list generator", exc_info=True)
+
+    ## Version of the external door / window state contract (hkPosition, hkPositionState, hkObstructed) that Durosity's
+    ## Virtual Doors plugin asks for with executeAction("hklinkProtocolVersion", waitUntilDone=True). This build doesn't
+    ## support that contract yet, so it answers 0: the companion gets an answer instead of an error, and doesn't rely
+    ## on it. Answer 1 once the contract is supported.
+    HKLINK_EXTERNAL_PROTOCOL_VERSION = 0
+
+    def action_hklinkProtocolVersion(self, action):
+        return self.HKLINK_EXTERNAL_PROTOCOL_VERSION
 
     ### callbacks from device selection menus
     def action_triggerHomeKitDevice(self, action):
@@ -6343,26 +6407,43 @@ class Plugin(indigo.PluginBase):
 
             ## Home devices using an old port: they reach another bridge, which shows the one they wanted as No Response.
             ## Reported on the bridge they wanted; still happening (within 10 minutes) is an error, stopped is a warning.
-            saved_ports = self._load_bridge_ports()
+            saved_ports, ports_error = self._load_bridge_ports()
+            port_moves = dict(getattr(self, "_bridge_port_moves", {}))   ## bridge id -> (usual port, port it moved to) at start
             by_uid = {bridge["uid"]: bridge for bridge in bridges}
             wrong_port = []
             for bridge in running:
+                unknown = {}   ## device ip -> [bridge numbers it named that aren't bridges here, count, first, last]
                 for (ip, wanted), (count, first, last) in bridge["driver"]["wrong_bridge"].items():
                     wrong_port.append((ip, wanted, bridge, count, first, last))
-                    target = by_uid.get(wanted, bridge)
-                    wanted_name = by_uid[wanted]["name"] if wanted in by_uid else f"Bridge {wanted} (no longer exists)"
-                    problem = (f"Device {ip} looks for {wanted_name} on port {bridge['driver']['port']}, an old port for it, and reaches "
-                               f"{bridge['name']} instead: {count}× from {when(first)} to {when(last)}.  {wanted_name}'s accessories show as No Response from that device.")
                     fix = (f"🛠️  Fix: restart the device at {ip} (if it's your Home hub: the Apple TV / HomePod) so it looks the bridges up again.  "
                            f"Run this report again a few minutes later: it should stop.")
-                    if (datetime.datetime.now() - last).total_seconds() < 600:
-                        target["errors"].append((problem, fix))
-                    else:
-                        target["warnings"].append((problem + "  It has stopped.", "ℹ️  Nothing to do unless it starts again."))
-                if bridge["uid"] in saved_ports and saved_ports[bridge["uid"]] != bridge["driver"]["port"]:
-                    bridge["warnings"].append((f"Running on port {bridge['driver']['port']}, not its saved port {saved_ports[bridge['uid']]} (that port was taken at start).  "
-                                               f"Home devices that remember the saved port may reach the wrong bridge.",
-                                               "🛠️  Fix: find what else uses that port, free it, then restart the plugin."))
+                    if wanted in by_uid:   ## one of our bridges: reported on that bridge, as its accessories show No Response
+                        wanted_name = by_uid[wanted]["name"]
+                        problem = (f"Device {ip} looks for {wanted_name} on port {bridge['driver']['port']}, an old port for it, and reaches "
+                                   f"{bridge['name']} instead: {count}× from {when(first)} to {when(last)}.  {wanted_name}'s accessories show as No Response from that device.")
+                        if (datetime.datetime.now() - last).total_seconds() < 600:
+                            by_uid[wanted]["errors"].append((problem, fix))
+                        else:
+                            by_uid[wanted]["warnings"].append((problem + "  It has stopped.", "ℹ️  Nothing to do unless it starts again."))
+                    else:                  ## not a bridge here (deleted, another Indigo Mac's, or a bad client): one line per device
+                        entry = unknown.setdefault(ip, [[], 0, first, last])
+                        entry[0].append(wanted)
+                        entry[1] += count
+                        entry[2], entry[3] = min(entry[2], first), max(entry[3], last)
+                for ip, (numbers, count, first, last) in unknown.items():
+                    named = ", ".join(sorted(numbers)[:5]) + (f" and {len(numbers) - 5} more" if len(numbers) > 5 else "")
+                    bridge["warnings"].append((f"Device {ip} reached {bridge['name']} looking for bridge{'s' if len(numbers) != 1 else ''} that "
+                                               f"{'aren' if len(numbers) != 1 else 'isn'}'t here ({named}): {count}× from {when(first)} to {when(last)}.  "
+                                               f"Usually a bridge you've deleted, one on another Indigo Mac, or a device that isn't a Home app.",
+                                               f"ℹ️  If it's a Home hub, restart it.  Otherwise nothing to do."))
+                if bridge["uid"] in port_moves:
+                    usual, moved_to = port_moves[bridge["uid"]]
+                    bridge["warnings"].append((f"Moved from its usual port {usual} to {moved_to} at start ({usual} wasn't free).  "
+                                               f"Home devices that remember {usual} may reach the wrong bridge, or none.",
+                                               "🛠️  Fix: restart your Home hub (Apple TV / HomePod) so it finds the bridge on its new port.  It keeps the new port from now on."))
+                elif bridge["uid"] in saved_ports and saved_ports[bridge["uid"]] != bridge["driver"]["port"]:
+                    bridge["warnings"].append((f"Running on port {bridge['driver']['port']}, but {saved_ports[bridge['uid']]} is saved for it (the file was changed after it started).",
+                                               "🛠️  Fix: restart the plugin to use the saved port, then restart your Home hub."))
 
             ## Duplicate MACs (state file copied between bridges)
             mac_owners = {}
@@ -6415,7 +6496,7 @@ class Plugin(indigo.PluginBase):
             if os.access(self.pluginprefDirectory, os.W_OK):
                 log.info("   ✅ State folder is writable - pairings and keys can be saved.")
             else:
-                log.error("   ❌ State folder is NOT writable - new pairings and keys cannot be saved and will be lost on restart.")
+                log.warning("   ❌ State folder is NOT writable - new pairings and keys cannot be saved and will be lost on restart.")
             log.info("   ℹ️  The setup code / QR code changes every time the plugin starts.  Always use the one on Show QR Code.")
 
             heading(f"📋 Bridge Summary  ({len(bridges)} bridge{'s' if len(bridges) != 1 else ''}, {len(running)} running)")
@@ -6474,42 +6555,57 @@ class Plugin(indigo.PluginBase):
             heading("🔌 Bridge Ports  (each bridge keeps its port; a Home device using an old one reaches the wrong bridge)")
             ports_file = self._bridge_ports_file()
             ports_ok = True
-            if not os.path.exists(ports_file):
+            ## The fix for a bad file: the ports bridges run on now (what Home devices know), plus saved ports of stopped bridges
+            running_ports = {bridge["uid"]: bridge["driver"]["port"] for bridge in running}
+            rebuilt = dict(running_ports)
+            for uid, port in saved_ports.items():
+                if uid not in rebuilt and port not in rebuilt.values():
+                    rebuilt[uid] = port
+            rebuild_fix = ("      🛠️  Fix: replace the file's contents with the line below (the ports bridges are running on now, "
+                           "which Home devices already know), then restart the plugin.  Don't just delete the file: bridges would get new ports in start order.")
+            def show_rebuild():
+                log.info(rebuild_fix)
+                log.info(f"         {ports_file}")
+                log.info(f"         {json.dumps(rebuilt, sort_keys=True)}")
+            if ports_error:
                 ports_ok = False
-                log.warning(f"   ⚠️  {os.path.basename(ports_file)} is missing: bridges get ports in start order until it's saved again (at the next bridge start).")
+                log.warning(f"   ❌ {os.path.basename(ports_file)} can't be used ({ports_error}).  Bridges get free ports without saving them, and may move.  The file is left as it is.")
+                show_rebuild()
+            elif not os.path.exists(ports_file):
+                ports_ok = False
+                log.warning(f"   ⚠️  {os.path.basename(ports_file)} is missing: it's saved the next time a bridge starts, and bridges may move until then.")
+                show_rebuild()
             else:
-                try:
-                    with open(ports_file) as file_handle:
-                        json.load(file_handle)
-                    log.info(f"   💾 {os.path.basename(ports_file)}: {len(saved_ports)} bridge{'s' if len(saved_ports) != 1 else ''} saved")
-                except Exception as error:
-                    ports_ok = False
-                    log.error(f"   ❌ {os.path.basename(ports_file)} can't be read ({error}).  Bridges get ports in start order until it's fixed.")
-                    log.info("      🛠️  Fix: delete the file and restart the plugin: it's saved again with the ports bridges have then.")
+                log.info(f"   💾 {os.path.basename(ports_file)}: {len(saved_ports)} bridge{'s' if len(saved_ports) != 1 else ''} saved")
             shared = {}
             for uid, port in saved_ports.items():
                 shared.setdefault(port, []).append(uid)
             for port, uids in shared.items():
                 if len(uids) > 1:
                     ports_ok = False
-                    log.error(f"   ❌ Port {port} is saved for more than one bridge: {', '.join(uids)}.  Only one can use it.")
-                    log.info("      🛠️  Fix: delete the file and restart the plugin.")
+                    log.warning(f"   ❌ Port {port} is saved for more than one bridge: {', '.join(uids)}.  Only one can use it.")
+                    show_rebuild()
             gone = sorted(uid for uid in saved_ports if uid not in by_uid)
             if gone:
                 log.info(f"   ℹ️  Saved ports kept for bridges that no longer exist: {', '.join(f'{uid} ({saved_ports[uid]})' for uid in gone)}.  Harmless: those ports just aren't reused.")
             for bridge in running:
                 saved_port = saved_ports.get(bridge["uid"])
-                note = "saved ✅" if saved_port == bridge["driver"]["port"] else (f"⚠️  saved port is {saved_port}" if saved_port else "not saved yet")
+                note = "saved ✅" if saved_port == bridge["driver"]["port"] else (f"⚠️  saved port is {saved_port}" if saved_port else "not saved")
+                if bridge["uid"] in port_moves:
+                    note += f"   ⚠️  moved from {port_moves[bridge['uid']][0]} at start"
                 log.info(f"   {bridge['name'][:name_width]:<{name_width}}   ID {bridge['uid']}   port {bridge['driver']['port']}   {note}")
-                if saved_port != bridge["driver"]["port"]:
+                if saved_port != bridge["driver"]["port"] or bridge["uid"] in port_moves:
                     ports_ok = False
             if ports_ok:
                 log.info("   ✅ Every running bridge is on its saved port, and the saved ports are all different.")
             if wrong_port:
                 log.warning(f"   🚫 Home devices that reached the wrong bridge since plugin start: {len(wrong_port)}")
-                for ip, wanted, bridge, count, first, last in sorted(wrong_port, key=lambda item: item[5], reverse=True):
-                    wanted_name = by_uid[wanted]["name"] if wanted in by_uid else f"Bridge {wanted} (no longer exists)"
+                newest = sorted(wrong_port, key=lambda item: item[5], reverse=True)
+                for ip, wanted, bridge, count, first, last in newest[:10]:
+                    wanted_name = by_uid[wanted]["name"] if wanted in by_uid else f"Bridge {wanted} (not a bridge here)"
                     log.warning(f"      {ip:<15}   wanted {wanted_name}   reached {bridge['name']} (port {bridge['driver']['port']})   {count}×   {when(first)} – {when(last)}")
+                if len(newest) > 10:
+                    log.warning(f"      … and {len(newest) - 10} more (the 10 most recent are shown)")
             else:
                 log.info("   ✅ No Home device has reached the wrong bridge since plugin start.")
 
@@ -6549,7 +6645,7 @@ class Plugin(indigo.PluginBase):
                 else:
                     log.info("      ⚙️  Running: not running")
                 for problem, fix in bridge["errors"]:
-                    log.error(f"      ❌ {problem}")
+                    log.warning(f"      ❌ {problem}")
                     log.info(f"         {fix}")
                 for problem, fix in bridge["warnings"]:
                     log.warning(f"      ⚠️  {problem}")
@@ -6567,7 +6663,7 @@ class Plugin(indigo.PluginBase):
             error_count = sum(len(bridge["errors"]) for bridge in bridges)
             warning_count = sum(len(bridge["warnings"]) for bridge in bridges)
             if error_count:
-                log.error(f"   ❌ {error_count} problem{'s' if error_count != 1 else ''} found - see the 🛠️ fixes under 🔍 Bridge Details above.")
+                log.warning(f"   ❌ {error_count} problem{'s' if error_count != 1 else ''} found - see the 🛠️ fixes under 🔍 Bridge Details above.")
             if warning_count:
                 log.warning(f"   ⚠️  {warning_count} item{'s need' if warning_count != 1 else ' needs'} attention - see 🔍 Bridge Details above.")
             if not error_count and not warning_count:

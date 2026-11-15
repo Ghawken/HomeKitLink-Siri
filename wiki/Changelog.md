@@ -6,6 +6,24 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.43 — 2026-11-15
+
+### 🔌 Saved bridge ports: safer
+- **A moved bridge shows in Troubleshoot 4.** If a bridge's usual port isn't free at start, it moves, and 🔌 Bridge Ports now shows *"moved from 51846 at start"* with what to do (restart your home hub) until the plugin restarts. Before, the report showed it as saved ✅
+- **`bridge_ports.json` is never lost or overwritten by mistake:** it's written to a temporary file and swapped in, so a crash mid-write can't leave half a file; and a file that can't be read (e.g. a bad hand edit, or a port above 65535) is left as it is, with a warning, instead of being replaced with just one bridge
+- **Troubleshoot 4's fix for a bad, missing or duplicated file** is now the exact line to put in the file, built from the ports the bridges are running on now (which Home devices already know), instead of "delete the file", which would have given bridges new ports
+- The wrong-bridge warning is limited to once every 10 minutes per device however many bridges it names, and Troubleshoot 4 keeps at most 50 entries per bridge
+- Troubleshoot 4 is easier to read: problems are logged as warnings (no code location in front), wrong-bridge attempts for bridges that aren't here are one line per device, and the list shows the 10 most recent
+
+### 🔁 Moving from Durosity's development build (unifi-hksv-twoway)
+- **UniFi cameras keep working:** that build's camera type `UniFiCamera` is changed to ours (UniFi Protect Camera) at startup, and the camera stays the same accessory in Home
+- **"New HomeKit identity" devices keep their accessory ID**, so Home doesn't add them again
+- **HKSV:** that build switched HKSV on with a camera setting; here a camera needs a **HomeKit Secure Video Recorder** device. The log says so once for each camera that had it on and has no Recorder yet
+- **Two-way audio:** that build switched it on by itself for doorbells and cameras with a speaker; here it's the camera's *Two-way audio* setting. The log says so once for each of that build's UniFi cameras where it's off
+- New hidden action **hklinkProtocolVersion** for Durosity's Virtual Doors plugin. It answers 0 (this build doesn't support Virtual Doors & Windows states yet), so the plugin gets an answer instead of an error
+
+---
+
 ## 0.8.42 — 2026-11-15
 
 ### 🔌 Troubleshoot 4 checks the saved bridge ports

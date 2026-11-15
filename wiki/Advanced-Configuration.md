@@ -58,10 +58,11 @@ Each HKLS bridge listens on its own port, starting from this number (51840, 5184
 
 **Each bridge keeps its port (0.8.40+).** The port a bridge gets the first time it starts is saved in `bridge_ports.json` in the plugin's preferences folder, and it gets the same port every start after that, whatever order bridges start in. A new bridge gets a port no other bridge has used. This matters because Home devices, especially home hubs, remember each bridge's port: if it moved, they reached a different bridge and showed theirs as No Response (see [Troubleshooting](Troubleshooting#no-response-on-a-whole-bridge-everything-works-from-indigo)).
 
-- If a bridge's saved port is in use by something else at start, it takes the next free port and the log warns that Home may show it as No Response for a while.
+- If a bridge's saved port is in use by something else at start, it moves to the next free port, keeps that port from then on, and the log warns that Home may show it as No Response for a while: restart your home hub. Troubleshoot 4 shows the move until the plugin restarts.
 - Ports saved for bridges you've deleted stay reserved; they just aren't reused.
 - Raising the Starting Port Number above a bridge's saved port moves that bridge (with the same warning). Restart your home hub afterwards.
-- **Troubleshoot 4 → 🔌 Bridge Ports** shows each bridge's port and checks the saved file. To start afresh, delete `bridge_ports.json` and restart the plugin: it's saved again with the ports bridges get then.
+- If `bridge_ports.json` can't be read (e.g. a bad hand edit), it's **left as it is**, the log warns, and bridges get free ports without saving them until it's fixed.
+- **Troubleshoot 4 → 🔌 Bridge Ports** shows each bridge's port and checks the file. If the file is bad, missing, or has two bridges on one port, it prints the line to put in the file: the ports the bridges are running on now, which Home devices already know. **Don't just delete the file**: bridges would get new ports in start order, which is exactly what upsets Home hubs.
 
 ---
 

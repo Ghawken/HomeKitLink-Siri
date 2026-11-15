@@ -1,5 +1,10 @@
 <?xml version="1.0"?>
 <Actions>
+        <!-- Hidden: lets companion plugins (Durosity's Virtual Doors) ask which external-control version this plugin supports -->
+        <Action id="hklinkProtocolVersion" uiPath="hidden">
+        <Name>Get HomeKitLink External Protocol Version</Name>
+        <CallbackMethod>action_hklinkProtocolVersion</CallbackMethod>
+    </Action>
         <Action id="triggerHomeKitDevice">
         <Name>Notify HomeKit Device</Name>
         <CallbackMethod>action_triggerHomeKitDevice</CallbackMethod>

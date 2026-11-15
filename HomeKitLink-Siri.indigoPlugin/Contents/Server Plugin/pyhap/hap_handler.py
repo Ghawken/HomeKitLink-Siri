@@ -218,7 +218,8 @@ class HAPServerHandler:
         self.response.body = bytesdata
 
     WRONG_BRIDGE_RE = re.compile(r"^HomeKitLink Bridge (\d+) ")
-    WRONG_BRIDGE_REPEAT = 600  ## seconds between warnings for the same device and bridge
+    WRONG_BRIDGE_REPEAT = 600  ## seconds between warnings for the same device
+    WRONG_BRIDGE_MAX = 50      ## (device, bridge wanted) entries kept per bridge for Troubleshoot 4
 
     def _check_wrong_bridge(self, headers):
         """Warn when a Home device reaches this bridge while looking for another one. Its Host header names the
@@ -235,16 +236,19 @@ class HAPServerHandler:
             wanted = match.group(1)
             key = (self.client_address[0], wanted)
             ## Every attempt, for Troubleshoot 4: (device ip, bridge it wanted) -> [count, first, last]
+            ## The Host header is the client's word, read before any pairing check: keep at most WRONG_BRIDGE_MAX
+            ## entries, and warn at most once per device ip per WRONG_BRIDGE_REPEAT, however many bridges it names.
             record = self.accessory_handler.__dict__.setdefault("wrong_bridge", {})
             stamp = datetime.datetime.now()
-            entry = record.setdefault(key, [0, stamp, stamp])
-            entry[0] += 1
-            entry[2] = stamp
+            if key in record or len(record) < self.WRONG_BRIDGE_MAX:
+                entry = record.setdefault(key, [0, stamp, stamp])
+                entry[0] += 1
+                entry[2] = stamp
             seen = self.accessory_handler.__dict__.setdefault("_wrong_bridge_warned", {})
             now = time.monotonic()
-            if now - seen.get(key, -self.WRONG_BRIDGE_REPEAT) < self.WRONG_BRIDGE_REPEAT:
+            if now - seen.get(key[0], -self.WRONG_BRIDGE_REPEAT) < self.WRONG_BRIDGE_REPEAT:
                 return
-            seen[key] = now
+            seen[key[0]] = now
             logger.warning(
                 f"Home device {self.client_address[0]} is looking for HomeKitLink Bridge {wanted} but reached "
                 f"Bridge {ours} on port {self.state.port}: it is using an old port for Bridge {wanted}. "
