@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.38 — 2026-11-15
+
+### 📷 Blue Iris: faster live view start
+- Blue Iris live views start about 1.7 s sooner: the quick-start options for reading the camera stream (`-probesize`/`-analyzeduration`) were placed where ffmpeg ignored them. Measured from request to first video: remote/small views 2.1 s → 0.4 s, local view 1.8 s → 1.2 s
+- Helps viewers that only stay for the first frame, such as Home widgets refreshing a camera, which repeatedly start and stop a short stream
+
+---
+
 ## 0.8.37 — 2026-11-15
 
 ### 🌡️ HomeKitLink Sensor

@@ -819,7 +819,11 @@ class Camera(HomeAccessory,  PyhapCamera):
                 # HEVC or other codecs needing larger probe
                 input_source = strategy["input_extra"] + "-rtsp_transport tcp -i " + input_source
             else:
-                input_source = "-rtsp_transport tcp -i " + input_source
+                # The camera's quick-start probe options (-probesize/-analyzeduration) are input options: before -i.
+                # (After -i ffmpeg applied them to the output and ignored them; measured, the first video then took
+                # ~2.1 s instead of ~0.4 s for Blue Iris Stream 0.)
+                input_source = str(extra_commands).strip() + " -rtsp_transport tcp -i " + input_source
+                input_source = input_source.strip()
 
             _LOGGER.debug("INPUT SOURCE: %s", input_source)
 
@@ -827,7 +831,7 @@ class Camera(HomeAccessory,  PyhapCamera):
             # Launch ffmpeg
             # ============================================================
             stream = IndigoFFmpeg(f"{str(self.plugin.ffmpeg_command_line)}")
-            extra_cmd_toadd = "-hide_banner -nostats " + str(extra_commands)
+            extra_cmd_toadd = "-hide_banner -nostats "
             opened = await stream.open(
                 cmd=[],
                 input_source=input_source,
