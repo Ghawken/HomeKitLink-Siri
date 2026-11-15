@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.42 — 2026-11-15
+
+### 🔌 Troubleshoot 4 checks the saved bridge ports
+- The **🔌 Bridge Ports** section now checks `bridge_ports.json` itself: that it's there and readable, that no two bridges are saved with the same port, and that every running bridge is on its saved port, with a ✅ line when all is well. Saved ports kept for deleted bridges are listed (harmless: those ports just aren't reused)
+
+---
+
 ## 0.8.41 — 2026-11-15
 
 ### ⚠️ Warning when a Home device reaches the wrong bridge

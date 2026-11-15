@@ -6472,10 +6472,39 @@ class Plugin(indigo.PluginBase):
                     log.info(f"      ⏳ {entry['unverified']} connection(s) still pairing / verifying, or rejected.")
 
             heading("🔌 Bridge Ports  (each bridge keeps its port; a Home device using an old one reaches the wrong bridge)")
+            ports_file = self._bridge_ports_file()
+            ports_ok = True
+            if not os.path.exists(ports_file):
+                ports_ok = False
+                log.warning(f"   ⚠️  {os.path.basename(ports_file)} is missing: bridges get ports in start order until it's saved again (at the next bridge start).")
+            else:
+                try:
+                    with open(ports_file) as file_handle:
+                        json.load(file_handle)
+                    log.info(f"   💾 {os.path.basename(ports_file)}: {len(saved_ports)} bridge{'s' if len(saved_ports) != 1 else ''} saved")
+                except Exception as error:
+                    ports_ok = False
+                    log.error(f"   ❌ {os.path.basename(ports_file)} can't be read ({error}).  Bridges get ports in start order until it's fixed.")
+                    log.info("      🛠️  Fix: delete the file and restart the plugin: it's saved again with the ports bridges have then.")
+            shared = {}
+            for uid, port in saved_ports.items():
+                shared.setdefault(port, []).append(uid)
+            for port, uids in shared.items():
+                if len(uids) > 1:
+                    ports_ok = False
+                    log.error(f"   ❌ Port {port} is saved for more than one bridge: {', '.join(uids)}.  Only one can use it.")
+                    log.info("      🛠️  Fix: delete the file and restart the plugin.")
+            gone = sorted(uid for uid in saved_ports if uid not in by_uid)
+            if gone:
+                log.info(f"   ℹ️  Saved ports kept for bridges that no longer exist: {', '.join(f'{uid} ({saved_ports[uid]})' for uid in gone)}.  Harmless: those ports just aren't reused.")
             for bridge in running:
                 saved_port = saved_ports.get(bridge["uid"])
                 note = "saved ✅" if saved_port == bridge["driver"]["port"] else (f"⚠️  saved port is {saved_port}" if saved_port else "not saved yet")
                 log.info(f"   {bridge['name'][:name_width]:<{name_width}}   ID {bridge['uid']}   port {bridge['driver']['port']}   {note}")
+                if saved_port != bridge["driver"]["port"]:
+                    ports_ok = False
+            if ports_ok:
+                log.info("   ✅ Every running bridge is on its saved port, and the saved ports are all different.")
             if wrong_port:
                 log.warning(f"   🚫 Home devices that reached the wrong bridge since plugin start: {len(wrong_port)}")
                 for ip, wanted, bridge, count, first, last in sorted(wrong_port, key=lambda item: item[5], reverse=True):
