@@ -1519,9 +1519,8 @@ class Plugin(indigo.PluginBase):
             if dev is not None:
                 self.device_list.add(dev.id)
         else:
-            values_dict["HomeKit_publishDevice"] = False
-            values_dict["HomeKit_bridgeUniqueID"] = ""
-            values_dict["HomeKit_deviceSubtype"] = ""
+            for key in [k for k in values_dict.keys() if self._is_publish_key(k)]:   ## unpublished: none left
+                del values_dict[key]
             if dev is not None and old_uid:
                 self.device_list.discard(dev.id)
                 self.device_list_internal = [i for i in self.device_list_internal
@@ -4718,6 +4717,44 @@ class Plugin(indigo.PluginBase):
         return values_dict
 
     ########################################
+    ## Publishing settings kept on a published device: these always, plus only its own type's (below).
+    ## Anything else HomeKitLink once wrote there is removed on Save, and everything on unpublish.
+    _CAMERAS = ("BlueIrisCamera", "SecuritySpyCamera", "UniFiProtectCamera")
+    PUBLISH_KEYS_BY_TYPE = {
+        "HomeKit_tempSelector": ("Thermostat", "TemperatureSensor", "HeaterCooler"),
+        "HomeKit_inverseSelector": ("Blind", "Window", "Door"),
+        "HomeKit_motionEnabled": _CAMERAS,
+        "HomeKit_audioSelector": _CAMERAS,
+        "HomeKit_doorbellId": _CAMERAS,
+        "HomeKit_unifiStreamURL": ("UniFiProtectCamera",),
+        "HomeKit_unifiTwoWay": ("UniFiProtectCamera",),
+        "HomeKit_unifiDoorbell": ("UniFiProtectCamera",),
+        "HomeKit_unifiStreamSize": ("UniFiProtectCamera",),
+        "HomeKit_hcZoneOf": ("HeaterCooler",),
+        "HomeKit_robotStart": ("Vacuum", "LawnMower"),
+        "HomeKit_robotStop": ("Vacuum", "LawnMower"),
+        "HomeKit_robotState": ("Vacuum", "LawnMower"),
+        "HomeKit_robotRunning": ("Vacuum", "LawnMower"),
+    }
+    for _field in ("PM25", "PM10", "VOC", "NO2", "O3", "CO2", "AQI", "GasUnit", "Configured"):
+        PUBLISH_KEYS_BY_TYPE["HomeKit_aq" + _field] = ("AirQualitySensor",)
+    del _field
+
+    @staticmethod
+    def _is_publish_key(key):
+        """A HomeKitLink publishing setting on a device (HomeKit_*, and the HomeKit name)."""
+        return key.startswith("HomeKit_") or key == "homekit-name"
+
+    def _prune_publish_props(self, device_props, subtype):
+        """Remove type-specific settings that don't belong to the device's HomeKit type (e.g. Vacuum settings
+        left after changing a device to Switch). Keys not listed are left alone."""
+        for key, types in self.PUBLISH_KEYS_BY_TYPE.items():
+            if key in device_props and subtype not in types:
+                del device_props[key]
+        if device_props.get("HomeKit_deviceSensor", None) == "":   ## an empty state choice does nothing
+            del device_props["HomeKit_deviceSensor"]
+        return device_props
+
     def save(self, values_dict, type_id="", dev_id=None):
         errors_dict = indigo.Dict()
         if self.debug8:
@@ -4829,31 +4866,8 @@ class Plugin(indigo.PluginBase):
             else:
                 values_dict["enablePublishFields"] = False
                 if device_props.get("HomeKit_publishDevice", False): publication_change = True
-                if getattr(device, "pluginId", None) == self.pluginId:
-                    device_props = {k: v for k, v in device_props.items() if not k.startswith("HomeKit_")}  ## own device (Buttons): keep its settings
-                else:
-                    device_props = {}  ##?
-                ## unpublished - delete all device props - not the Device/Bridge itself!
-                device_props["HomeKit_bridgeUniqueID"] = ""
-                device_props["HomeKit_deviceSubtype"] = ""
-                device_props["HomeKit_deviceSensor"] = ""
-                device_props["homekit-name"] = ""
-                device_props["HomeKit_tempSelector"] = ""
-                device_props["HomeKit_motionEnabled"] = ""
-                device_props["HomeKit_inverseSelector"] = ""
-                device_props["HomeKit_audioSelector"] = ""
-                device_props["HomeKit_unifiStreamURL"] = ""
-                device_props["HomeKit_unifiTwoWay"] = False
-                device_props["HomeKit_unifiDoorbell"] = False
-                device_props["HomeKit_robotStart"] = ""
-                device_props["HomeKit_robotStop"] = ""
-                device_props["HomeKit_robotState"] = ""
-                device_props["HomeKit_robotRunning"] = ""
-                for field, _, _ in self.AQ_READINGS:
-                    device_props["HomeKit_" + field] = ""
-                device_props["HomeKit_aqGasUnit"] = ""
-                device_props["HomeKit_aqConfigured"] = False
-                device_props["HomeKit_hcZoneOf"] = ""
+                ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default)
+                device_props = {k: v for k, v in device_props.items() if not self._is_publish_key(k)}
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = self._own_index(device.id)   ## only its own entry: a camera may still use it as its doorbell
@@ -4864,6 +4878,8 @@ class Plugin(indigo.PluginBase):
                     self.logger.info("Given just unpublished device to HomeKit, Bridge will need to be restarted for changes to take effect")
                 except:
                     self.logger.debug("device_list remove error, Exception\n", exc_info=True)
+            if device_props.get("HomeKit_publishDevice", False):
+                self._prune_publish_props(device_props, device_props.get("HomeKit_deviceSubtype", ""))
             self.logger.debug(u"saving plugin props: \n{}".format(device_props))
             device.replacePluginPropsOnServer(indigo.Dict(device_props))
 

@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.36 — 2026-11-15
+
+### 🧹 Fewer settings stored on your devices
+- **Unpublishing** a device now removes all of HomeKitLink's settings from it, instead of leaving them behind as empty values
+- **Saving** a published device keeps only the settings its HomeKit type uses (e.g. a Switch no longer stores temperature, camera or vacuum settings; changing a Vacuum to a Switch drops its vacuum settings). Older devices are tidied the next time they're saved
+
+---
+
 ## 0.8.35 — 2026-11-15
 
 ### 🛠️ Device updates
