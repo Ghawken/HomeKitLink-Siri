@@ -6272,8 +6272,13 @@ class Plugin(indigo.PluginBase):
             result = subprocess.run([ffprobe_bin, "-rtsp_transport", "tcp", "-v", "error", "-select_streams", "v:0",
                                      "-show_entries", "stream=codec_name,width,height,pix_fmt", "-of", "json", "-i", test_source],
                                     capture_output=True, timeout=15)
-            video = (json.loads(result.stdout.decode(errors="replace")).get("streams") or [{}])[0]
+            video = (json.loads(result.stdout.decode(errors="replace") or "{}").get("streams") or [{}])[0]
             codec, height = video.get("codec_name"), int(video.get("height", 0) or 0)
+            if not codec:   ## nothing came back: not a setting problem (e.g. BlueIris busy, or a timeout)
+                reason = (result.stderr.decode(errors="replace").strip().splitlines() or ["no video returned"])[-1]
+                self.logger.warning("[%s] Remote viewing: could not read BlueIris Stream %s to check it (%s).  Remote / mobile viewing will use Stream 2 "
+                                    "until the next check (plugin restart, or 'Check Camera Stream Compatibility').", cam_name, choice, reason[:200])
+                return
             if not (codec == "h264" and video.get("pix_fmt") == "yuv420p" and 0 < height <= 400):
                 self.logger.warning("[%s] Remote viewing: BlueIris Stream %s did not resize (asked for 360 high, got %sx%s %s).  %s",
                                     cam_name, choice, video.get("width"), height, codec, fix)

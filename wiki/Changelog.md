@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.45 — 2026-11-15
+
+### 🔧 Fix
+- Blue Iris remote viewing check: when Blue Iris returns nothing (e.g. busy serving many streams), the log now says it couldn't read the stream to check it, instead of wrongly suggesting the Direct-to-wire setting. Remote views use Stream 2 until the next check
+
+---
+
 ## 0.8.44 — 2026-11-15
 
 ### 📷 Improved live view (on by default)

@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.42** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.45** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -121,7 +121,10 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.42 — Latest
+### 0.8.45 — Latest
+- **Improved live view** (0.8.44, on by default) — video is sent from the port HomeKit expects, re-encoded video is sized for what HomeKit asked for, and remote views start at 720p instead of 640x360; copied streams keep the camera's full picture
+- **Camera fixes** — cameras on bridges that start later are now stream-checked; a camera with no check data is re-encoded rather than copied
+- **Saved bridge ports made safer** (0.8.43); compatible with devices set up with Durosity's development build
 - **Important: bridges keep their port** (0.8.40) — adding, deleting or renaming a bridge used to move other bridges to new ports, and home hubs that remembered the old ports showed whole bridges as **No Response**. Ports are now saved per bridge. If you run more than one bridge, please update, then restart your home hub
 - **Wrong-bridge warning** (0.8.41) — the log names any Home device that reaches the wrong bridge (an old port) and says what to do; **Troubleshoot 4** has a new 🔌 Bridge Ports section that checks every bridge's port and the saved ports file (0.8.42)
 - **Blue Iris live views start ~1.7 s sooner** (0.8.38); repeated short views from Home widgets are logged once (0.8.39)

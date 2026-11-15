@@ -4,7 +4,7 @@
 
 **HomeKitLink Siri (HKLS)** is an [Indigo](https://www.indigodomo.com/) plugin that creates HomeKit Bridges, exposing your Indigo devices to Apple HomeKit and Siri control — all natively, with no Homebridge or external server required.
 
-> **Current version:** `0.8.42` (preliminary release) &nbsp;|&nbsp; **Requires:** Indigo 2025.1+ (Python 3)  
+> **Current version:** `0.8.45` (preliminary release) &nbsp;|&nbsp; **Requires:** Indigo 2025.1+ (Python 3)  
 > **Forum:** [HomeKitLink Siri on Indigo Forums](https://forums.indigodomo.com/viewforum.php?f=366)  
 > **GitHub:** [Ghawken/HomeKitLink-Siri](https://github.com/Ghawken/HomeKitLink-Siri)
 
@@ -13,6 +13,7 @@
 | | |
 |---|---|
 | ⚠️ **Bridges keep their port** (0.8.40) | **Important if you run more than one bridge.** Adding a bridge used to move the others to new ports, and home hubs that remembered the old ports showed whole bridges as **No Response**. Ports are now saved per bridge. → [Troubleshooting](Troubleshooting#no-response-on-a-whole-bridge-everything-works-from-indigo) |
+| 📷 **Improved live view** (0.8.44) | On by default: video sent from the port HomeKit expects, HomeKit-sized re-encoding, and remote views start at 720p instead of 640×360. Copied (passthrough) streams keep the camera's full picture. → [Camera Setup](Camera-Setup#improved-live-view-v0844) |
 | 🔎 **Wrong-bridge warning** (0.8.41) | The log names any Home device that reaches the wrong bridge (an old port), and what to do. **Troubleshoot 4** lists every bridge's port and checks the saved ports. → [Plugin Menu Items](Plugin-Menu-Items#ℹ️-troubleshoot-4--homekit-pairing--security-keys) |
 | 🧩 **New HomeKitLink devices** | **HomeKitLink Sensor** (one state of any device as its own HomeKit sensor), **HomeKit Buttons** (Indigo starts Home app automations), **HKSV Recorder**. → [HomeKitLink Devices](HomeKitLink-Devices) |
 | 🎥 **HomeKit Secure Video** | Home hubs record a camera's motion and doorbell events to iCloud. → [Camera Setup](Camera-Setup#homekit-secure-video-v0822) |
