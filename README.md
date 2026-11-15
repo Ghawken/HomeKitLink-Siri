@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.39** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.42** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -121,7 +121,12 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.37 — Latest
+### 0.8.42 — Latest
+- **Important: bridges keep their port** (0.8.40) — adding, deleting or renaming a bridge used to move other bridges to new ports, and home hubs that remembered the old ports showed whole bridges as **No Response**. Ports are now saved per bridge. If you run more than one bridge, please update, then restart your home hub
+- **Wrong-bridge warning** (0.8.41) — the log names any Home device that reaches the wrong bridge (an old port) and says what to do; **Troubleshoot 4** has a new 🔌 Bridge Ports section that checks every bridge's port and the saved ports file (0.8.42)
+- **Blue Iris live views start ~1.7 s sooner** (0.8.38); repeated short views from Home widgets are logged once (0.8.39)
+
+### 0.8.37
 - **New: HomeKitLink Sensor** — publish one state of any Indigo device as a HomeKit sensor of its own (e.g. a weather gateway's outdoor temperature, humidity and rain as separate tiles), without changing that device
 - Fewer HomeKitLink settings stored on your devices; bridge settings device lists can be searched and are sorted properly
 

@@ -286,7 +286,7 @@ Security systems are a special case — there is no direct Indigo equivalent. HK
 
 HomeKit security states: Disarmed, Armed Stay, Armed Away, Armed Night, Triggered.
 
-> Testing security systems is difficult without the actual hardware. If you have a supported system and encounter issues, please report on the forum with the [Troubleshoot menu output](Plugin-Menu-Items#troubleshoot-items).
+> Testing security systems is difficult without the actual hardware. If you have a supported system and encounter issues, please report on the forum with the [Troubleshoot menu output](Plugin-Menu-Items#⭐-troubleshoot-items--run-these-first).
 
 ---
 

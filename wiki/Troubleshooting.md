@@ -39,9 +39,11 @@ Checks mDNS/Bonjour health — whether bridges are advertising correctly, interf
 
 Checks pairing and security keys for every bridge — saved vs running keys, paired Home users, connected Home hubs and failed connection attempts — with a 🛠️ fix for each problem. Essential for "won't add", "Accessory already added", "Needs to be reset" and pairing-error problems.
 
+Its **🔌 Bridge Ports** section (0.8.41+) shows each bridge's port, checks the saved ports, and lists any Home device that reached the **wrong bridge**: the cause of a whole bridge showing No Response while everything looks fine (see [below](#no-response-on-a-whole-bridge-everything-works-from-indigo)).
+
 ---
 
-See [Plugin Menu Items](Plugin-Menu-Items#troubleshoot-items) for full details on what each tool checks.
+See [Plugin Menu Items](Plugin-Menu-Items#⭐-troubleshoot-items--run-these-first) for full details on what each tool checks.
 
 ---
 
@@ -103,6 +105,28 @@ A bridge with **no published devices** running successfully confirms the issue i
 3. Try to see the empty bridge in the Home app
 
 If the empty bridge is visible, the problem is with a specific device configuration.
+
+---
+
+## No Response on a whole bridge, everything works from Indigo
+
+**What you see:** every accessory on one or more bridges shows **No Response** in the Home app, but the devices still work from Indigo, and Troubleshoot 2 and 3 look fine. It may come back for a moment (e.g. after restarting your iPhone) and then drop out again.
+
+**Cause:** a Home device, usually your **home hub** (Apple TV / HomePod), is using an **old port** for that bridge. Each bridge listens on its own port, and Home devices remember it. If a bridge's port changes, a device still using the old one reaches a **different bridge**, can't verify, and shows the bridge it wanted as No Response. When the hub has it wrong, the Home app shows No Response everywhere, even after your phone briefly connects directly.
+
+Before **0.8.40**, ports were handed out in the order bridges started (name order), so **adding, deleting or renaming a bridge** moved the bridges after it to new ports at the next restart. Since 0.8.40 each bridge keeps its port (saved in `bridge_ports.json` in the plugin's preferences folder), so this should no longer happen. A hub can still hold an old port from before you updated.
+
+**How to tell (0.8.41+):**
+- The log shows a warning naming the device, the bridge it wanted and the bridge it reached:
+  > Home device 192.168.1.142 is looking for HomeKitLink Bridge 757297 but reached Bridge 104164 on port 51846: it is using an old port for Bridge 757297. …
+- **Troubleshoot 4 → 🔌 Bridge Ports** lists every such device, and the bridge it wanted shows ❌ with the fix.
+
+**Fix:**
+1. **Restart the device at that IP.** If it's your home hub, restart the Apple TV / HomePod. Check your router's client list if you're not sure which device has the IP. With several hubs, restart the one named in the warning.
+2. Force-quit the Home app on your phone, or turn Wi-Fi off and on.
+3. Check the bridge's accessories respond in the Home app. The log warning stops. In **Troubleshoot 4**, once 10 minutes have passed since the last wrong-bridge attempt, the bridge shows ⚠️ *"It has stopped"* instead of ❌; it clears at the next plugin restart.
+
+> ℹ️ Restarting the plugin or the bridge doesn't fix this: the bridges keep their ports, and the device has to look them up again itself.
 
 ---
 

@@ -8,7 +8,7 @@
 
 | Requirement | Detail |
 |---|---|
-| **Indigo version** | 2022.1 or later (Python 3 required) |
+| **Indigo version** | 2025.1 or later (Python 3.13) |
 | **macOS** | 10.15 Catalina or later; macOS Sequoia 15.x has extra [Local Network Access](Troubleshooting#macos-sequoia-local-network-access) requirements |
 | **iOS / iPadOS** | 16.0 or later recommended for Home app |
 | **Apple Home Hub** | Strongly recommended (HomePod or Apple TV) for reliable remote access and persistent connections |

@@ -54,9 +54,14 @@ Forces HKLS to use a specific IP address for the HAP (HomeKit Accessory Protocol
 
 Default: **51840**
 
-Each HKLS bridge uses a sequential port number (Bridge 0 = 51840, Bridge 1 = 51841, etc.). Change the base port if there are conflicts with other software.
+Each HKLS bridge listens on its own port, starting from this number (51840, 51841, …). Change the base port if there are conflicts with other software.
 
-HKLS checks whether each port is in use at startup and will skip occupied ports.
+**Each bridge keeps its port (0.8.40+).** The port a bridge gets the first time it starts is saved in `bridge_ports.json` in the plugin's preferences folder, and it gets the same port every start after that, whatever order bridges start in. A new bridge gets a port no other bridge has used. This matters because Home devices, especially home hubs, remember each bridge's port: if it moved, they reached a different bridge and showed theirs as No Response (see [Troubleshooting](Troubleshooting#no-response-on-a-whole-bridge-everything-works-from-indigo)).
+
+- If a bridge's saved port is in use by something else at start, it takes the next free port and the log warns that Home may show it as No Response for a while.
+- Ports saved for bridges you've deleted stay reserved; they just aren't reused.
+- Raising the Starting Port Number above a bridge's saved port moves that bridge (with the same warning). Restart your home hub afterwards.
+- **Troubleshoot 4 → 🔌 Bridge Ports** shows each bridge's port and checks the saved file. To start afresh, delete `bridge_ports.json` and restart the plugin: it's saved again with the ports bridges get then.
 
 ---
 

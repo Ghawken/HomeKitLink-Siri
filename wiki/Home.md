@@ -4,9 +4,23 @@
 
 **HomeKitLink Siri (HKLS)** is an [Indigo](https://www.indigodomo.com/) plugin that creates HomeKit Bridges, exposing your Indigo devices to Apple HomeKit and Siri control — all natively, with no Homebridge or external server required.
 
-> **Current version:** `0.8.05` &nbsp;|&nbsp; **Requires:** Indigo 2022.1+ (Python 3)  
+> **Current version:** `0.8.42` (preliminary release) &nbsp;|&nbsp; **Requires:** Indigo 2025.1+ (Python 3)  
 > **Forum:** [HomeKitLink Siri on Indigo Forums](https://forums.indigodomo.com/viewforum.php?f=366)  
 > **GitHub:** [Ghawken/HomeKitLink-Siri](https://github.com/Ghawken/HomeKitLink-Siri)
+
+### What's new since 0.8.05
+
+| | |
+|---|---|
+| ⚠️ **Bridges keep their port** (0.8.40) | **Important if you run more than one bridge.** Adding a bridge used to move the others to new ports, and home hubs that remembered the old ports showed whole bridges as **No Response**. Ports are now saved per bridge. → [Troubleshooting](Troubleshooting#no-response-on-a-whole-bridge-everything-works-from-indigo) |
+| 🔎 **Wrong-bridge warning** (0.8.41) | The log names any Home device that reaches the wrong bridge (an old port), and what to do. **Troubleshoot 4** lists every bridge's port and checks the saved ports. → [Plugin Menu Items](Plugin-Menu-Items#ℹ️-troubleshoot-4--homekit-pairing--security-keys) |
+| 🧩 **New HomeKitLink devices** | **HomeKitLink Sensor** (one state of any device as its own HomeKit sensor), **HomeKit Buttons** (Indigo starts Home app automations), **HKSV Recorder**. → [HomeKitLink Devices](HomeKitLink-Devices) |
+| 🎥 **HomeKit Secure Video** | Home hubs record a camera's motion and doorbell events to iCloud. → [Camera Setup](Camera-Setup#homekit-secure-video-v0822) |
+| 📷 **Cameras** | **UniFi Protect** cameras with two-way audio; **Blue Iris** live views start ~1.7 s sooner (0.8.38); repeated short views from Home widgets logged once (0.8.39). → [Camera Setup](Camera-Setup) |
+| 🌡️ **New HomeKit types** | **Heater-Cooler** (AC, with zones such as Actron Que), **Air Quality Sensor**, **Vacuum / Lawn Mower**. → [Supported Devices](Supported-Devices) |
+| ⚙️ **Bridge settings** | Search with Find / Clear, proper sorting, new list types, fewer settings stored on your devices. → [Setup & Configuration](Setup-and-Configuration) |
+
+Everything new is opt-in: devices you don't change behave as before. Full detail: [Changelog](Changelog).
 
 ![divider](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/divider.gif?raw=true)
 
@@ -49,7 +63,7 @@ HKLS lets you publish any Indigo device into Apple's Home ecosystem. You create 
 > **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 1 – Support Information For Forum Posting**  
 > **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 2 – Network Troubleshooting**  
 > **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 3 – Support mDNS Troubleshooting**  
-> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 4 – HomeKit Pairing & Security Keys** (pairing / won't add)
+> **Plugins → HomeKitLink Siri → ℹ️ Troubleshoot 4 – HomeKit Pairing & Security Keys** (pairing / won't add / No Response on a whole bridge)
 
 Copy the output from the Indigo log and include it in your forum post. These tools diagnose the vast majority of connectivity and discovery issues and give forum helpers everything they need.
 

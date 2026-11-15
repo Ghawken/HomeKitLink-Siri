@@ -91,12 +91,13 @@ The report has these sections:
 - 📋 **Bridge Summary** — one line per bridge: ✅ healthy, ⚠️ needs attention, ❌ problem, ⏸️ disabled
 - 👥 **Home Users** — each person (Apple Account) paired with your bridges: 👑 owner / 👤 shared, and whether any are missing from some bridges
 - 📡 **Connected Devices / Home Hubs** — which IPs are connected, and which is probably your Home hub
+- 🔌 **Bridge Ports** (0.8.41+) — each bridge's port and whether it's its saved port; checks that `bridge_ports.json` is there, readable and has no two bridges on one port; ports kept for deleted bridges; and every Home device that reached the **wrong bridge** since plugin start (device, bridge it wanted, bridge it reached, how often, when). See [Troubleshooting → No Response on a whole bridge](Troubleshooting#no-response-on-a-whole-bridge-everything-works-from-indigo)
 - 🔍 **Bridge Details** — one line for a healthy bridge; full detail and a 🛠️ fix for anything wrong
 - 🩺 **Result** and 📖 **Common HomeKit Issues Explained**
 
 Private keys are never logged and IDs are shortened, so the output is safe to post on the forum.
 
-**Use it when:** A bridge won't add ("Accessory already added", "Setup code incorrect"); accessories show "No Response" and Troubleshoot 2 & 3 look fine; the log shows a Home app client failing to verify; after restoring a backup or resetting a bridge.
+**Use it when:** A bridge won't add ("Accessory already added", "Setup code incorrect"); accessories show "No Response" and Troubleshoot 2 & 3 look fine (check 🔌 Bridge Ports); the log warns that a Home device reached the wrong bridge; the log shows a Home app client failing to verify; after restoring a backup or resetting a bridge.
 
 > ℹ️ Failed connection attempts are recorded from plugin start.  If you are chasing a connection problem, open the Home app (or wait a few minutes) before running it.
 

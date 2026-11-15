@@ -114,6 +114,12 @@ macOS Sequoia requires **Local Network Access** permission for HKLS. Go to **Sys
 3. Restart the plugin
 4. Re-add with the QR code
 
+### A whole bridge shows "No Response", but its devices work from Indigo.
+
+Most likely a Home device, usually your **home hub** (Apple TV / HomePod), is using an **old port** for that bridge and reaching a different bridge instead. Before 0.8.40, adding, deleting or renaming a bridge could move other bridges' ports; since 0.8.40 each bridge keeps its port.
+
+Since 0.8.41 the log warns *"Home device … is looking for HomeKitLink Bridge … but reached Bridge …"*, and **Troubleshoot 4 → 🔌 Bridge Ports** lists it. **Restart the device at that IP** (the hub), then force-quit the Home app. See [Troubleshooting → No Response on a whole bridge](Troubleshooting#no-response-on-a-whole-bridge-everything-works-from-indigo).
+
 ### Can HKLS work with multiple network interfaces (Ethernet + Wi-Fi, VPN, etc.)?
 
 Yes — HKLS 0.7.40+ binds to all IPv4 interfaces by default. If you need to specify a particular interface, use the **HAP Server IP Address** and **mDNS Interfaces** settings in Plugin Config. See [Advanced Configuration](Advanced-Configuration).
