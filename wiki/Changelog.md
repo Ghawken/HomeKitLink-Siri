@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.41 — 2026-11-15
+
+### ⚠️ Warning when a Home device reaches the wrong bridge
+- A Home device (home hub, iPhone, iPad) that remembers an **old port** for a bridge can reach a different bridge on it, and then shows the bridge it wanted as **No Response**. The bridge it reached sees nothing wrong, so until now nothing was logged. HomeKitLink now spots it, because each request names the bridge it's for, and logs a warning naming the device, the bridge it wanted and the bridge it reached, with what to do: restart that device so it looks the bridges up again. Repeats at most every 10 minutes per device and bridge
+- **Troubleshoot 4** has a new **🔌 Bridge Ports** section: each bridge's port and whether it's the saved one, and every Home device that reached the wrong bridge since the plugin started (device, bridge it wanted, bridge it reached, how often, when). The problem is also listed under the bridge the device wanted, as an error while it's still happening and a warning once it has stopped
+
+---
+
 ## 0.8.40 — 2026-11-15
 
 ### 🔌 Bridges keep their port (fixes "No Response" after adding a bridge)

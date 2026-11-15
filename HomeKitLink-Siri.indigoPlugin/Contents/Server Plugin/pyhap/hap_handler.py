@@ -4,7 +4,10 @@ The HAPServerHandler manages the state of the connection and handles incoming re
 """
 import asyncio
 from http import HTTPStatus
+import datetime
 import logging
+import re
+import time
 from typing import TYPE_CHECKING, Dict, Optional, Any
 from urllib.parse import ParseResult, parse_qs, urlparse
 import uuid
@@ -214,6 +217,44 @@ class HAPServerHandler:
         assert self.response is not None  # nosec
         self.response.body = bytesdata
 
+    WRONG_BRIDGE_RE = re.compile(r"^HomeKitLink Bridge (\d+) ")
+    WRONG_BRIDGE_REPEAT = 600  ## seconds between warnings for the same device and bridge
+
+    def _check_wrong_bridge(self, headers):
+        """Warn when a Home device reaches this bridge while looking for another one. Its Host header names the
+        bridge it wants (e.g. 'HomeKitLink\\032Bridge\\032757297\\032A1ECF0._hap._tcp.local'), so a different bridge
+        number means it is using a port it remembers for that bridge, which another bridge now has. The other
+        bridge's accessories then show as No Response for that device, and this bridge sees nothing wrong:
+        the device rejects this bridge's keys itself."""
+        try:
+            ours = getattr(self.accessory_handler, "indigodeviceid", None)
+            host = next((v for k, v in headers if k.lower() == b"host"), b"").decode(errors="replace")
+            match = self.WRONG_BRIDGE_RE.match(host.replace("\\032", " "))
+            if not ours or not match or match.group(1) == str(ours):
+                return
+            wanted = match.group(1)
+            key = (self.client_address[0], wanted)
+            ## Every attempt, for Troubleshoot 4: (device ip, bridge it wanted) -> [count, first, last]
+            record = self.accessory_handler.__dict__.setdefault("wrong_bridge", {})
+            stamp = datetime.datetime.now()
+            entry = record.setdefault(key, [0, stamp, stamp])
+            entry[0] += 1
+            entry[2] = stamp
+            seen = self.accessory_handler.__dict__.setdefault("_wrong_bridge_warned", {})
+            now = time.monotonic()
+            if now - seen.get(key, -self.WRONG_BRIDGE_REPEAT) < self.WRONG_BRIDGE_REPEAT:
+                return
+            seen[key] = now
+            logger.warning(
+                f"Home device {self.client_address[0]} is looking for HomeKitLink Bridge {wanted} but reached "
+                f"Bridge {ours} on port {self.state.port}: it is using an old port for Bridge {wanted}. "
+                f"Bridge {wanted}'s accessories will show as No Response from that device (if it's your home hub, "
+                f"in the Home app everywhere). Restart that device (e.g. the Apple TV or HomePod) so it looks the "
+                f"bridges up again. Repeats every {self.WRONG_BRIDGE_REPEAT // 60} minutes while it continues."
+            )
+        except Exception:  # pylint: disable=broad-except
+            logger.debug("Wrong-bridge check failed", exc_info=True)
+
     def dispatch(
         self, request: h11.Request, body: Optional[bytes] = None
     ) -> HAPResponse:
@@ -234,6 +275,8 @@ class HAPServerHandler:
         )
 
         path = self.parsed_url.path
+        if path == "/pair-verify":
+            self._check_wrong_bridge(request.headers)
         try:
             getattr(self, self.HANDLERS[self.command][path])()
         except UnprivilegedRequestException:

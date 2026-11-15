@@ -6301,7 +6301,8 @@ class Plugin(indigo.PluginBase):
                            "admins": {name for name, client in clients.items() if state.is_admin(client)},
                            "public_key": raw_public(state.public_key).hex(),
                            "successes": {str(client): value for client, value in dict(getattr(driver, "verify_successes", {})).items()},
-                           "failures": list(getattr(driver, "verify_failures", [])), "connections": []}
+                           "failures": list(getattr(driver, "verify_failures", [])), "connections": [],
+                           "wrong_bridge": dict(getattr(driver, "wrong_bridge", {}))}   ## (device ip, bridge it wanted) -> [count, first, last]
                     for proto in list(driver.http_server.connections.values()):
                         handler = proto.handler
                         peer = proto.peername[0] if proto.peername else "?"
@@ -6339,6 +6340,29 @@ class Plugin(indigo.PluginBase):
 
             running = [bridge for bridge in bridges if bridge["driver"] is not None]
             paired = [bridge for bridge in running if bridge["driver"]["paired"]]  ## an unpaired (new) bridge has no Home users yet
+
+            ## Home devices using an old port: they reach another bridge, which shows the one they wanted as No Response.
+            ## Reported on the bridge they wanted; still happening (within 10 minutes) is an error, stopped is a warning.
+            saved_ports = self._load_bridge_ports()
+            by_uid = {bridge["uid"]: bridge for bridge in bridges}
+            wrong_port = []
+            for bridge in running:
+                for (ip, wanted), (count, first, last) in bridge["driver"]["wrong_bridge"].items():
+                    wrong_port.append((ip, wanted, bridge, count, first, last))
+                    target = by_uid.get(wanted, bridge)
+                    wanted_name = by_uid[wanted]["name"] if wanted in by_uid else f"Bridge {wanted} (no longer exists)"
+                    problem = (f"Device {ip} looks for {wanted_name} on port {bridge['driver']['port']}, an old port for it, and reaches "
+                               f"{bridge['name']} instead: {count}× from {when(first)} to {when(last)}.  {wanted_name}'s accessories show as No Response from that device.")
+                    fix = (f"🛠️  Fix: restart the device at {ip} (if it's your Home hub: the Apple TV / HomePod) so it looks the bridges up again.  "
+                           f"Run this report again a few minutes later: it should stop.")
+                    if (datetime.datetime.now() - last).total_seconds() < 600:
+                        target["errors"].append((problem, fix))
+                    else:
+                        target["warnings"].append((problem + "  It has stopped.", "ℹ️  Nothing to do unless it starts again."))
+                if bridge["uid"] in saved_ports and saved_ports[bridge["uid"]] != bridge["driver"]["port"]:
+                    bridge["warnings"].append((f"Running on port {bridge['driver']['port']}, not its saved port {saved_ports[bridge['uid']]} (that port was taken at start).  "
+                                               f"Home devices that remember the saved port may reach the wrong bridge.",
+                                               "🛠️  Fix: find what else uses that port, free it, then restart the plugin."))
 
             ## Duplicate MACs (state file copied between bridges)
             mac_owners = {}
@@ -6447,6 +6471,19 @@ class Plugin(indigo.PluginBase):
                 if entry["unverified"]:
                     log.info(f"      ⏳ {entry['unverified']} connection(s) still pairing / verifying, or rejected.")
 
+            heading("🔌 Bridge Ports  (each bridge keeps its port; a Home device using an old one reaches the wrong bridge)")
+            for bridge in running:
+                saved_port = saved_ports.get(bridge["uid"])
+                note = "saved ✅" if saved_port == bridge["driver"]["port"] else (f"⚠️  saved port is {saved_port}" if saved_port else "not saved yet")
+                log.info(f"   {bridge['name'][:name_width]:<{name_width}}   ID {bridge['uid']}   port {bridge['driver']['port']}   {note}")
+            if wrong_port:
+                log.warning(f"   🚫 Home devices that reached the wrong bridge since plugin start: {len(wrong_port)}")
+                for ip, wanted, bridge, count, first, last in sorted(wrong_port, key=lambda item: item[5], reverse=True):
+                    wanted_name = by_uid[wanted]["name"] if wanted in by_uid else f"Bridge {wanted} (no longer exists)"
+                    log.warning(f"      {ip:<15}   wanted {wanted_name}   reached {bridge['name']} (port {bridge['driver']['port']})   {count}×   {when(first)} – {when(last)}")
+            else:
+                log.info("   ✅ No Home device has reached the wrong bridge since plugin start.")
+
             heading("🔍 Bridge Details")
             for bridge in bridges:
                 run = bridge["driver"]
@@ -6512,6 +6549,8 @@ class Plugin(indigo.PluginBase):
             guide = [
                 ("'No Response' on accessories",
                  "Almost always network / discovery (mDNS) or the Home hub, not keys.  If this report is all ✅, run Troubleshoot 2 and 3 and check the Home hub is online."),
+                ("'No Response' on one bridge, everything looks fine",
+                 "Check 🔌 Bridge Ports above: a Home device (often the hub) still using an old port for the bridge reaches another bridge instead.  Restart that device."),
                 ("'Accessory already added' / bridge will not add",
                  "The bridge is already paired with a Home (only one Home at a time).  Remove it in the Home app first, or use 'Reset Accessory / Bridge'."),
                 ("'Setup code incorrect' / QR code will not scan",
