@@ -1365,9 +1365,14 @@ class Plugin(indigo.PluginBase):
                             unit_mode = self._hc_mode_name(indigo.devices[main_id])
                         except Exception:
                             unit_mode = "Off"
-                        mode = getattr(indigo.kHvacMode, unit_mode if unit_mode != "Off" else "Cool")
-                        self.logger.info("{}: HomeKit turned the zone on".format(dev.name))
-                        indigo.thermostat.setHvacMode(dev.id, value=mode)
+                        if unit_mode == "Off":
+                            ## Main unit off: the zone would stay Off in Indigo, so the tile would stay on. Put it back.
+                            self.logger.info("{}: the main unit is off - turn it on before turning on a zone".format(dev.name))
+                            accessory.update({"Active": 0})
+                            threading.Timer(2, self._hc_refresh_zones, args=(main_id,)).start()   ## again, in case the Home app missed it
+                        else:
+                            self.logger.info("{}: HomeKit turned the zone on".format(dev.name))
+                            indigo.thermostat.setHvacMode(dev.id, value=getattr(indigo.kHvacMode, unit_mode))
                     elif not on and self._hc_mode_name(dev) != "Off":
                         self.logger.info("{}: HomeKit turned the zone off".format(dev.name))
                         indigo.thermostat.setHvacMode(dev.id, value=indigo.kHvacMode.Off)

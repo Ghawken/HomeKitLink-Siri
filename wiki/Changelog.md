@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.46 — 2026-11-16
+
+### 🔧 Fix
+- Heater-Cooler zones (e.g. Actron Que): turning a zone on in the Home app while the main unit is off no longer leaves the zone tile showing on. The zone isn't changed, the log says to turn the main unit on first, and the tile goes back to off (the same as Actron's own Set Zone action). It never started the main unit
+
+---
+
 ## 0.8.45 — 2026-11-15
 
 ### 🔧 Fix
