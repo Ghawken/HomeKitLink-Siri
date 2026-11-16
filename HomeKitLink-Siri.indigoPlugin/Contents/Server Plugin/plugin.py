@@ -2918,6 +2918,8 @@ class Plugin(indigo.PluginBase):
                                      indigo.kHvacMode.ProgramCool: 2,
                                      indigo.kHvacMode.ProgramHeatCool: 3}
                     homekitModeWished = listHvacModes.get(newmode, 0)
+                    if getattr(self.device_list_internal[checkindex]["accessory"], "heat_only", False):
+                        homekitModeWished = 1 if homekitModeWished else 0   ## heat-only: anything but Off shows as Heat
                     self.device_list_internal[checkindex]["accessory"].char_target_heat_cool.set_value(homekitModeWished)
 
                     ## Mode has been changed need to update target and range for HomeKit
@@ -2950,7 +2952,7 @@ class Plugin(indigo.PluginBase):
                                 self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(1)
                             else:
                                 self.device_list_internal[checkindex]["accessory"].char_current_heat_cool.set_value(0)
-                    elif updated_device.hvacMode == indigo.kHvacMode.Cool:
+                    elif updated_device.hvacMode == indigo.kHvacMode.Cool and not getattr(self.device_list_internal[checkindex]["accessory"], "heat_only", False):
                         if self.debug2:
                             self.logger.debug(f"hvacMode == Cool and current Cooler is {updated_device.states['hvacCoolerIsOn']}")
                         if 'hvacCoolerIsOn' in updated_device.states:
@@ -3500,9 +3502,16 @@ class Plugin(indigo.PluginBase):
 
                 if self.debug5:
                     self.logger.debug("Thermostat Device State")
+                heat_only = getattr(accessoryself, "heat_only", False)
+                if heat_only and valuetoSet.get("TargetHeatingCoolingState") in (2, 3):
+                    ## Heat-only: Siri still asks for Auto (or Cool) when changing the temperature. Treat it as Heat (as HA does).
+                    valuetoSet["TargetHeatingCoolingState"] = 1
+                    accessoryself.char_target_heat_cool.set_value(1)
                 if hasattr(indigodevice, "hvacMode"):
                     currentMode = indigodevice.hvacMode
                     newMode = currentMode
+                    if heat_only and valuetoSet.get("TargetHeatingCoolingState") == 1 and currentMode not in (indigo.kHvacMode.Off, indigo.kHvacMode.Cool, indigo.kHvacMode.ProgramCool):
+                        valuetoSet.pop("TargetHeatingCoolingState")   ## already heating (Heat, Auto or a program): leave its mode alone
                     if "TargetHeatingCoolingState" in valuetoSet:
                         ## Wants to change state of thermostat - do that first and then
                         modewished = valuetoSet["TargetHeatingCoolingState"]
@@ -3550,7 +3559,11 @@ class Plugin(indigo.PluginBase):
                                 target_temp = HKutils.celsius_to_fahrenheit(target_temp)  ## Homekit always in Celsius so if using F convert back. for Indigo.
                                 if self.debug5:
                                     self.logger.debug("TargetTemperature found and converted to {}".format(target_temp))
-                            if currentMode == indigo.kHvacMode.Off:
+                            if heat_only:
+                                if self.debug5:
+                                    self.logger.debug("Heat-only thermostat: setting HeatSetPoint to {}".format(target_temp))
+                                indigo.thermostat.setHeatSetpoint(accessoryself.indigodeviceid, value=target_temp)
+                            elif currentMode == indigo.kHvacMode.Off:
                                 ## ignore everything?
                                 pass
                             elif currentMode == indigo.kHvacMode.Cool:
@@ -4046,6 +4059,8 @@ class Plugin(indigo.PluginBase):
                     return temptosend
 
             elif statetoGet == "Thermostat_target_temp":
+                if getattr(accessoryself, "heat_only", False) and 'setpointHeat' in indigodevice.states:
+                    return indigodevice.states['setpointHeat']   ## heat-only: the heat setpoint is the target, whatever the mode
                 if "hvacOperationModeIsAuto" in indigodevice.states:
                     if indigodevice.states["hvacOperationModeIsAuto"]:
                         if self.debug4:
@@ -5013,6 +5028,7 @@ class Plugin(indigo.PluginBase):
             values_dict["deviceSensor"] = device.pluginProps.get("HomeKit_deviceSensor", "")  ## unless sensor device this isn't used. I believe. Hope.
             values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
             values_dict["tempSelector"] = device.pluginProps.get("HomeKit_tempSelector", False)
+            values_dict["heatOnly"] = device.pluginProps.get("HomeKit_heatOnly", hasattr(device, "supportsCoolSetpoint") and not device.supportsCoolSetpoint)
             values_dict["motionEnabled"] = device.pluginProps.get("HomeKit_motionEnabled", True)
             values_dict["inverseSelector"] = device.pluginProps.get("HomeKit_inverseSelector",False)
             values_dict["audioSelector"] = device.pluginProps.get("HomeKit_audioSelector", False)
@@ -5076,6 +5092,7 @@ class Plugin(indigo.PluginBase):
         "HomeKit_unifiDoorbell": ("UniFiProtectCamera",),
         "HomeKit_unifiStreamSize": ("UniFiProtectCamera",),
         "HomeKit_hcZoneOf": ("HeaterCooler",),
+        "HomeKit_heatOnly": ("Thermostat",),
         "HomeKit_robotStart": ("Vacuum", "LawnMower"),
         "HomeKit_robotStop": ("Vacuum", "LawnMower"),
         "HomeKit_robotState": ("Vacuum", "LawnMower"),
@@ -5189,6 +5206,9 @@ class Plugin(indigo.PluginBase):
                         device_props["HomeKit_" + field] = str(values_dict.get(field, "none") or "none")
                     device_props["HomeKit_aqGasUnit"] = str(values_dict.get("aqGasUnit", "ugm3") or "ugm3")
                     device_props["HomeKit_aqConfigured"] = True
+
+                if values_dict.get("deviceSubtype") == "Thermostat":
+                    device_props["HomeKit_heatOnly"] = bool(values_dict.get("heatOnly", False))
 
                 if values_dict.get("deviceSubtype") == "HeaterCooler":
                     device_props["HomeKit_hcZoneOf"] = str(values_dict.get("hcZoneOf", "none") or "none")

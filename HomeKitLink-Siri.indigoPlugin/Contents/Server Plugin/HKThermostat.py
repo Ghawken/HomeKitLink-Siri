@@ -94,6 +94,8 @@ class Thermostat(HomeAccessory):
             self.chars = ['CurrentHeatingCoolingState',"TargetHeatingCoolingState","CurrentTemperature", "TargetTemperature" ]
 
             indigodevice = indigo.devices[indigodeviceid]
+            ## Heat-only (e.g. floor heating): Off and Heat only, no Auto range, so Siri just changes the target
+            self.heat_only = bool(indigodevice.pluginProps.get("HomeKit_heatOnly", False))
 
             ## get temperature unit we are using
             tempSelector = indigodevice.pluginProps.get("HomeKit_tempSelector", False)  ## True if F
@@ -126,12 +128,18 @@ class Thermostat(HomeAccessory):
             ## also seems Indigo has heat and cool min/max
             ## get indigo device info and set within each Accessory whether F or C, then convert everything.. and set DisplayUnits
 
-            self.chars.extend(    ( CHAR_COOLING_THRESHOLD_TEMPERATURE, CHAR_HEATING_THRESHOLD_TEMPERATURE)      )
+            if not self.heat_only:
+                self.chars.extend(    ( CHAR_COOLING_THRESHOLD_TEMPERATURE, CHAR_HEATING_THRESHOLD_TEMPERATURE)      )
             logger.debug("Thermostat Device using Chars: {}".format(self.chars))
             serv_thermostat = self.add_preload_service('Thermostat', self.chars)
 
-            self.char_current_heat_cool = serv_thermostat.configure_char( 'CurrentHeatingCoolingState', value= 0, getter_callback=self.get_currentState )
-            self.char_target_heat_cool = serv_thermostat.configure_char( "TargetHeatingCoolingState", value= 0, getter_callback = self.get_targetState )
+            if self.heat_only:
+                self.char_current_heat_cool = serv_thermostat.configure_char( 'CurrentHeatingCoolingState', value= 0, valid_values={"Off": 0, "Heat": 1}, getter_callback=self.get_currentState )
+                self.char_target_heat_cool = serv_thermostat.configure_char( "TargetHeatingCoolingState", value= 0, valid_values={"Off": 0, "Heat": 1}, getter_callback = self.get_targetState )
+                self.char_target_heat_cool.allow_invalid_client_values = True   ## Siri sends Auto anyway: the plugin treats it as Heat (as HA does)
+            else:
+                self.char_current_heat_cool = serv_thermostat.configure_char( 'CurrentHeatingCoolingState', value= 0, getter_callback=self.get_currentState )
+                self.char_target_heat_cool = serv_thermostat.configure_char( "TargetHeatingCoolingState", value= 0, getter_callback = self.get_targetState )
             self.char_current_temp = serv_thermostat.configure_char("CurrentTemperature", getter_callback=self.get_temp )
 
             '''
@@ -234,6 +242,9 @@ class Thermostat(HomeAccessory):
             self.char_current_temp.set_value(self._temperature_to_homekit(temperature))
         elif type == "target":
             self.char_target_temp.set_value(self._temperature_to_homekit(temperature))
+        elif self.heat_only:   ## no Auto range: the heat setpoint is the target
+            if type in ("heatthresh", "setpointHeat"):
+                self.char_target_temp.set_value(self._temperature_to_homekit(temperature))
         elif type == "coolthresh":
             self.char_cooling_thresh_temp.set_value(self._temperature_to_homekit(temperature))
         elif type == "heatthresh":
@@ -337,6 +348,8 @@ class Thermostat(HomeAccessory):
             value = self.plugin.Plugin_getter_callback(self, "Thermostat_currentState")
             if self.plugin.debug6:
                 logger.debug("Current State:{}".format(value))
+            if self.heat_only and value not in (0, 1):
+                return 0   ## heat-only: cooling shows as idle
             return value
         except:
             logger.exception("get currentState exception")
@@ -347,6 +360,8 @@ class Thermostat(HomeAccessory):
             #if self.plugin.debug6:
             if self.plugin.debug6:
                 logger.debug("Target State:{}".format(value))
+            if self.heat_only and value:
+                return 1   ## heat-only: Auto or Cool show as Heat
             return value
         except:
             logger.exception("get target state exception")

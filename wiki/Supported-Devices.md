@@ -131,6 +131,15 @@ Largely supported. Supports:
 - Setpoint heat and cool managed independently when mode changes
 - Temperature unit conversion (plugin converts non-Celsius devices for HomeKit)
 
+### Heat only (v0.8.47+)
+
+For thermostats that can only heat, such as floor heating (e.g. Heatit TF021) or a virtual heating thermostat, tick **Heat only** in the bridge settings when publishing it as Thermostat. It's ticked already for thermostats that have no cool setpoint.
+
+- The Home app offers only **Off** and **Heat**, with **no Auto range**. There's one target temperature: the thermostat's heat setpoint.
+- **Siri just changes the target.** Without it, "Hey Siri, lower the bathroom temperature" switched the thermostat to Auto with a range. Siri still asks for Auto behind the scenes; a heat-only thermostat treats that as Heat (the same as Home Assistant), so a thermostat that's already heating keeps its mode, and one that's off turns on to Heat.
+- A thermostat in Auto or a program mode in Indigo shows as Heat; cooling shows as idle.
+- Saving restarts the bridge and the Home app updates the tile; nothing else changes.
+
 > Some fine-tuning may still be needed for complex multi-zone setups.
 
 ### Heater-Cooler (v0.8.29+)
@@ -147,7 +156,7 @@ Actron Que devices (main unit and zones) default to HeaterCooler (v0.8.30+); dev
 
 **Zones** (e.g. Actron Que zones, which are Indigo thermostats of their own): publish each zone you want in the Home app separately, each with **Zone of** set to its main unit. Leave the main unit itself as *Not a zone*. It's filled in automatically for Actron Que zones.
 
-- A zone's **power button** only opens or closes that zone. Turning a zone on while the main unit is off opens the zone but doesn't start the unit.
+- A zone's **power button** only opens or closes that zone, and never starts the main unit. While the main unit is off a zone can't be turned on: the tile goes back to off and the log says to turn the main unit on first (v0.8.46).
 - A zone **shows the main unit's mode** and never changes it. Changing the mode on a zone's tile is ignored (the log says so); change it on the main unit.
 - Each zone has its **own targets**. If the zone has minimum and maximum setpoint states (Actron zones do, and they move with the main unit's setpoint), a new target is kept within the range at that moment and the tile shows where it landed. The log says when a target was adjusted.
 

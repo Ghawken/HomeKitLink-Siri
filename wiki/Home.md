@@ -4,7 +4,7 @@
 
 **HomeKitLink Siri (HKLS)** is an [Indigo](https://www.indigodomo.com/) plugin that creates HomeKit Bridges, exposing your Indigo devices to Apple HomeKit and Siri control — all natively, with no Homebridge or external server required.
 
-> **Current version:** `0.8.45` (preliminary release) &nbsp;|&nbsp; **Requires:** Indigo 2025.1+ (Python 3)  
+> **Current version:** `0.8.47` &nbsp;|&nbsp; **Requires:** Indigo 2025.1+ (Python 3)  
 > **Forum:** [HomeKitLink Siri on Indigo Forums](https://forums.indigodomo.com/viewforum.php?f=366)  
 > **GitHub:** [Ghawken/HomeKitLink-Siri](https://github.com/Ghawken/HomeKitLink-Siri)
 
@@ -18,7 +18,7 @@
 | 🧩 **New HomeKitLink devices** | **HomeKitLink Sensor** (one state of any device as its own HomeKit sensor), **HomeKit Buttons** (Indigo starts Home app automations), **HKSV Recorder**. → [HomeKitLink Devices](HomeKitLink-Devices) |
 | 🎥 **HomeKit Secure Video** | Home hubs record a camera's motion and doorbell events to iCloud. → [Camera Setup](Camera-Setup#homekit-secure-video-v0822) |
 | 📷 **Cameras** | **UniFi Protect** cameras with two-way audio; **Blue Iris** live views start ~1.7 s sooner (0.8.38); repeated short views from Home widgets logged once (0.8.39). → [Camera Setup](Camera-Setup) |
-| 🌡️ **New HomeKit types** | **Heater-Cooler** (AC, with zones such as Actron Que), **Air Quality Sensor**, **Vacuum / Lawn Mower**. → [Supported Devices](Supported-Devices) |
+| 🌡️ **New HomeKit types** | **Heater-Cooler** (AC, with zones such as Actron Que), **Air Quality Sensor**, **Vacuum / Lawn Mower**; **heat-only thermostats** (0.8.47: Off and Heat only, so Siri just changes the target). → [Supported Devices](Supported-Devices#heat-only-v0847) |
 | ⚙️ **Bridge settings** | Search with Find / Clear, proper sorting, new list types, fewer settings stored on your devices. → [Setup & Configuration](Setup-and-Configuration) |
 
 Everything new is opt-in: devices you don't change behave as before. Full detail: [Changelog](Changelog).

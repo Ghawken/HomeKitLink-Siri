@@ -4,7 +4,7 @@
 
 HomeKitLink Siri is an Indigo plugin that creates native HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri control. No Homebridge. No external server. Everything runs inside Indigo.
 
-[b]Current Version:[/b] 0.8.45   |   [b]Requires:[/b] Indigo 2025.1+ (Python 3)
+[b]Current Version:[/b] 0.8.47   |   [b]Requires:[/b] Indigo 2025.1+ (Python 3)
 [b]GitHub:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri]https://github.com/Ghawken/HomeKitLink-Siri[/url]
 [b]Full Documentation / Wiki:[/b] [url=https://github.com/Ghawken/HomeKitLink-Siri/wiki]https://github.com/Ghawken/HomeKitLink-Siri/wiki[/url]
 
@@ -142,7 +142,15 @@ Delete the bridge from Home app first, then reset, then restart plugin, then re-
 
 [img]https://github.com/Ghawken/HomeKitLink-Siri/blob/main/Images/divider.gif?raw=true[/img]
 
-[size=150][u]What's New — Version 0.8.45[/u][/size]
+[size=150][u]What's New — Version 0.8.47[/u][/size]
+
+[u][size=125]Heat-only thermostats (0.8.47)[/size][/u]
+
+- New [i]Heat only[/i] option for thermostats: the Home app offers only Off and Heat, with no Auto range, so asking Siri to change the temperature just changes the target. Ticked already for thermostats without a cool setpoint.
+
+[u][size=125]Heater-Cooler zones (0.8.46)[/size][/u]
+
+- Turning an Actron (or other) zone on while the main unit is off no longer leaves the tile showing on; the log says to turn the main unit on first.
 
 [u][size=125]Improved live view (0.8.44, on by default)[/size][/u]
 

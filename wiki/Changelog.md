@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.47 — 2026-11-17
+
+### ✨ New
+- **Heat only** option for thermostats published as Thermostat (e.g. floor heating such as Heatit TF021, or virtual heating thermostats): the Home app offers only Off and Heat with no Auto range, so asking Siri to change the temperature just changes the target instead of switching to Auto with a range. Siri's Auto request is treated as Heat, as Home Assistant does. Ticked already in bridge settings for thermostats without a cool setpoint; devices already published don't change until it's ticked
+
+---
+
 ## 0.8.46 — 2026-11-16
 
 ### 🔧 Fix

@@ -110,6 +110,13 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If a sim
 			<Field id="tempSelectorlabel" type="label"  fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat,TemperatureSensor,HeaterCooler" alwaysUseInDialogHeightCalc="true">
 				<Label>Unchecked = Celsius, enable to select Fahrenheit.</Label>
 			</Field>
+			<Field id="heatOnly" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat">
+				<Label/>
+				<Description>Heat only</Description>
+			</Field>
+			<Field id="heatOnlyLabel" type="label" fontSize="small" fontColor="darkgray" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Thermostat">
+				<Label>For thermostats that only heat (e.g. floor heating): the Home app offers only Off and Heat, with no Auto range, so asking Siri to change the temperature just changes the target. Ticked already for thermostats that have no cool setpoint.</Label>
+			</Field>
 			<Field id="motionEnabled" type="checkbox" tooltip="Enabling will enable camera motion." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label/>
 				<Description>Motion Sensor Enabled</Description>

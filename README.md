@@ -12,7 +12,7 @@
 
 HomeKitLink Siri (HKLS) is an Indigo plugin that creates HomeKit Bridges — exposing your Indigo devices to Apple HomeKit and Siri. No Homebridge. No external servers. Everything runs inside Indigo.
 
-> **Version 0.8.45** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
+> **Version 0.8.47** &nbsp;|&nbsp; Requires Indigo 2025.1+ (Python 3)
 
 ---
 
@@ -121,7 +121,11 @@ Copy the Indigo log output and include it in your forum post. These tools diagno
 
 See the [full Changelog](https://github.com/Ghawken/HomeKitLink-Siri/wiki/Changelog) in the wiki.
 
-### 0.8.45 — Latest
+### 0.8.47 — Latest
+- **Heat-only thermostats** — new *Heat only* option: Off and Heat only, no Auto range, so Siri just changes the target temperature
+- **Actron (Heater-Cooler) zones** (0.8.46) — turning a zone on while the main unit is off no longer leaves the tile showing on
+
+### 0.8.45
 - **Improved live view** (0.8.44, on by default) — video is sent from the port HomeKit expects, re-encoded video is sized for what HomeKit asked for, and remote views start at 720p instead of 640x360; copied streams keep the camera's full picture
 - **Camera fixes** — cameras on bridges that start later are now stream-checked; a camera with no check data is re-encoded rather than copied
 - **Saved bridge ports made safer** (0.8.43); compatible with devices set up with Durosity's development build
