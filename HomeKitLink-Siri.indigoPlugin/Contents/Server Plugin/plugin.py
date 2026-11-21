@@ -4476,6 +4476,15 @@ class Plugin(indigo.PluginBase):
     def subtype_callback(self, valuesDict, *args, **kwargs):  # typeId, devId):
         if self.debug8:
             self.logger.debug("Subtype callback: returning valuesDict \n {}".format(valuesDict))
+        return self.camera_control_callback(valuesDict)
+
+    def camera_control_callback(self, valuesDict, *args, **kwargs):
+        """Show a camera's control options only once a control device is chosen."""
+        try:
+            chosen = int(valuesDict.get("controlDevice", -1) or -1) > 0
+        except (TypeError, ValueError):
+            chosen = False
+        valuesDict["controlShow"] = chosen and valuesDict.get("deviceSubtype") in self._CAMERAS
         return valuesDict
 
     def _clear_device_selection(self, valuesDict):
@@ -4487,6 +4496,7 @@ class Plugin(indigo.PluginBase):
         valuesDict["showSubtypes"] = False
         valuesDict["showALL"] = False
         valuesDict["HomeKit_publishDevice_2"] = False
+        valuesDict["controlShow"] = False
         return valuesDict
 
     def list_search(self, valuesDict, *args, **kwargs):
@@ -5096,6 +5106,7 @@ class Plugin(indigo.PluginBase):
 
             alt_name = self.get_alt_name(device)
             values_dict["altName"] = alt_name if alt_name != device.name else ""
+            self.camera_control_callback(values_dict)
 
         except KeyError:
             # No device is selected, so hide everything

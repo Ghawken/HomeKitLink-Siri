@@ -69,13 +69,15 @@ def add_control(accessory, plugin, camera_id):
     name = settings["name"] or target.name
     settings["timer"] = None
     if settings["kind"] == "lock":
-        serv = accessory.add_preload_service("LockMechanism", ["Name"])
+        serv = accessory.add_preload_service("LockMechanism", ["Name", "ConfiguredName"])
         serv.configure_char("Name", value=name)
+        serv.configure_char("ConfiguredName", value=name)   ## the name the Home app shows for a second service
         settings["current"] = serv.configure_char("LockCurrentState", value=LOCK_SECURED)
         settings["target"] = serv.configure_char("LockTargetState", value=LOCK_SECURED)
     else:
-        serv = accessory.add_preload_service("Switch", ["Name"])
+        serv = accessory.add_preload_service("Switch", ["Name", "ConfiguredName"])
         serv.configure_char("Name", value=name)
+        serv.configure_char("ConfiguredName", value=name)   ## the name the Home app shows for a second service
         settings["current"] = None
         settings["target"] = serv.configure_char("On", value=False)
     settings["target"].setter_callback = lambda value: _set_from_homekit(accessory, plugin, value)
