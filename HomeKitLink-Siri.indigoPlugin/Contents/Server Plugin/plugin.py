@@ -1934,6 +1934,8 @@ class Plugin(indigo.PluginBase):
             self._hksv_set_status(device, "Camera not found")
         elif camera.pluginProps.get("HomeKit_deviceSubtype", "") not in HKSV_CAMERA_SUBTYPES or not camera.pluginProps.get("HomeKit_publishDevice", False):
             self._hksv_set_status(device, "Camera isn't published to HomeKit")
+            self.logger.warning("HKSV Recorder '{}': its camera '{}' isn't published to HomeKit, so nothing is recorded. "
+                                "Publish the camera again, or delete the Recorder if the camera is no longer wanted.".format(device.name, camera.name))
         elif bridge_dev is None or not bridge_dev.enabled:
             self._hksv_set_status(device, "Camera's bridge is off")
         elif self.pluginStartingUp or driver is None:
@@ -5288,6 +5290,10 @@ class Plugin(indigo.PluginBase):
             else:
                 values_dict["enablePublishFields"] = False
                 if device_props.get("HomeKit_publishDevice", False): publication_change = True
+                recorder = self._hksv_recorder_for(device.id)
+                if recorder is not None:
+                    self.logger.warning("{}: its HomeKit Secure Video Recorder '{}' still records it. Delete the Recorder (or choose another camera in it) "
+                                        "to remove this camera from HomeKit; while the Recorder points at it, the camera can come back.".format(device.name, recorder.name))
                 ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default)
                 device_props = {k: v for k, v in device_props.items() if not self._is_publish_key(k)}
                 try:

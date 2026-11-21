@@ -81,6 +81,10 @@ def add_control(accessory, plugin, camera_id):
         settings["current"] = None
         settings["target"] = serv.configure_char("On", value=False)
     settings["target"].setter_callback = lambda value: _set_from_homekit(accessory, plugin, value)
+    ## Link it to the camera (its doorbell, else its video stream), so the Home app knows it belongs with the camera
+    primary = accessory.get_service("Doorbell") or accessory.get_service("CameraRTPStreamManagement")
+    if primary is not None:
+        primary.add_linked_service(serv)
     accessory.control = settings
     if settings["follow"]:
         update_from_device(accessory, target)
