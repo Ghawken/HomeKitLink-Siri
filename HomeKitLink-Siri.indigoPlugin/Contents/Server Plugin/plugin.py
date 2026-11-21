@@ -84,6 +84,7 @@ import HKDevicesCameraSecuritySpy
 import HKDevicesCameraUniFi
 import HKThermostat
 import HKCameraControl
+import HKTalkStream
 import HKutils
 
 _HAS_IPV6 = hasattr(socket, "AF_INET6")
@@ -304,7 +305,8 @@ class Plugin(indigo.PluginBase):
         self.debug10 = self.pluginPrefs.get('debug10', False)
         self.debug11 = self.pluginPrefs.get('debug11', False)
         self.debugHKSV = self.pluginPrefs.get('debugHKSV', False)
-        self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
+        self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', False)
+        self.talkStreamPort = self._talk_port(self.pluginPrefs.get('talkStreamPort', HKTalkStream.DEFAULT_HTTP_PORT))
         self._set_live_tuning(self.pluginPrefs)
         self._hc_zones = {}   ## main thermostat id -> Heater-Cooler zone device ids (zones show the main unit's mode)
         self._camera_controls = {}   ## control device id -> camera device ids showing it (HKCameraControl)
@@ -476,7 +478,11 @@ class Plugin(indigo.PluginBase):
             self.debug10 = valuesDict.get('debug10', False)
             self.debug11 = valuesDict.get('debug11', False)
             self.debugHKSV = valuesDict.get('debugHKSV', False)
-            self.talkEchoSuppress = valuesDict.get('talkEchoSuppress', True)
+            self.talkEchoSuppress = valuesDict.get('talkEchoSuppress', False)
+            port = self._talk_port(valuesDict.get('talkStreamPort', HKTalkStream.DEFAULT_HTTP_PORT))
+            if port != self.talkStreamPort:
+                self.talkStreamPort = port
+                HKTalkStream.stop_server()   ## the next talk opens it on the new port
             self._set_live_tuning(valuesDict)
             if "HKSV" in sys.modules:   ## only once an HKSV Recorder camera is running
                 sys.modules["HKSV"].set_debug(self.debugHKSV)
@@ -2771,6 +2777,15 @@ class Plugin(indigo.PluginBase):
 
     def shutdown(self):
         self.logger.info("Shutting down HomeKitLink")
+        HKTalkStream.stop_server()
+
+    @staticmethod
+    def _talk_port(value):
+        try:
+            port = int(str(value).strip())
+        except (TypeError, ValueError):
+            return HKTalkStream.DEFAULT_HTTP_PORT
+        return port if 1024 <= port <= 65535 else HKTalkStream.DEFAULT_HTTP_PORT
 
     ### Subscription Changes
     ########################################
@@ -4621,14 +4636,14 @@ class Plugin(indigo.PluginBase):
                         self.logger.debug("camera control refresh failed", exc_info=True)
 
     def talk_through_list(self, filter="", valuesDict=None, typeId="", targetId=0):
-        """UniFi Protect cameras whose speaker can play the Home app's talk."""
+        """Where the Home app's talk can play: UniFi Protect camera speakers, AirPlay devices (Apple TV plugin)."""
         items = [(-1, "None (default)"), (-2, "%%separator%%")]
         try:
             cameras = HKDevicesCameraUniFi.talk_through_list()
         except Exception:
             self.logger.debug("talk through list", exc_info=True)
             cameras = []
-        return items + (cameras or [(-3, "%%disabled:No UniFi Protect cameras with talkback found%%")])
+        return items + (cameras or [(-3, "%%disabled:No UniFi Protect cameras or AirPlay devices found%%")])
 
     def camera_control_list(self, filter="", valuesDict=None, typeId="", targetId=0):
         """Devices with on/off (gate relays, locks, UniFi Access doors, lights) and action groups."""

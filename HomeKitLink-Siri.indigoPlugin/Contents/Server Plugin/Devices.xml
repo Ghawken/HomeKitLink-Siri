@@ -149,7 +149,7 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 				<List class="self" method="talk_through_list" dynamicReload="true" />
 			</Field>
 			<Field id="talkThroughLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
-				<Label>The Home app's talk button speaks through this UniFi Protect camera (Durosity's UniFi plugin), e.g. a Blue Iris gate camera talking through a G6 Entry nearby. Needs Support Audio on for this camera.</Label>
+				<Label>The Home app's talk button speaks through another device: a UniFi Protect camera's speaker (Durosity's UniFi plugin, live), or an Apple TV / HomePod from the Apple TV plugin (AirPlay, plays 2-3 s late). E.g. a Blue Iris gate camera talking through a G6 Entry nearby. Needs Support Audio on for this camera.</Label>
 			</Field>
 			<Field id="controlDevice" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>Control device:</Label>

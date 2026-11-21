@@ -151,9 +151,12 @@ We can't speed up requests, but we can slow them down if needed. Defaults to 30 
 This means the image can be kept updated on opening Home to whatever degree requested here.
         </Label>
     </Field>
-    <Field id="talkEchoSuppress" type="checkbox" defaultValue="true" tooltip="While you talk from the Home app, the camera's own audio is muted so you don't hear yourself back (like a walkie-talkie). The visitor's reply comes through as soon as you stop. Turn off to hear the camera while you talk: worth trying when talk goes through another camera that's further from this camera's microphone.">
+    <Field id="talkEchoSuppress" type="checkbox" defaultValue="false" tooltip="Off (default): you hear the visitor all the time, even while you talk, so you don't miss their reply; if the speaker is near the camera's microphone you may hear yourself back. On: the camera's audio is muted while you speak (like a walkie-talkie), held a moment after you stop (3.5 s for AirPlay, which plays late).">
         <Label/>
         <Description>Two-way audio: mute the camera while you talk (reduces echo)</Description>
+    </Field>
+    <Field id="talkStreamPort" type="textfield" defaultValue="8891" tooltip="Talk through a HomePod, Apple TV or Sonos: the speaker fetches your voice from this Mac on this port. If the speaker is on another subnet or VLAN, allow this TCP port from it to this Mac on your router / firewall.">
+        <Label>Talk stream port:</Label>
     </Field>
     <Field id="sepLiveTuning" type="separator" alwaysUseInDialogHeightCalc="true"/>
     <Field id="liveImproved" type="checkbox" defaultValue="true" alwaysUseInDialogHeightCalc="true"

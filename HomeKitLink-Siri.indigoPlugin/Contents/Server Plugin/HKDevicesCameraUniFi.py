@@ -37,6 +37,7 @@ from HKConstants import (
     CONF_VIDEO_MAP,
 )
 from HKDevicesCameraSecuritySpy import SecuritySpyCamera
+import HKTalkStream
 
 _LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 
@@ -155,12 +156,20 @@ def talkback_info(dev):
 
 
 def talk_through_list():
-    """Cameras Home's talk can be sent to: UniFi Protect cameras (Durosity's plugin) with talkback details."""
+    """Where Home's talk can go: UniFi Protect cameras (Durosity's plugin) with talkback details, and
+    Apple TV plugin devices that take AirPlay audio (Apple TV, HomePod), and Sonos plugin players."""
     items = []
     for d in indigo.devices.iter(UNIFI_DUROSITY_ID):
         if d.deviceTypeId == "protectCamera" and talkback_info(d) is not None:
             items.append((d.id, d.name))
-    return sorted(items, key=lambda x: x[1].lower())
+    items = sorted(items, key=lambda x: x[1].lower())
+    airplay = HKTalkStream.airplay_targets()
+    if airplay:
+        items += [(-4, "%%separator%%"), (-5, "%%disabled:AirPlay (Apple TV plugin):%%")] + airplay
+    sonos = HKTalkStream.sonos_targets()
+    if sonos:
+        items += [(-6, "%%separator%%"), (-7, "%%disabled:Sonos (Sonos plugin):%%")] + sonos
+    return items
 
 
 def apply_talk_through(plugin, dev, config):
@@ -179,6 +188,14 @@ def apply_talk_through(plugin, dev, config):
     if not config.get(CONF_SUPPORT_AUDIO):
         plugin.logger.warning("[{}] Talk through '{}' needs Support Audio turned on for this camera.".format(dev.name, target.name))
         return
+    if HKTalkStream.is_stream_target(target):   ## Apple TV / HomePod (Apple TV plugin) or Sonos (Sonos plugin): a live stream
+        config["two_way_audio"] = True
+        config["talk_target"] = target_id
+        config["talk_stream"] = True
+        config["speaker_service"] = True
+        plugin.logger.info("[{}] Talk: the Home app's talk button streams to '{}' ({}, plays a little late)".format(
+            dev.name, target.name, "Sonos" if HKTalkStream.is_sonos_target(target) else "AirPlay"))
+        return
     if target.pluginId != UNIFI_DUROSITY_ID or is_package_camera(target) or talkback_info(target) is None:
         plugin.logger.warning("[{}] Talk through: '{}' isn't a UniFi Protect camera with talkback details (Durosity's UniFi plugin).".format(dev.name, target.name))
         return
@@ -193,6 +210,17 @@ def talkback_config(plugin, config, name):
     is never stored in the camera config or logged). The talk target is this camera or another one."""
     if not config.get("two_way_audio"):
         return None
+    if config.get("talk_stream"):
+        try:
+            stream = HKTalkStream.TalkStream(plugin, config["talk_target"], name)
+        except Exception:
+            _LOGGER.exception("[%s] Talk: couldn't set up the talk stream", name)
+            return None
+        info = stream.worker_config()
+        info["_owner"] = stream   ## closed with the audio proxy at the end of the live view
+        info["echo_suppress"] = bool(getattr(plugin, "talkEchoSuppress", False))
+        info["echo_hold_ms"] = 3500   ## the speaker plays 2-3 s late: hold the mute past the echo
+        return info
     try:
         target = indigo.devices[int(config.get("talk_target") or config["UP_deviceId"])]
         info = talkback_info(target)
@@ -203,7 +231,7 @@ def talkback_config(plugin, config, name):
         _LOGGER.warning("[%s] Two-way audio: Protect details missing - talk is off for this stream", name)
         return None
     info["name"] = target.name
-    info["echo_suppress"] = bool(getattr(plugin, "talkEchoSuppress", True))
+    info["echo_suppress"] = bool(getattr(plugin, "talkEchoSuppress", False))
     _LOGGER.debug("[%s] Two-way audio enabled for this stream: %s (console %s)", name, target.name, info["host"])
     return info
 

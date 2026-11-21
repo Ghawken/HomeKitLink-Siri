@@ -41,6 +41,9 @@ class AudioProxy:
         self._srtp_key_b64 = srtp_key_b64
         self._target_clock_rate = target_clock_rate
         self._python_path = python_path or sys.executable
+        talkback = dict(talkback) if talkback else None
+        ## An object that lives as long as this proxy (HomeKitLink's AirPlay talk stream): closed in async_stop
+        self._talk_owner = talkback.pop("_owner", None) if talkback else None
         self._talkback = talkback  ## two-way audio target (camera speaker), or None
         self._process: asyncio.subprocess.Process | None = None
         self._stderr_task: asyncio.Task[None] | None = None
@@ -158,3 +161,9 @@ class AudioProxy:
                 pass
             self._stderr_task = None
         self._process = None
+        owner, self._talk_owner = self._talk_owner, None
+        if owner is not None:
+            try:
+                await asyncio.get_running_loop().run_in_executor(None, owner.close)
+            except Exception:
+                _LOGGER.debug("Talk stream close failed", exc_info=True)

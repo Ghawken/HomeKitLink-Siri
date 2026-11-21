@@ -6,6 +6,19 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.50 — 2026-11-22
+
+### ✨ New
+- **Talk through a HomePod, Apple TV or Sonos**: a camera's Home app talk can be streamed live to a speaker, for as long as you talk, and stops when you stop. Choose it in **Talk through**. → [Camera Setup](Camera-Setup#two-way-audio-v0817)
+  - **HomePod / Apple TV** (Apple TV plugin): over AirPlay, using the Apple TV plugin's existing Send Command action, so nothing to change there. Plays a little late (about 2 s).
+  - **Sonos** (Sonos plugin players): played as a Sonos audio clip, the speaker's own announcement feature: the music is lowered, then carries on afterwards. Needs a Sonos S2 speaker that supports audio clips. Very little delay
+  - The speaker fetches the stream from the Mac on **Plugin Config → Talk stream port** (default 8891). A speaker on another subnet / VLAN needs that port allowed; the log warns if a speaker never fetches the stream, and reports a Sonos that can't play it
+
+### 🔧 Change
+- *Two-way audio: mute the camera while you talk* is now **off by default**: you hear the visitor all the time, so you don't miss their reply, at the cost of maybe hearing yourself if the speaker is near the camera's microphone. A setting you've already saved keeps its value
+
+---
+
 ## 0.8.49 — 2026-11-22
 
 ### ✨ New

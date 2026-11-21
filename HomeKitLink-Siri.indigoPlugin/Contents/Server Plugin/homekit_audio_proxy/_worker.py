@@ -121,6 +121,13 @@ class _Talkback:
         self.last_speech = 0.0
         self._sizes = []
         self.ducked = 0
+        # Forward mode (talk through an AirPlay device): plain RTP to a local port, no Protect session
+        self._forward = None
+        if cfg.get("forward"):
+            host, port = cfg["forward"]
+            self._forward = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._forward.connect((host, int(port)))
+            self._forward.setblocking(False)
 
     def ducking(self, now: float) -> bool:
         return self.echo_suppress and (now - self.last_speech) < self._hold
@@ -190,6 +197,9 @@ class _Talkback:
                 srt = sorted(self._sizes)
                 _log("DEBUG", f"Two-way audio: talk packet sizes min {srt[0]} median {srt[100]} max {srt[-1]} "
                               f"(speech threshold {self._speech_bytes})")
+        if self._forward is not None:
+            self._send(rtp)
+            return
         # Open a fresh Protect session at the start of each burst of talk,
         # since sessions expire shortly after they're created.
         ready, self._ready = self._ready, None
@@ -203,18 +213,25 @@ class _Talkback:
         if self._sock is None:
             self._dropped += 1      # said while the session was opening
             return
+        self._send(rtp)
+
+    def _send(self, rtp: bytes) -> None:
+        """Opus RTP on the 48 kHz clock, payload type 96, to the speaker (Protect session or local forward)."""
+        sock = self._forward or self._sock
         packet = bytearray(rtp)
         ts = _UINT32_BE.unpack_from(packet, 4)[0]
         _UINT32_BE.pack_into(packet, 4, (ts * SRTP_OPUS_CLOCK_RATE // self._source_clock) & 0xFFFFFFFF)
         packet[1] = (packet[1] & 0x80) | _TALKBACK_PAYLOAD_TYPE
         try:
-            self._sock.send(bytes(packet))
+            sock.send(bytes(packet))
             self._forwarded += 1
             if self._forwarded == 1:
                 _log("DEBUG", f"Two-way audio: first packet sent to {self._name}")
         except BlockingIOError:
             pass
         except OSError as err:
+            if self._forward is not None:
+                return
             # The camera rejected us (expired session): reopen on the next packet
             _log("DEBUG", f"Two-way audio: send failed ({err}); reopening session")
             self._close()
@@ -229,6 +246,8 @@ class _Talkback:
         elif self._received:
             _log("WARNING", f"Two-way audio: received {self._received} Home app packets for {self._name} but sent none")
         self._close()
+        if self._forward is not None:
+            self._forward.close()
         ready, self._ready = self._ready, None
         if ready is not None:
             ready.close()

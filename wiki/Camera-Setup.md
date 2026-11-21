@@ -163,7 +163,17 @@ Talk from the Home app through a UniFi doorbell or a camera with a speaker (UniF
 
 **Talk through another camera (v0.8.49+).** Any camera (Blue Iris, SecuritySpy or UniFi) can send its talk to a UniFi Protect camera's speaker: choose it in **Talk through** in the camera's settings (with Support Audio on). For example, a Blue Iris gate camera that's your doorbell talks through the G6 Entry beside it: you watch the Blue Iris picture and your voice comes out of the G6. The log shows `Talk: the Home app's talk button speaks through 'G6 Entry'` when the bridge starts. Blue Iris cameras already show the talk button (they're set up as doorbells); without Talk through their talk goes nowhere.
 
-While you talk, the camera's own audio is muted so your voice doesn't echo back (like a walkie-talkie; the visitor's reply comes through as soon as you stop). To hear both at once, untick **Two-way audio: mute the camera while you talk** in the plugin's Config (v0.8.25+). It's worth trying off with Talk through, when the speaker is further from the camera's microphone. The log shows:
+**Talk through a HomePod, Apple TV or Sonos (v0.8.50+).** *Talk through* also lists the Apple TV plugin's devices that take AirPlay audio (HomePods, Apple TVs) and the Sonos plugin's players. Your voice is streamed to it live while you talk.
+- **HomePod / Apple TV:** over AirPlay, using the Apple TV plugin's own Send Command action (Apple TV plugin 1.8.8 or later; nothing to set up there).
+- **Sonos:** played as a Sonos **audio clip**, the speaker's own announcement feature (the same one Home Assistant uses): music playing on it is lowered, then carries on afterwards. Needs a Sonos S2 speaker that supports audio clips; the log says if one doesn't. Handy for outside cameras, where the Sonos often is too.
+- **Delay:** very little on Sonos (audio clips start quickly); about 2 s on AirPlay, which holds audio back by design. Steady for the whole talk.
+- **The speaker fetches your voice from this Mac** on **Plugin Config → Talk stream port** (default **8891**). If the speaker is on another subnet or VLAN (common for Sonos), allow that TCP port from the speaker's network to the Indigo Mac on your router or firewall (e.g. add it next to the Sonos plugin's 8888 / 8889 / 1400; it can't share those, as the Sonos plugin is using them). If a speaker is asked to play but never fetches the stream, the log says so, with the port to allow; a Sonos that can't play the stream says why.
+- It's one-way: the visitor answers through the camera's microphone, live as usual.
+- Stop talking for 2.5 s and the stream ends, so the HomePod goes quiet; talk again and it starts again. Music on a HomePod stops for the talk; a Sonos carries on afterwards.
+- The log shows `Talk: streaming to 'Lounge HomePod'` each time.
+- If you turn on *mute the camera while you talk*, the mute is held 3.5 s after you stop, past the AirPlay echo.
+
+You hear the visitor all the time, even while you talk, so you don't miss their reply. If the speaker is near the camera's microphone you may hear yourself back; tick **Two-way audio: mute the camera while you talk** in the plugin's Config to mute the camera while you speak, like a walkie-talkie (off by default since v0.8.51; on by default v0.8.25-0.8.50). The log shows:
 ```
 Two-way audio: talking to Front Door (opus, 24000 Hz, …)
 Two-way audio: finished, 412 packets sent to Front Door
