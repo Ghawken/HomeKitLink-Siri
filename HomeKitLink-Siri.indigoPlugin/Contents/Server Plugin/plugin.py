@@ -2626,6 +2626,7 @@ class Plugin(indigo.PluginBase):
             else:  # Yikes not a camera
                 self.logger.warning("This device ID {} with Name {} ** CANNOT ** be a camera device in HomeKit. Please remove and update. ".format(indigodeviceid, indigo.devices[indigodeviceid].name))
                 return None
+            HKDevicesCameraUniFi.apply_talk_through(self, indigo.devices[indigodeviceid], config)   ## any camera: talk through a UniFi camera's speaker
             # Create Default Image for Accessory at beginning to avoid filenotfound exception (caught)
             # later on.
             try:
@@ -4619,6 +4620,16 @@ class Plugin(indigo.PluginBase):
                     except Exception:
                         self.logger.debug("camera control refresh failed", exc_info=True)
 
+    def talk_through_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """UniFi Protect cameras whose speaker can play the Home app's talk."""
+        items = [(-1, "None (default)"), (-2, "%%separator%%")]
+        try:
+            cameras = HKDevicesCameraUniFi.talk_through_list()
+        except Exception:
+            self.logger.debug("talk through list", exc_info=True)
+            cameras = []
+        return items + (cameras or [(-3, "%%disabled:No UniFi Protect cameras with talkback found%%")])
+
     def camera_control_list(self, filter="", valuesDict=None, typeId="", targetId=0):
         """Devices with on/off (gate relays, locks, UniFi Access doors, lights) and action groups."""
         try:
@@ -5069,6 +5080,7 @@ class Plugin(indigo.PluginBase):
             values_dict["deviceSensor"] = device.pluginProps.get("HomeKit_deviceSensor", "")  ## unless sensor device this isn't used. I believe. Hope.
             values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
             values_dict["controlDevice"] = device.pluginProps.get("HomeKit_controlDevice", "") or "-1"
+            values_dict["talkThrough"] = device.pluginProps.get("HomeKit_talkThrough", "") or "-1"
             values_dict["controlType"] = device.pluginProps.get("HomeKit_controlType", "") or "lock"
             values_dict["controlMode"] = device.pluginProps.get("HomeKit_controlMode", "") or "momentary"
             values_dict["controlSeconds"] = device.pluginProps.get("HomeKit_controlSeconds", "") or "3"
@@ -5135,6 +5147,7 @@ class Plugin(indigo.PluginBase):
         "HomeKit_audioSelector": _CAMERAS,
         "HomeKit_doorbellId": _CAMERAS,
         "HomeKit_controlDevice": _CAMERAS,
+        "HomeKit_talkThrough": _CAMERAS,
         "HomeKit_controlType": _CAMERAS,
         "HomeKit_controlMode": _CAMERAS,
         "HomeKit_controlSeconds": _CAMERAS,
@@ -5250,6 +5263,7 @@ class Plugin(indigo.PluginBase):
 
                 if values_dict.get("deviceSubtype") in self._CAMERAS:
                     device_props["HomeKit_controlDevice"] = str(values_dict.get("controlDevice", "-1") or "-1")
+                    device_props["HomeKit_talkThrough"] = str(values_dict.get("talkThrough", "-1") or "-1")
                     device_props["HomeKit_controlType"] = str(values_dict.get("controlType", "lock") or "lock")
                     device_props["HomeKit_controlMode"] = str(values_dict.get("controlMode", "momentary") or "momentary")
                     device_props["HomeKit_controlSeconds"] = str(values_dict.get("controlSeconds", "3") or "3").strip()

@@ -161,7 +161,9 @@ Talk from the Home app through a UniFi doorbell or a camera with a speaker (UniF
 1. In the camera's HomeKitLink settings, turn on **Support Audio** and **Two-way Audio (talk)**
 2. Save, then restart the bridge — the Home app shows the talk button on the camera
 
-While you talk, the camera's own audio is muted so your voice doesn't echo back (like a walkie-talkie; the visitor's reply comes through as soon as you stop). To hear both at once, untick **Two-way audio: mute the camera while you talk** in the plugin's Config (v0.8.25+). The log shows:
+**Talk through another camera (v0.8.49+).** Any camera (Blue Iris, SecuritySpy or UniFi) can send its talk to a UniFi Protect camera's speaker: choose it in **Talk through** in the camera's settings (with Support Audio on). For example, a Blue Iris gate camera that's your doorbell talks through the G6 Entry beside it: you watch the Blue Iris picture and your voice comes out of the G6. The log shows `Talk: the Home app's talk button speaks through 'G6 Entry'` when the bridge starts. Blue Iris cameras already show the talk button (they're set up as doorbells); without Talk through their talk goes nowhere.
+
+While you talk, the camera's own audio is muted so your voice doesn't echo back (like a walkie-talkie; the visitor's reply comes through as soon as you stop). To hear both at once, untick **Two-way audio: mute the camera while you talk** in the plugin's Config (v0.8.25+). It's worth trying off with Talk through, when the speaker is further from the camera's microphone. The log shows:
 ```
 Two-way audio: talking to Front Door (opus, 24000 Hz, …)
 Two-way audio: finished, 412 packets sent to Front Door
@@ -266,7 +268,9 @@ Any HKLS camera can have a **Doorbell** device associated with it:
 
 ## Control Device (v0.8.48+)
 
-Any HKLS camera (Blue Iris, SecuritySpy, UniFi Protect) can carry a **control**: a gate, door or light shown **inside the camera's own accessory** in the Home app. With a doorbell: see who's there, talk, and open the gate, all from the one accessory. This is the same approach homebridge-unifi-protect uses for UniFi Access door locks on Protect cameras.
+Any HKLS camera (Blue Iris, SecuritySpy, UniFi Protect) can carry a **control**: a gate, door or light that's part of the camera's own accessory, e.g. a doorbell camera with its gate. It's the same approach homebridge-unifi-protect uses for UniFi Access door locks on Protect cameras.
+
+**Where it shows:** the Home app shows it as its own tile in the camera's room, and in the camera's **nearby accessories** when you view the camera, like any other accessory in that room. It doesn't appear on the video itself or in the doorbell notification; HomeKit has no way to put it there. So it works the same as publishing the gate device on its own, but it's set up with the camera: one accessory, same room and bridge, named here. The tile can be renamed and moved in the Home app like any other.
 
 Set it in the bridge settings when publishing the camera:
 

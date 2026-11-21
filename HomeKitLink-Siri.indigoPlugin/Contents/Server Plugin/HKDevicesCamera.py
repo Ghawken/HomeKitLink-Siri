@@ -506,8 +506,18 @@ class Camera(HomeAccessory,  PyhapCamera):
             serv_speaker = self.add_preload_service("Speaker")
             serv_speaker.configure_char("Mute", value=0)
 
+        ## Talk through another camera's speaker on a camera that isn't a doorbell needs its own Speaker service
+        if config.get("speaker_service") and "DoorBell_ID" not in config:
+            serv_speaker = self.add_preload_service("Speaker")
+            serv_speaker.configure_char("Mute", value=0)
+
         ## Optional control device (gate, door, light) shown inside this camera's accessory
         HKCameraControl.add_control(self, plugin, indigodeviceid)
+
+    def _talkback_config(self):
+        """Two-way audio target for the audio proxy: another camera's speaker ('Talk through'), or None."""
+        from HKDevicesCameraUniFi import talkback_config
+        return talkback_config(self.plugin, self.config, self.display_name)
 
     async def run(self):
         #if self.plugin.debug6:
@@ -741,6 +751,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                         srtp_key_b64=stream_config["a_srtp_key"],
                         target_clock_rate=target_clock,
                         python_path=os.path.join(sys.prefix, "bin", "python3"),
+                        talkback=self._talkback_config(),
                     )
                     await audio_proxy.async_start()
                 except Exception:
@@ -1060,6 +1071,7 @@ class Camera(HomeAccessory,  PyhapCamera):
                         srtp_key_b64=stream_config["a_srtp_key"],
                         target_clock_rate=target_clock,
                         python_path=os.path.join(sys.prefix, "bin", "python3"),
+                        talkback=self._talkback_config(),
                     )
                     await audio_proxy.async_start()
                 except Exception:

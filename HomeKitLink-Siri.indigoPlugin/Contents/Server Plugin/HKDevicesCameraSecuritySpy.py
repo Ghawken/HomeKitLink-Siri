@@ -303,8 +303,10 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         return text
 
     def _talkback_config(self):
-        """Two-way audio target for the audio proxy, or None (UniFi overrides)."""
-        return None
+        """Two-way audio target for the audio proxy, or None: this camera's speaker (UniFi), or another
+        camera's ('Talk through')."""
+        from HKDevicesCameraUniFi import talkback_config   ## here: HKDevicesCameraUniFi imports this module
+        return talkback_config(self.plugin, self.config, self.display_name)
 
     def _select_source(self, stream_config):
         """Stream URL, its ffprobe result and video codec setting for this request (UniFi overrides)."""

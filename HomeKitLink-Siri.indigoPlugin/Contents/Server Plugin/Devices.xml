@@ -144,6 +144,13 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 			<Field id="doorBellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true"  visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>Device to make a DoorBell with this camera.</Label>
 			</Field>
+			<Field id="talkThrough" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>Talk through:</Label>
+				<List class="self" method="talk_through_list" dynamicReload="true" />
+			</Field>
+			<Field id="talkThroughLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>The Home app's talk button speaks through this UniFi Protect camera (Durosity's UniFi plugin), e.g. a Blue Iris gate camera talking through a G6 Entry nearby. Needs Support Audio on for this camera.</Label>
+			</Field>
 			<Field id="controlDevice" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>Control device:</Label>
 				<List class="self" method="camera_control_list" dynamicReload="true" />

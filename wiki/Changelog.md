@@ -6,11 +6,19 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.49 — 2026-11-22
+
+### ✨ New
+- **Talk through another camera** (all camera types): the Home app's talk button can speak through a UniFi Protect camera's speaker, e.g. a Blue Iris gate camera talking through a G6 Entry. Choose it in **Talk through** in the camera's settings (needs Support Audio on). Blue Iris cameras already show the talk button; until now their talk went nowhere. → [Camera Setup](Camera-Setup#two-way-audio-v0817)
+- *Two-way audio: mute the camera while you talk* now applies to any talk, including Talk through
+
+---
+
 ## 0.8.48 — 2026-11-22
 
 ### ✨ New
 - **HKSV:** unpublishing a camera that an HKSV Recorder still records now logs a warning naming the Recorder (delete it, or point it at another camera, to remove the camera); a Recorder whose camera isn't published logs why nothing is recorded
-- **Camera control device** (all camera types): a gate, door or light shown inside the camera's own accessory in the Home app, e.g. open the gate from the doorbell. Any on/off device or action group, shown as a **Lock** (Home asks for Face ID) or a **Switch**; **momentary** (shows open for a few seconds) or **follows the device**. Lock uses Indigo's lock convention (unlock = off), so a UniFi Access door works directly. Off by default. → [Camera Setup](Camera-Setup#control-device-v0848)
+- **Camera control device** (all camera types): a gate, door or light that's part of the camera's own accessory, e.g. a doorbell camera with its gate. The Home app shows it in the camera's nearby accessories and room, like any accessory (not on the video), so it's the same as publishing the device separately, set up with the camera. Its options show once a device is chosen. Any on/off device or action group, shown as a **Lock** (Home asks for Face ID) or a **Switch**; **momentary** (shows open for a few seconds) or **follows the device**. Lock uses Indigo's lock convention (unlock = off), so a UniFi Access door works directly. Off by default. → [Camera Setup](Camera-Setup#control-device-v0848)
 
 ---
 
