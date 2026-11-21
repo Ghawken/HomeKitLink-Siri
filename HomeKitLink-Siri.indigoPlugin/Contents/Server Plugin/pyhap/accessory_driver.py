@@ -52,6 +52,7 @@ from pyhap.const import (
 )
 from pyhap.encoder import AccessoryEncoder
 from pyhap.hap_server import HAPServer
+from pyhap.hap_handler import HAPServerHandler
 from pyhap.hsrp import Server as SrpServer
 from pyhap.loader import Loader
 from pyhap.params import get_srp_context
@@ -414,6 +415,7 @@ class AccessoryDriver:
             self.state.port,
         )
 
+        HAPServerHandler.bridge_changed = time.monotonic()   ## hubs settle before wrong-bridge warnings
         # Start listening for requests
         logger.debug("Starting server.")
         await self.http_server.async_start(self.loop)
@@ -477,6 +479,7 @@ class AccessoryDriver:
     async def async_stop(self):
         """Stops the AccessoryDriver and shutdown all remaining tasks."""
         self.stop_event.set()
+        HAPServerHandler.bridge_changed = time.monotonic()
         logger.debug("Stopping HAP server and event sending")
         logger.debug("Stopping mDNS advertising for %s", self.accessory.display_name)
         await self.advertiser.async_unregister_service(self.mdns_service_info)

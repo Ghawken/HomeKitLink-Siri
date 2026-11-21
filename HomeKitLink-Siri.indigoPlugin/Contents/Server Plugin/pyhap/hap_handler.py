@@ -220,6 +220,8 @@ class HAPServerHandler:
     WRONG_BRIDGE_RE = re.compile(r"^HomeKitLink Bridge (\d+) ")
     WRONG_BRIDGE_REPEAT = 600  ## seconds between warnings for the same device
     WRONG_BRIDGE_MAX = 50      ## (device, bridge wanted) entries kept per bridge for Troubleshoot 4
+    WRONG_BRIDGE_SETTLE = 120  ## seconds after any bridge starts or stops with no warning (still counted)
+    bridge_changed = -WRONG_BRIDGE_SETTLE   ## time.monotonic() of the last bridge start or stop, set by the driver
 
     def _check_wrong_bridge(self, headers):
         """Warn when a Home device reaches this bridge while looking for another one. Its Host header names the
@@ -246,6 +248,10 @@ class HAPServerHandler:
                 entry[2] = stamp
             seen = self.accessory_handler.__dict__.setdefault("_wrong_bridge_warned", {})
             now = time.monotonic()
+            ## While bridges restart, Home hubs also try ports they remember from long ago for a bridge that's
+            ## down, then find it on its own port once it's back: not a problem, so only counted.
+            if now - HAPServerHandler.bridge_changed < self.WRONG_BRIDGE_SETTLE:
+                return
             if now - seen.get(key[0], -self.WRONG_BRIDGE_REPEAT) < self.WRONG_BRIDGE_REPEAT:
                 return
             seen[key[0]] = now

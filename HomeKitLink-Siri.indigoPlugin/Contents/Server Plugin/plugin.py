@@ -1078,7 +1078,7 @@ class Plugin(indigo.PluginBase):
                             self.listofenabledcameras.append(cameraoptions)
                         device_add_id = indigodevice.pluginProps.get("HomeKit_doorbellId", "")
                         #DoorBelldeviceAID = int(str(bridgenumber) + str(device_add_id))
-                        if device_add_id != "":  ## Doorbell ID exists  ## internal list = deviceid = okay to use for accessory but not here..
+                        if device_add_id != "" and str(device_add_id) != "-1":  ## Doorbell ID exists  ## internal list = deviceid = okay to use for accessory but not here..
                             # self.runningAccessoryCount = self.runningAccessoryCount +1
                             extend_device_list.append({"deviceid": int(device_add_id),
                                                        "devicename": "Special-Doorbell",
@@ -5093,7 +5093,7 @@ class Plugin(indigo.PluginBase):
             values_dict["HomeKit_publishDevice_2"] = device.pluginProps.get("HomeKit_publishDevice", False)
             values_dict["showSubtypes"] = True
             values_dict["deviceSensor"] = device.pluginProps.get("HomeKit_deviceSensor", "")  ## unless sensor device this isn't used. I believe. Hope.
-            values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
+            values_dict["doorbellId"] = str(device.pluginProps.get("HomeKit_doorbellId", "") or "-1")   ## none saved: the menu shows "No DoorBell", not blank
             values_dict["controlDevice"] = device.pluginProps.get("HomeKit_controlDevice", "") or "-1"
             values_dict["talkThrough"] = device.pluginProps.get("HomeKit_talkThrough", "") or "-1"
             values_dict["controlType"] = device.pluginProps.get("HomeKit_controlType", "") or "lock"
@@ -5323,8 +5323,11 @@ class Plugin(indigo.PluginBase):
                 if recorder is not None:
                     self.logger.warning("{}: its HomeKit Secure Video Recorder '{}' still records it. Delete the Recorder (or choose another camera in it) "
                                         "to remove this camera from HomeKit; while the Recorder points at it, the camera can come back.".format(device.name, recorder.name))
-                ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default)
-                device_props = {k: v for k, v in device_props.items() if not self._is_publish_key(k)}
+                    ## The Recorder keeps the camera in HomeKit: keep its settings, so they're there if it's published again
+                    device_props["HomeKit_publishDevice"] = False
+                else:
+                    ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default)
+                    device_props = {k: v for k, v in device_props.items() if not self._is_publish_key(k)}
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = self._own_index(device.id)   ## only its own entry: a camera may still use it as its doorbell

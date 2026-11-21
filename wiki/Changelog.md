@@ -6,6 +6,15 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.51 — 2026-11-22
+
+### 🐛 Fix
+- **Unpublishing a camera an HKSV Recorder still records keeps its settings** (audio, motion, doorbell, talk, control): the Recorder keeps it in HomeKit, so they're there when it's published again. Other devices still have their settings removed on unpublish
+- **Bridge dialog, DoorBell Linked**: a camera with no doorbell chosen showed an empty menu; it now shows *No DoorBell Device Selected*
+- **"Looking for Bridge … but reached Bridge …" warnings right after a restart**: while bridges restart, Home hubs also try ports they remember from long ago, then find each bridge on its own port. These attempts in the first 2 minutes after a bridge starts or stops are now only counted (Troubleshoot 4), not warned; a hub still reaching the wrong bridge after that is warned as before
+
+---
+
 ## 0.8.50 — 2026-11-22
 
 ### ✨ New
