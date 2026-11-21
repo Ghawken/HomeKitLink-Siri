@@ -7,6 +7,7 @@ from indigoffmpeg.core import IndigoFFmpeg, FFMPEG_STDERR
 from homekit_audio_proxy import AudioProxy
 from typing import Any
 from HKutils import pid_is_alive
+import HKCameraControl
 from HKutils import SimpleIntervalScheduler
 from HKutils import RepeatedViews
 from HKutils import live_tuning, tune_live_video, presumed_upgrade
@@ -505,6 +506,8 @@ class Camera(HomeAccessory,  PyhapCamera):
             serv_speaker = self.add_preload_service("Speaker")
             serv_speaker.configure_char("Mute", value=0)
 
+        ## Optional control device (gate, door, light) shown inside this camera's accessory
+        HKCameraControl.add_control(self, plugin, indigodeviceid)
 
     async def run(self):
         #if self.plugin.debug6:

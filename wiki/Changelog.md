@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.48 — 2026-11-22
+
+### ✨ New
+- **Camera control device** (all camera types): a gate, door or light shown inside the camera's own accessory in the Home app, e.g. open the gate from the doorbell. Any on/off device or action group, shown as a **Lock** (Home asks for Face ID) or a **Switch**; **momentary** (shows open for a few seconds) or **follows the device**. Lock uses Indigo's lock convention (unlock = off), so a UniFi Access door works directly. Off by default. → [Camera Setup](Camera-Setup#control-device-v0848)
+
+---
+
 ## 0.8.47 — 2026-11-17
 
 ### ✨ New

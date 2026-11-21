@@ -83,6 +83,7 @@ HKSV_CAMERA_SUBTYPES = ("BlueIrisCamera", "SecuritySpyCamera", "UniFiProtectCame
 import HKDevicesCameraSecuritySpy
 import HKDevicesCameraUniFi
 import HKThermostat
+import HKCameraControl
 import HKutils
 
 _HAS_IPV6 = hasattr(socket, "AF_INET6")
@@ -306,6 +307,7 @@ class Plugin(indigo.PluginBase):
         self.talkEchoSuppress = self.pluginPrefs.get('talkEchoSuppress', True)
         self._set_live_tuning(self.pluginPrefs)
         self._hc_zones = {}   ## main thermostat id -> Heater-Cooler zone device ids (zones show the main unit's mode)
+        self._camera_controls = {}   ## control device id -> camera device ids showing it (HKCameraControl)
         self._search_refused = {}   ## bridge dialog: search text a Save was refused for (refused once only)
         self._mirrors = {}   ## source device id -> HomeKitLink Sensor (mirror) device ids
         self._name_refused = set()   ## HomeKitLink devices whose Save was refused once for an empty HomeKit name
@@ -1156,6 +1158,8 @@ class Plugin(indigo.PluginBase):
 
                     if item['subtype'] in HKSV_CAMERA_SUBTYPES:
                         self._hksv_attach(accessory, item["deviceid"], cameraoptions)
+                    if getattr(accessory, "control", None):
+                        self._camera_controls.setdefault(accessory.control["id"], set()).add(item["deviceid"])
 
                     manufacturer = item['manufacturername']
                     model = item['devicemodel']
@@ -2840,6 +2844,8 @@ class Plugin(indigo.PluginBase):
                 return
             if original_device.id in self._hc_zones:   ## a main unit changed: its Heater-Cooler zones show its mode
                 self._hc_refresh_zones(original_device.id)
+            if original_device.id in self._camera_controls:   ## a camera's control device changed
+                self._camera_control_refresh(updated_device)
             if original_device.id in self._mirrors:   ## a mirrored device changed: its HomeKitLink Sensors copy it
                 self._mirror_source_changed(updated_device)
             if original_device.id not in self.device_list_internal_idonly:
@@ -4592,6 +4598,29 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.exception(f"Caught Exception with Action Notification.")
 
+    def _camera_control_refresh(self, control_dev):
+        for camera_id in list(self._camera_controls.get(control_dev.id, ())):
+            for item in self.device_list_internal:
+                if item["deviceid"] == camera_id and item.get("accessory") is not None and getattr(item["accessory"], "control", None):
+                    try:
+                        HKCameraControl.update_from_device(item["accessory"], control_dev)
+                    except Exception:
+                        self.logger.debug("camera control refresh failed", exc_info=True)
+
+    def camera_control_list(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """Devices with on/off (gate relays, locks, UniFi Access doors, lights) and action groups."""
+        try:
+            devices = sorted(((d.id, d.name) for d in indigo.devices if "onOffState" in d.states), key=lambda x: self._natural_key(x[1]))
+            groups = sorted(((g.id, g.name) for g in indigo.actionGroups), key=lambda x: self._natural_key(x[1]))
+            items = [(-1, "None (default)"), (-2, "%%separator%%"), (-3, "%%disabled:Devices:%%")]
+            items.extend(devices)
+            items.extend([(-4, "%%separator%%"), (-5, "%%disabled:Action groups:%%")])
+            items.extend(groups)
+            return items
+        except Exception:
+            self.logger.exception("camera control list")
+            return [(-1, "None (default)")]
+
     def doorbell_list_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
         try:
             unassigned_device_list = []
@@ -5027,6 +5056,11 @@ class Plugin(indigo.PluginBase):
             values_dict["showSubtypes"] = True
             values_dict["deviceSensor"] = device.pluginProps.get("HomeKit_deviceSensor", "")  ## unless sensor device this isn't used. I believe. Hope.
             values_dict["doorbellId"] = device.pluginProps.get("HomeKit_doorbellId", "")
+            values_dict["controlDevice"] = device.pluginProps.get("HomeKit_controlDevice", "") or "-1"
+            values_dict["controlType"] = device.pluginProps.get("HomeKit_controlType", "") or "lock"
+            values_dict["controlMode"] = device.pluginProps.get("HomeKit_controlMode", "") or "momentary"
+            values_dict["controlSeconds"] = device.pluginProps.get("HomeKit_controlSeconds", "") or "3"
+            values_dict["controlName"] = device.pluginProps.get("HomeKit_controlName", "")
             values_dict["tempSelector"] = device.pluginProps.get("HomeKit_tempSelector", False)
             values_dict["heatOnly"] = device.pluginProps.get("HomeKit_heatOnly", hasattr(device, "supportsCoolSetpoint") and not device.supportsCoolSetpoint)
             values_dict["motionEnabled"] = device.pluginProps.get("HomeKit_motionEnabled", True)
@@ -5087,6 +5121,11 @@ class Plugin(indigo.PluginBase):
         "HomeKit_motionEnabled": _CAMERAS,
         "HomeKit_audioSelector": _CAMERAS,
         "HomeKit_doorbellId": _CAMERAS,
+        "HomeKit_controlDevice": _CAMERAS,
+        "HomeKit_controlType": _CAMERAS,
+        "HomeKit_controlMode": _CAMERAS,
+        "HomeKit_controlSeconds": _CAMERAS,
+        "HomeKit_controlName": _CAMERAS,
         "HomeKit_unifiStreamURL": ("UniFiProtectCamera",),
         "HomeKit_unifiTwoWay": ("UniFiProtectCamera",),
         "HomeKit_unifiDoorbell": ("UniFiProtectCamera",),
@@ -5195,6 +5234,13 @@ class Plugin(indigo.PluginBase):
                     audioSelector = values_dict['audioSelector']
                     if device_props.get("HomeKit_audioSelector") != audioSelector:
                         device_props["HomeKit_audioSelector"] = audioSelector
+
+                if values_dict.get("deviceSubtype") in self._CAMERAS:
+                    device_props["HomeKit_controlDevice"] = str(values_dict.get("controlDevice", "-1") or "-1")
+                    device_props["HomeKit_controlType"] = str(values_dict.get("controlType", "lock") or "lock")
+                    device_props["HomeKit_controlMode"] = str(values_dict.get("controlMode", "momentary") or "momentary")
+                    device_props["HomeKit_controlSeconds"] = str(values_dict.get("controlSeconds", "3") or "3").strip()
+                    device_props["HomeKit_controlName"] = str(values_dict.get("controlName", "") or "").strip()
 
                 if values_dict.get("deviceSubtype") == "UniFiProtectCamera":
                     device_props["HomeKit_unifiStreamURL"] = str(values_dict.get("unifiStreamURL", "")).strip()

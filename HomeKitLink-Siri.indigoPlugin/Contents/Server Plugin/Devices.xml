@@ -144,6 +144,33 @@ Uncheck no motion sensor except through Action Group trigger.</Label>
 			<Field id="doorBellLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true"  visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
 				<Label>Device to make a DoorBell with this camera.</Label>
 			</Field>
+			<Field id="controlDevice" type="menu" defaultValue="-1" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>Control device:</Label>
+				<List class="self" method="camera_control_list" dynamicReload="true" />
+			</Field>
+			<Field id="controlType" type="menu" defaultValue="lock" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>Show as:</Label>
+				<List>
+					<Option value="lock">Lock (Home asks for Face ID to open)</Option>
+					<Option value="switch">Switch</Option>
+				</List>
+			</Field>
+			<Field id="controlMode" type="menu" defaultValue="momentary" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>Behaviour:</Label>
+				<List>
+					<Option value="momentary">Momentary: opens, then shows closed again</Option>
+					<Option value="follow">Follows the device's on/off</Option>
+				</List>
+			</Field>
+			<Field id="controlSeconds" type="textfield" defaultValue="3" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>Momentary, seconds:</Label>
+			</Field>
+			<Field id="controlName" type="textfield" defaultValue="" enabledBindingId="HomeKit_publishDevice_2" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>Control name:</Label>
+			</Field>
+			<Field id="controlLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="BlueIrisCamera,SecuritySpyCamera,UniFiProtectCamera">
+				<Label>A gate, door or light shown inside this camera in the Home app (e.g. open the gate from the doorbell). Lock: unlock turns the device off, lock turns it on (Indigo's lock convention, e.g. a UniFi Access door). Switch: on turns it on. Momentary: the device does its own pulse or relock; action groups are always momentary. Name: blank uses the device's name. The bridge restarts on Save.</Label>
+			</Field>
 			<Field id="unifiTwoWay" type="checkbox" defaultValue="false" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="UniFiProtectCamera" tooltip="Talk through the camera's speaker from the Home app.">
 				<Label/>
 				<Description>Two-way Audio (talk)</Description>

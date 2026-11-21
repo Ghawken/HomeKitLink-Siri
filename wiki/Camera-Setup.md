@@ -264,6 +264,34 @@ Any HKLS camera can have a **Doorbell** device associated with it:
 
 ---
 
+## Control Device (v0.8.48+)
+
+Any HKLS camera (Blue Iris, SecuritySpy, UniFi Protect) can carry a **control**: a gate, door or light shown **inside the camera's own accessory** in the Home app. With a doorbell: see who's there, talk, and open the gate, all from the one accessory. This is the same approach homebridge-unifi-protect uses for UniFi Access door locks on Protect cameras.
+
+Set it in the bridge settings when publishing the camera:
+
+| Setting | |
+|---|---|
+| **Control device** | Any Indigo device with on/off (gate relay, lock, UniFi Access door, light) or an **action group**. *None* by default. |
+| **Show as** | **Lock** (default): Home asks for Face ID or an unlocked iPhone before opening, and Siri says "unlock". **Switch**: no confirmation. Your choice. |
+| **Behaviour** | **Momentary** (default): opening shows unlocked / on for a few seconds, then locked / off again. **Follows the device**: shows the device's own on/off. Action groups are always momentary. |
+| **Momentary, seconds** | How long it shows open (default 3). |
+| **Control name** | What Home and Siri call it, e.g. *Front Gate*. Blank uses the device's name. |
+
+What it sends:
+- **Lock** uses Indigo's lock convention: **unlock turns the device off, lock turns it on** (on = locked). That's how Indigo locks and the UniFi plugin's **Access Door** work.
+- **Switch:** on turns the device on, off turns it off.
+- **Action group:** opening runs it. Use one for a gate relay that needs a pulse (turn on, wait, turn off), or for a plugin action.
+- **Momentary** only changes what HomeKit shows: the device does its own pulse or relock (a relay's auto-off, an action group, or the UniFi Access door's momentary unlock, which relocks by itself).
+
+**UniFi Access door** (Durosity's UniFi plugin): choose the door's device, *Show as: Lock*, *Momentary*. Unlock sends the plugin's momentary unlock. Or use an action group with the plugin's *Unlock Door (Momentary)* action.
+
+**Gate relay where on = open:** choose *Switch*, or an action group that pulses it, shown as a Lock.
+
+The log shows the control at bridge start and every open. Saving restarts the bridge, and the Home app reloads the camera. The device can also be published on its own as well.
+
+---
+
 ## HomeKit Secure Video (v0.8.22+)
 
 HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doorbell events to iCloud, with the Home app's timeline, face recognition and activity zones. It is **per camera and opt-in**: cameras without an HKSV Recorder device are unchanged.
