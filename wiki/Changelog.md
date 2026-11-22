@@ -6,6 +6,21 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.55 — 2026-11-22
+
+### ✨ New
+- **Garage Door: Enable to Invert Controls**, for devices that turn **on to open**, e.g. a gate (Nice IT4WIFI): Home's Open turns the device on and Close turns it off, and an on/off state reads on as open. Each open or close from Home is logged → [Supported Devices](Supported-Devices#garage-door)
+- **Garage Door: obstruction from an `obstructed` state**, when the device has one: it sets and clears Home's obstruction warning
+
+### 🐛 Fix
+- **Garage Door: Stopped shows as Stopped** in Home (it showed as Open); the target stays where it was
+- **Cameras: a restarted bridge no longer checks all its camera streams again**: each bridge start added its cameras again, unchecked, so every camera was checked again one by one, and a camera published again re-encoded its live view until its turn (15 minutes on a bridge of cameras). A camera keeps its stream check while its stream is the same
+
+### 🔧 Change
+- **Unpublishing a camera an HKSV Recorder records** now warns that Home deletes its recordings and turns its recording off, that its Recorder and settings are kept, to Save without unpublishing to change settings, and to restart the phone if the Home app then shows an old tile or no Recording Options
+
+---
+
 ## 0.8.54 — 2026-11-22
 
 ### ✨ New

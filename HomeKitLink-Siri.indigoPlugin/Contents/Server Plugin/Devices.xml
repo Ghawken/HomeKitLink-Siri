@@ -125,9 +125,12 @@ The plugin will decide which is possible aiming for 3, then 2, then 1.  If a sim
 				<Label>Enabled = use camera motion reports to trigger in HomeKit.
 Uncheck no motion sensor except through Action Group trigger.</Label>
 			</Field>
-			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will invert controls." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window,Door">
+			<Field id="inverseSelector" type="checkbox" tooltip="Enabling will invert controls." enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="Blind,Window,Door,GarageDoor">
 				<Label/>
 				<Description>Enable to Invert Controls</Description>
+			</Field>
+			<Field id="inverseGarageLabel" type="label" fontSize="small" enabledBindingId="HomeKit_publishDevice_2" alignWithControl="true" visibleBindingId="deviceSubtype" visibleBindingValue="GarageDoor" alwaysUseInDialogHeightCalc="true">
+				<Label>Garage Door: tick when the device turns on to open (e.g. a Nice IT4WIFI gate). Unticked, on = closed (e.g. an Insteon I/O Linc).</Label>
 			</Field>
 			<Field id="audioSelector" defaultValue="false" type="checkbox" enabledBindingId="HomeKit_publishDevice_2" tooltip="Enabling will enable audio." alignWithControl="true" alwaysUseInDialogHeightCalc="true" visibleBindingId="deviceSubtype" visibleBindingValue="SecuritySpyCamera,BlueIrisCamera,UniFiProtectCamera" >
 				<Label/>

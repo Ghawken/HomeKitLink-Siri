@@ -1079,7 +1079,7 @@ class Plugin(indigo.PluginBase):
                         accessory = HKDevicesCamera.Camera(driver, plugin=self, indigodeviceid=item["deviceid"], display_name=item['devicename'], aid=deviceAID, config=cameraoptions)
                         ## start snapshot thread.. to save
                         if "BI_imageURL" in cameraoptions:
-                            self.listofenabledcameras.append(cameraoptions)
+                            self._add_enabled_camera(cameraoptions)
                         device_add_id = indigodevice.pluginProps.get("HomeKit_doorbellId", "")
                         #DoorBelldeviceAID = int(str(bridgenumber) + str(device_add_id))
                         if device_add_id != "" and str(device_add_id) != "-1":  ## Doorbell ID exists  ## internal list = deviceid = okay to use for accessory but not here..
@@ -1108,7 +1108,7 @@ class Plugin(indigo.PluginBase):
                         accessory = HKDevicesCameraSecuritySpy.SecuritySpyCamera(driver, plugin=self, indigodeviceid=item["deviceid"], display_name=item['devicename'], aid=deviceAID, config=cameraoptions)
                         ## start snapshot thread.. to save
                         if "SS_imageURL" in cameraoptions:
-                            self.listofenabledcameras.append(cameraoptions)
+                            self._add_enabled_camera(cameraoptions)
                         device_add_id = indigodevice.pluginProps.get("HomeKit_doorbellId", "")
                         # self.logger.error("{} type and {} value".format(type(device_add_id),device_add_id))
                         # DoorBelldeviceAID = int("1000" + str(bridgenumber) + str(device_add_id))
@@ -1135,7 +1135,7 @@ class Plugin(indigo.PluginBase):
                         if self.debug7:
                             self.logger.debug("Options:\n\n{}\n".format(HKDevicesCameraUniFi.mask_url(cameraoptions)))
                         accessory = HKDevicesCameraUniFi.UniFiCamera(driver, plugin=self, indigodeviceid=item["deviceid"], display_name=item['devicename'], aid=deviceAID, config=cameraoptions)
-                        self.listofenabledcameras.append(cameraoptions)
+                        self._add_enabled_camera(cameraoptions)
                         device_add_id = str(cameraoptions.get("DoorBell_ID", ""))
                         if device_add_id not in ("", "-1", str(item["deviceid"])):  ## linked doorbell device (a UniFi doorbell is its own)
                             extend_device_list.append({"deviceid": int(device_add_id),
@@ -3304,34 +3304,12 @@ class Plugin(indigo.PluginBase):
                 return
 
         elif str(updateddevice_subtype) == "GarageDoor":
-            for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
-                # doorState:    0 -> open, 1 -> closed, 2 -> opening, 3 -> closing, 4 -> stopped, 5 -> reversing
-                # onOffState:   0 -> open, 1 -> closed
-                # binaryInput1: 0 -> open, 1 -> closed
-                if stateName in updated_device.states:  # choose the first match
-                    oldstate = original_device.states[stateName]
-                    newstate = updated_device.states[stateName]
-                    if newstate != oldstate:  # state has changed
-
-                        if self.debug2:
-                            self.logger.debug("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        if this_is_debug_device:
-                            self.logger.warning("NewState of Device:{} & State: {} ".format(updated_device.name, newstate))
-                        accessory = self.device_list_internal[checkindex]["accessory"]
-
-                        currentDoorState = (0, 1, 2, 3, 0, 2)[newstate]
-                        accessory.char_current_state.set_value(currentDoorState)
-
-                        # TargetDoorState must be 0 -> open or 1 -> closed
-                        targetDoorState = (0, 1, 0, 1, 0, 0)[newstate]
-                        accessory.char_target_state.set_value(targetDoorState)
-
-                        # ObstructionDetected must be 0 -> False or 1 -> True
-                        obstructionDetected = (None, 0, None, None, 1, 1)[newstate]
-                        if obstructionDetected is not None:
-                            accessory.char_obstruction_detected.set_value(obstructionDetected)
-
-                    break
+            ## doorState (0-5) first, then onOffState / binaryInput1; "obstructed" when the device has it
+            accessory = self.device_list_internal[checkindex]["accessory"]
+            if hasattr(accessory, "update_door"):
+                if self.debug2 or this_is_debug_device:
+                    self.logger.debug("GarageDoor {}: {}".format(updated_device.name, accessory.door_values(updated_device, accessory.on_opens)))
+                accessory.update_door(updated_device)
             return
 
         elif str(updateddevice_subtype) == "AirQualitySensor":
@@ -4062,7 +4040,7 @@ class Plugin(indigo.PluginBase):
                         doorState = indigodevice.states[stateName]  # Get Indigo doorState (0-5)
                         if self.debug4:
                             self.logger.debug(f"Found {stateName=} using that., converted to {doorState}")
-                        return (0, 1, 2, 3, 0, 2)[doorState]     # Return HomeKit currentDoorState (0-3)
+                        return (0, 1, 2, 3, 4, 2)[doorState]     # Return HomeKit currentDoorState (0-4)
 
             elif statetoGet == "lockState":
                 if "onOffState" in indigodevice.states:
@@ -5216,7 +5194,7 @@ class Plugin(indigo.PluginBase):
     _CAMERAS = ("BlueIrisCamera", "SecuritySpyCamera", "UniFiProtectCamera")
     PUBLISH_KEYS_BY_TYPE = {
         "HomeKit_tempSelector": ("Thermostat", "TemperatureSensor", "HeaterCooler"),
-        "HomeKit_inverseSelector": ("Blind", "Window", "Door"),
+        "HomeKit_inverseSelector": ("Blind", "Window", "Door", "GarageDoor"),
         "HomeKit_motionEnabled": _CAMERAS,
         "HomeKit_audioSelector": _CAMERAS,
         "HomeKit_doorbellId": _CAMERAS,
@@ -5381,8 +5359,9 @@ class Plugin(indigo.PluginBase):
                 if device_props.get("HomeKit_publishDevice", False): publication_change = True
                 recorder = self._hksv_recorder_for(device.id)
                 if recorder is not None:
-                    self.logger.warning("{}: its HomeKit Secure Video Recorder '{}' still records it. Delete the Recorder (or choose another camera in it) "
-                                        "to remove this camera from HomeKit; while the Recorder points at it, the camera can come back.".format(device.name, recorder.name))
+                    self.logger.warning("{}: unpublished, and removed from Home: Home deletes its recordings and turns its recording off. Its HomeKit Secure Video "
+                                        "Recorder '{}' and its settings are kept, so it records again once published. To change a camera's settings, Save without "
+                                        "unpublishing. If the Home app shows an old tile or no Recording Options afterwards, restart the phone (or force-quit Home).".format(device.name, recorder.name))
                     ## The Recorder keeps the camera in HomeKit: keep its settings, so they're there if it's published again
                     device_props["HomeKit_publishDevice"] = False
                 else:
@@ -6065,6 +6044,21 @@ class Plugin(indigo.PluginBase):
     def Menu_runffprobe(self, *args, **kwargs):
         """Menu callback: probe all enabled camera streams with ffprobe and log codec compatibility."""
         self._run_ffprobe(debug_only=False)
+
+    def _add_enabled_camera(self, cameraoptions):
+        """Add a camera to listofenabledcameras, replacing its entry from an earlier start of its bridge. Its stream
+        check results carry over while its stream is the same: a restarted bridge (or a camera published again) used
+        to add every camera again, unchecked, so all of them were checked again one by one and live view re-encoded
+        until its turn came (15 minutes on a bridge of cameras)."""
+        key = next((k for k in ("BI_name", "SS_name", "UP_name") if k in cameraoptions), None)
+        if key is not None:
+            for old in [cam for cam in self.listofenabledcameras if cam.get(key) == cameraoptions[key]]:
+                if old.get("stream_source") == cameraoptions.get("stream_source"):
+                    for k, v in old.items():
+                        if k.startswith("ffprobe") and k not in cameraoptions:
+                            cameraoptions[k] = v
+                self.listofenabledcameras.remove(old)
+        self.listofenabledcameras.append(cameraoptions)
 
     def _probe_cameras_background(self):
         """Probe, in the background, every published camera that hasn't been probed yet (no "ffprobe_video" key).

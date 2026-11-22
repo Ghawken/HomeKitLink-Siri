@@ -1987,6 +1987,8 @@ class GarageDoor(HomeAccessory):
 
         self.activate_only = self.is_activate(indigodeviceid)
         self.indigodeviceid = indigodeviceid
+        ## On opens: the device turns on to open (e.g. a Nice IT4WIFI gate). Otherwise on = closed (Insteon I/O Linc)
+        self.on_opens = bool(indigo.devices[indigodeviceid].pluginProps.get("HomeKit_inverseSelector", False)) if not self.activate_only else False
         serv_garage_door = self.add_preload_service("GarageDoorOpener")
         self.char_current_state = serv_garage_door.configure_char(
             "CurrentDoorState", value=0 )# getter_callback=self.get_state)
@@ -2005,14 +2007,8 @@ class GarageDoor(HomeAccessory):
         # TODO add support - will need config changes/menu
 
         # add state from start and set.
-        currentstate = self.get_state()
-        if currentstate is not None:
-            ## CurrentDoorState is 0-4 (open, closed, opening, closing, stopped), TargetDoorState only 0/1
-            try:
-                self.char_target_state.set_value((0, 1, 0, 1, 0)[int(currentstate)])
-            except (ValueError, TypeError, IndexError):
-                pass
-            self.char_current_state.set_value(currentstate)
+        if not self.activate_only:
+            self.update_door(indigo.devices[indigodeviceid])
 
         serv_garage_door.setter_callback = self._set_chars  ## Setter for everything
 
@@ -2034,6 +2030,39 @@ class GarageDoor(HomeAccessory):
         value = self.plugin.Plugin_getter_callback(self, "garageDoorState")
         return value
 
+    @staticmethod
+    def door_values(device, on_opens=False):
+        """(CurrentDoorState, TargetDoorState, ObstructionDetected) from the Indigo device; None = leave as is.
+        doorState (0 open, 1 closed, 2 opening, 3 closing, 4 stopped, 5 reversing) is used first, then onOffState
+        or binaryInput1 (on = closed, or on = open with on_opens). An "obstructed" state, when there, sets and clears
+        the obstruction; otherwise stopped and reversing show it, and closed clears it."""
+        states = device.states
+        current = target = obstructed = None
+        if "doorState" in states:
+            try:
+                d = int(states["doorState"])
+                current = (0, 1, 2, 3, 4, 2)[d]
+                target = (0, 1, 0, 1, None, 0)[d]   ## stopped: the target stays where it was
+                obstructed = (None, False, None, None, True, True)[d]
+            except (ValueError, TypeError, IndexError):
+                pass
+        else:
+            for name in ("onOffState", "binaryInput1"):
+                if name in states:
+                    closed = bool(states[name]) != bool(on_opens)
+                    current = target = 1 if closed else 0
+                    break
+        if "obstructed" in states:
+            obstructed = bool(states["obstructed"])
+        return current, target, obstructed
+
+    def update_door(self, device):
+        current, target, obstructed = self.door_values(device, self.on_opens)
+        for char, value in ((self.char_target_state, target), (self.char_current_state, current),
+                            (self.char_obstruction_detected, obstructed)):
+            if value is not None and char.value != value:
+                char.set_value(value)
+
     def _set_chars(self, char_values):
         """This will be called every time the value of one of the
         characteristics on the service changes.
@@ -2051,7 +2080,9 @@ class GarageDoor(HomeAccessory):
             if "TargetDoorState" in char_values:
                 if self.plugin.debug6:
                     logger.debug('TargetDoorState wished to be {}, converted to and sending to Indigo'.format( char_values))
-                char_values["On"] = char_values.pop("TargetDoorState")  ## replace targetdoorstate with On and send through onOffRelay actioning..
+                target = char_values.pop("TargetDoorState")  ## 0 open, 1 close
+                char_values["On"] = (1 - target) if self.on_opens else target  ## replace targetdoorstate with On and send through onOffRelay actioning..
+                logger.info("[{}] Home asked to {}: turning the device {}".format(self.display_name, "close" if target else "open", "on" if char_values["On"] else "off"))
                 if self.plugin.debug6:
                     logger.debug("Char Values converted from TargetDoorState to On/off.  New char_values : {}".format(char_values))
                 self.plugin.Plugin_setter_callback(self, "onOffState", char_values)  ## probably shoudl check ?send
