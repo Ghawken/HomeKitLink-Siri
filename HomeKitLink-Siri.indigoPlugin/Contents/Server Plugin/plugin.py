@@ -234,6 +234,10 @@ class Plugin(indigo.PluginBase):
         self.pluginPath = os.getcwd()
         self.listofenabledcameras = []
         self.camera_snapShot_Requested_que = UniqueQueue()  # queue.Queue()
+        ## Doorbell rings: a fresh snapshot for the ring notification (see _ring_doorbell / wait_ring_snapshot)
+        self.snapshot_rang = {}     ## snapshot name: time it rang
+        self.snapshot_force = set() ## snapshot names to fetch now, past the refresh limit
+        self.snapshot_done = {}     ## snapshot name: time its last fetch finished
         self.count = 0
         self.deviceBridgeNumber = []
         ## Internal list added to at device startup of Devices internal bridge numbering
@@ -2087,7 +2091,7 @@ class Plugin(indigo.PluginBase):
                                     timecheck = cameracheck[cameraRequested]  # requested=BI_name here ##value
                                     if self.debug7:
                                         self.logger.debug("Found Camera name:{} in camera check with timevalue:{}".format(cameraRequested, timecheck))
-                                    if t.time() - timecheck < int(self.camera_refresh_max_time):  ## Plugin Config setting
+                                    if t.time() - timecheck < int(self.camera_refresh_max_time) and not self._snapshot_forced(cameraRequested):  ## Plugin Config setting
                                         if self.debug7:
                                             self.logger.debug(" Skipping update as too soon, requested at timecheck difference {}".format(t.time() - timecheck))
                                         break
@@ -2123,6 +2127,7 @@ class Plugin(indigo.PluginBase):
                                     self.logger.debug("Camera Unavailable returning, Status Code:{}".format(r.status_code))
                                     self.logger.debug("Will pause downloading thread here for a few seconds")
                                     self.sleep(3)
+                                self.snapshot_done[camName] = t.time()
                                 if self.debug7:
                                     self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
                         elif "SS_name" in camera:
@@ -2139,7 +2144,7 @@ class Plugin(indigo.PluginBase):
                                     timecheck = cameracheck[cameraRequested]  # requested=BI_name here ##value
                                     if self.debug7:
                                         self.logger.debug("Found Camera name:{} in camera check with timevalue:{}".format(cameraRequested, timecheck))
-                                    if t.time() - timecheck < 30:  ## 30 seconds update
+                                    if t.time() - timecheck < 30 and not self._snapshot_forced(cameraRequested):  ## 30 seconds update
                                         if self.debug7:
                                             self.logger.debug(" Skipping update as too soon, requested at timecheck difference {}".format(t.time() - timecheck))
                                         break
@@ -2201,17 +2206,20 @@ class Plugin(indigo.PluginBase):
                                     self.logger.debug("Error Downloading Camera Snapshot, given Status Code:{}".format(r.status_code))
                                     self.logger.debug("Quite likely camera or Security Spy offline.  Having a slight pause for effect.")
                                     self.sleep(3)
+                                self.snapshot_done[camName] = t.time()
                                 if self.debug7:
                                     self.logger.debug("Downloaded Image for {}, with URL \n{}".format(camName, theURL))
                         elif "UP_name" in camera:
                             if camera["UP_name"] == cameraRequested:
-                                if cameraRequested in cameracheck and t.time() - cameracheck[cameraRequested] < 30:  ## 30 seconds update
+                                if cameraRequested in cameracheck and t.time() - cameracheck[cameraRequested] < 30 and not self._snapshot_forced(cameraRequested):  ## 30 seconds update
                                     if self.debug7:
                                         self.logger.debug("Skipping update as too soon for {}".format(cameraRequested))
                                     break
                                 cameracheck[cameraRequested] = t.time()
                                 path = self.cameraimagePath + '/' + cameraRequested + '.jpg'
-                                if not HKDevicesCameraUniFi.fetch_snapshot(self, camera, path, image_width, session):
+                                fetched = HKDevicesCameraUniFi.fetch_snapshot(self, camera, path, image_width, session)
+                                self.snapshot_done[cameraRequested] = t.time()
+                                if not fetched:
                                     self.sleep(3)
                                 elif self.debug7:
                                     self.logger.debug("Downloaded UniFi Image for {}".format(camera.get("cameraName")))
@@ -2293,6 +2301,44 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.debug("exception in camera snapShots", exc_info=True)
             pass
+
+    ####################################################################################################################
+
+    ## Doorbell rings. Home asks for a snapshot for the ring notification straight away, and get_snapshot normally
+    ## answers with the last saved image (and queues a new one), so the notification could show the doorstep from
+    ## minutes ago. A ring fetches a new image now, past the refresh limit, and get_snapshot waits for it briefly.
+    RING_SNAPSHOT_WAIT = 2.0    ## seconds get_snapshot waits for the ring's image, at most
+    RING_SNAPSHOT_WINDOW = 15   ## seconds after a ring that snapshot requests wait for it
+
+    def _ring_doorbell(self, accessory):
+        try:
+            name = accessory.config.get(getattr(accessory, "SNAPSHOT_NAME_KEY", "BI_name"), "")
+            if name:
+                self.snapshot_rang[name] = t.time()
+                self.snapshot_force.add(name)
+                self.camera_snapShot_Requested_que.put((name, 1380))
+        except Exception:
+            self.logger.debug("Ring snapshot:", exc_info=True)
+        accessory._char_doorbell_detected.set_value(0)
+        accessory._char_doorbell_detected_switch.set_value(0)
+
+    def _snapshot_forced(self, name):
+        if name in self.snapshot_force:
+            self.snapshot_force.discard(name)
+            return True
+        return False
+
+    def wait_ring_snapshot(self, name):
+        """Called by get_snapshot (in an executor thread): just after a ring, wait for the ring's image."""
+        rang = self.snapshot_rang.get(name)
+        if rang is None or t.time() - rang > self.RING_SNAPSHOT_WINDOW:
+            return
+        deadline = t.time() + self.RING_SNAPSHOT_WAIT
+        while self.snapshot_done.get(name, 0) < rang and t.time() < deadline:
+            t.sleep(0.05)
+        if self.debug7:
+            fresh = self.snapshot_done.get(name, 0) >= rang
+            self.logger.debug(f"{name}: ring snapshot {'fresh' if fresh else 'not ready, sent the last image'}, {t.time() - rang:.2f}s after the ring")
 
     ####################################################################################################################
 
@@ -3323,8 +3369,7 @@ class Plugin(indigo.PluginBase):
             if HKDevicesCameraUniFi.is_unifi_camera(updated_device):   ## a UniFi doorbell's button rings this camera too
                 if HKDevicesCameraUniFi.doorbell_rang(original_device, updated_device) and getattr(accessory, "_char_doorbell_detected", None) is not None:
                     self.logger.info("[{}] doorbell ring from '{}' sent to HomeKit".format(accessory.display_name, updated_device.name))
-                    accessory._char_doorbell_detected.set_value(0)
-                    accessory._char_doorbell_detected_switch.set_value(0)
+                    self._ring_doorbell(accessory)
             elif "onOffState" in updated_device.states:  ## double check Linked Doorbell are set only to have onOffStates
                 if updated_device.states['onOffState'] != original_device.states['onOffState']:
                     newstate = updated_device.onState
@@ -3333,8 +3378,7 @@ class Plugin(indigo.PluginBase):
                     if self.debug2:
                         self.logger.debug("OnOffState of Device:{} & State: {} ".format(updated_device.name, newstate))
                     ## Trigger doorbell if state change, rather than just On.if newstate:  ##
-                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
-                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
+                    self._ring_doorbell(accessory)
             # if Doorbell nothing further to do... return regardless
             return
 
@@ -3356,8 +3400,7 @@ class Plugin(indigo.PluginBase):
             accessory = self.device_list_internal[checkindex]["accessory"]
             if HKDevicesCameraUniFi.doorbell_rang(original_device, updated_device) and getattr(accessory, "_char_doorbell_detected", None) is not None:
                 self.logger.info("[{}] UniFi doorbell ring sent to HomeKit".format(updated_device.name))
-                accessory._char_doorbell_detected.set_value(0)
-                accessory._char_doorbell_detected_switch.set_value(0)
+                self._ring_doorbell(accessory)
             if updated_device.pluginProps.get("HomeKit_motionEnabled", True):
                 newstate = HKDevicesCameraUniFi.motion_active(updated_device)
                 if newstate != HKDevicesCameraUniFi.motion_active(original_device):
@@ -4613,8 +4656,7 @@ class Plugin(indigo.PluginBase):
                     self.logger.debug(f"CheckIndex has found device with result {checkindex=}")
                 if type_device=="camera_doorbell":
                     self.logger.info(f"Activating Camera DoorBell Notification in Home App, for Home device {homekit_name}")
-                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected.set_value(0)
-                    self.device_list_internal[checkindex]["accessory"]._char_doorbell_detected_switch.set_value(0)
+                    self._ring_doorbell(self.device_list_internal[checkindex]["accessory"])
                     return
                 elif type_device=="camera_motion_true":
                     self.logger.info(f"Setting Motion to Detected with Home Camera, for Home device {homekit_name}")

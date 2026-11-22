@@ -817,6 +817,7 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                     width = 1380
                 self.plugin.camera_snapShot_Requested_que.put((camname, width))
                 path = self.plugin.cameraimagePath + "/" + camname + '.jpg'
+                self.plugin.wait_ring_snapshot(camname)  ## just after a doorbell ring: the image of who rang
             else:
                 ## or default saved to plugin packages
                 path = self.plugin.pluginPath + "/cameras/snapshot.jpg"

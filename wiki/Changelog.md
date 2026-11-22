@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.54 — 2026-11-22
+
+### ✨ New
+- **Doorbell notifications show who rang**: Home asks for a snapshot for the ring notification straight away, and HKLS used to answer with the last saved image, which could be minutes old (often an empty doorstep). A ring now fetches a new snapshot at once, past the snapshot refresh limit, and the notification's snapshot waits for it (up to 2 seconds, then the last image). Blue Iris, SecuritySpy and UniFi cameras, for every kind of ring: the camera's own doorbell, DoorBell Linked and the doorbell action → [Camera Setup](Camera-Setup#doorbell-integration)
+
+---
+
 ## 0.8.53 — 2026-11-22
 
 ### ✨ New

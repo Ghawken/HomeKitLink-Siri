@@ -274,6 +274,7 @@ Any HKLS camera can have a **Doorbell** device associated with it:
   - **On/off devices**: any Indigo device with an on/off state; HomeKit fires a doorbell notification each time it turns on or off
 - Nothing else needs publishing: the doorbell device doesn't have to be published itself
 - The notification shows the **live camera stream** — tap to view the feed
+- **The ring's picture is taken when it rings** (v0.8.54+): HKLS fetches a new snapshot straight away and gives Home that one for the notification (waiting up to 2 seconds for it), instead of the last saved image, so it shows who's at the door
 - Works great with smart doorbells, button devices, or motion-triggered relays
 
 ---
