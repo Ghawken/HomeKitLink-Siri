@@ -326,7 +326,7 @@ HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doo
 3. HomeKitLink restarts that camera's bridge to add the recording services
 4. **If Recording Options don't appear** (or recordings don't show on an iPhone), the Home app is still using what it knew about the camera:
    - first, **force-close the Home app** (swipe it away) on each iPhone/iPad and open it again. The Home app should then show a "Secure Video" welcome for the camera
-   - if that doesn't do it, **re-add the camera**: unpublish it from its bridge, save, wait for it to disappear from the Home app, then publish it again. Only that camera is affected (its room, name, notifications and automations need setting again); the bridge doesn't need re-pairing
+   - if that doesn't do it, **re-add the camera**: unpublish it from its bridge, save, wait for it to disappear from the Home app, then publish it again. It comes back with a new HomeKit identity, so Home adds it as a new camera and can't bring back anything it kept for the old one. Only that camera is affected (its room, name, notifications, automations and Recording Options need setting again); the bridge doesn't need re-pairing. **Plugins → HomeKitLink Siri → New HomeKit Identity for a Device** does the same in one step
 5. In the Home app, open the camera's settings → **Recording Options**, and choose when to record (e.g. Stream & Allow Recording when away). The Home app may say "There was an error updating the setting" the first time; the setting is saved regardless
 
 ### How it records

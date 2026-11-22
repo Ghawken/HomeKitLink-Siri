@@ -1734,6 +1734,8 @@ class Plugin(indigo.PluginBase):
             values_dict["HomeKit_publishDevice"] = True
             values_dict["HomeKit_bridgeUniqueID"] = new_uid
             values_dict["HomeKit_deviceSubtype"] = subtype
+            if dev is not None and not old_uid:
+                self._publish_identity(dev, values_dict)
             ## The HomeKit name from this dialog: a new device is still "new device N" here (Indigo applies the
             ## name typed in its main dialog afterwards), and HomeKit keeps the name an accessory is added with.
             if homekit_name and values_dict.get("homekit-name") != homekit_name:
@@ -1745,6 +1747,8 @@ class Plugin(indigo.PluginBase):
         else:
             for key in [k for k in values_dict.keys() if self._unpublish_removes(k)]:   ## unpublished: none left (but its AID generation)
                 del values_dict[key]
+            if old_uid:
+                self._unpublish_identity(values_dict)
             if dev is not None and old_uid:
                 self.device_list.discard(dev.id)
                 self.device_list_internal = [i for i in self.device_list_internal
@@ -5235,10 +5239,53 @@ class Plugin(indigo.PluginBase):
 
     @staticmethod
     def _aid_generation(device):
+        """A device's AID generation (a device, or its props)."""
         try:
-            return max(0, int(device.pluginProps.get("HomeKit_aidGeneration", 0) or 0))
+            props = getattr(device, "pluginProps", device)
+            return max(0, int(props.get("HomeKit_aidGeneration", 0) or 0))
         except Exception:
             return 0
+
+    def _free_aid_generation(self, dev_id, uid, gen, driver=None):
+        """The first generation from gen whose AID no other device on bridge uid has (AIDs are joined digits, so
+        another device's AID could match), or None past AID_GENERATION_MAX."""
+        uid = str(uid)
+        in_use = set(getattr(getattr(driver, "accessory", None), "accessories", {}) or {})
+        for other in indigo.devices:
+            other_props = other.pluginProps
+            if other.id != dev_id and other_props.get("HomeKit_publishDevice", False) \
+                    and str(other_props.get("HomeKit_bridgeUniqueID", "")) == uid:
+                in_use.add(self._accessory_aid(uid, other.id, self._aid_generation(other)))
+        while gen <= self.AID_GENERATION_MAX:
+            if self._accessory_aid(uid, dev_id, gen) not in in_use:
+                return gen
+            gen += 1
+        return None
+
+    def _unpublish_identity(self, props):
+        """Unpublishing raises the AID generation, so a device published again is a new accessory to Home. With the
+        same AID, Home (or a home hub with an old copy) matched it to its old record, and brought back what it kept,
+        e.g. a camera's old control as No Response, and its recording not saved."""
+        props["HomeKit_aidGeneration"] = min(self._aid_generation(props) + 1, self.AID_GENERATION_MAX)
+
+    def _publish_identity(self, device, props):
+        """A device published again (generation from an unpublish or New HomeKit Identity): skip a generation another
+        device's AID has on its bridge, and start a camera's saved HKSV Home app settings again, as Home does."""
+        gen = self._aid_generation(props)
+        if gen <= 0:
+            return   ## first published: its usual AID
+        uid = str(props.get("HomeKit_bridgeUniqueID", ""))
+        free = self._free_aid_generation(device.id, uid, gen, self._bridge_for_uid(uid)[1])
+        if free is None:
+            self.logger.warning(f"'{device.name}': no free HomeKit identity generation left on Bridge {uid}: it keeps generation {gen}")
+            free = gen
+        props["HomeKit_aidGeneration"] = free
+        try:
+            os.remove(self._hksv_state_path(device.id))
+        except OSError:
+            pass
+        self.logger.info(f"'{device.name}': published again with a new HomeKit identity (accessory ID {self._accessory_aid(uid, device.id, free)}): "
+                         f"Home adds it as a new accessory. Set its room, name and settings in the Home app")
 
     def _prune_publish_props(self, device_props, subtype):
         """Remove type-specific settings that don't belong to the device's HomeKit type (e.g. Vacuum settings
@@ -5361,7 +5408,9 @@ class Plugin(indigo.PluginBase):
                     device_props["HomeKit_robotState"] = str(values_dict.get("robotState", "") or "")
                     device_props["HomeKit_robotRunning"] = str(values_dict.get("robotRunning", "") or "").strip()
 
-                if not device_props.get("HomeKit_publishDevice", False): publication_change = True
+                if not device_props.get("HomeKit_publishDevice", False):
+                    publication_change = True
+                    self._publish_identity(device, device_props)
                 self.device_list.add(device.id)
                 ## this is fine - will be added to internal_list on device start - just not removed from it
                 ## internal_list is add only by start/stop.
@@ -5376,13 +5425,15 @@ class Plugin(indigo.PluginBase):
                 recorder = self._hksv_recorder_for(device.id)
                 if recorder is not None:
                     self.logger.warning("{}: unpublished, and removed from Home: Home deletes its recordings and turns its recording off. Its HomeKit Secure Video "
-                                        "Recorder '{}' and its settings are kept, so it records again once published. To change a camera's settings, Save without "
-                                        "unpublishing. If the Home app shows an old tile or no Recording Options afterwards, restart the phone (or force-quit Home).".format(device.name, recorder.name))
+                                        "Recorder '{}' and its settings are kept. Published again, it's added to Home as a new camera: set its Recording Options "
+                                        "again. To change a camera's settings, Save without unpublishing.".format(device.name, recorder.name))
                     ## The Recorder keeps the camera in HomeKit: keep its settings, so they're there if it's published again
                     device_props["HomeKit_publishDevice"] = False
                 else:
                     ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default), but its AID generation
                     device_props = {k: v for k, v in device_props.items() if not self._unpublish_removes(k)}
+                if publication_change:   ## it was published: published again, it gets a new identity (see _publish_identity)
+                    self._unpublish_identity(device_props)
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = self._own_index(device.id)   ## only its own entry: a camera may still use it as its doorbell
@@ -5543,17 +5594,8 @@ class Plugin(indigo.PluginBase):
                 return
             old_gen = self._aid_generation(device)
             old_aid = self._accessory_aid(uid, dev_id, old_gen)
-            ## AIDs are joined digits, so another device's AID could match: skip any generation already in use on the bridge
-            in_use = set(getattr(getattr(driver, "accessory", None), "accessories", {}) or {})
-            for other in indigo.devices:
-                other_props = other.pluginProps
-                if other.id != dev_id and other_props.get("HomeKit_publishDevice", False) \
-                        and str(other_props.get("HomeKit_bridgeUniqueID", "")) == uid:
-                    in_use.add(self._accessory_aid(uid, other.id, self._aid_generation(other)))
-            gen = old_gen + 1
-            while self._accessory_aid(uid, dev_id, gen) in in_use and gen <= self.AID_GENERATION_MAX:
-                gen += 1
-            if gen > self.AID_GENERATION_MAX:
+            gen = self._free_aid_generation(dev_id, uid, old_gen + 1, driver)
+            if gen is None:
                 self.logger.error(f"New HomeKit Identity: '{device.name}' has no generation left (up to {self.AID_GENERATION_MAX}). Nothing was changed")
                 return
             new_aid = self._accessory_aid(uid, dev_id, gen)

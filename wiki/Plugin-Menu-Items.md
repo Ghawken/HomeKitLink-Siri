@@ -267,7 +267,9 @@ Use it when Home keeps showing something that's no longer published, e.g. a came
 2. Tick **Confirm**, then click **Make New Identity**. The log shows the old and new accessory IDs
 3. Its bridge restarts. In the Home app, the device appears as new in the bridge's room: set its room, name and settings again (for a camera, Stream & Allow Recording)
 
-Each press makes another new identity, so the tick is cleared after each one. The identity is kept when the device is unpublished, so publishing it again keeps the new ID.
+Each press makes another new identity, so the tick is cleared after each one.
+
+> Unpublishing a device and publishing it again also gives it a new identity (from 0.8.59), so use this menu item when the device should stay published.
 
 ---
 

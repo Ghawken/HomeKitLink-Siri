@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.59 — 2026-11-22
+
+### 🔧 Change
+- **A device unpublished and published again is a new accessory to Home**: unpublishing raises its HomeKit identity generation, so it comes back with a new accessory ID. With the same ID, Home (or a home hub with an old copy) matched it to its old record and brought back what it kept, e.g. a camera's old control showing No Response, and recordings not saved. A device published for the first time keeps its usual ID; moving a device to another bridge is unchanged. Published again, a camera's saved HKSV Home app settings start again too, as Home's do → [Plugin Menu Items](Plugin-Menu-Items#new-homekit-identity-for-a-device-emergency)
+
+---
+
 ## 0.8.58 — 2026-11-22
 
 ### ✨ New
