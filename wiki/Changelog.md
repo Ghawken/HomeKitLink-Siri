@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.57 — 2026-11-22
+
+### ✨ New
+- **Make Home Re-read a Bridge's Accessories** menu item: raises a bridge's configuration number, so every home hub, iPhone and iPad fetches its accessories again and drops any no longer published (e.g. an extra camera accessory showing No Response, which a hub kept putting back). The bridge stays paired and running, and nothing is unpublished → [Plugin Menu Items](Plugin-Menu-Items#make-home-re-read-a-bridges-accessories)
+
+---
+
 ## 0.8.56 — 2026-11-22
 
 ### 🔧 Change

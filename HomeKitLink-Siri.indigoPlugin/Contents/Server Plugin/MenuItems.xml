@@ -123,6 +123,24 @@ It would be important to unpair the old bridge in homekit app.
         </ConfigUI>
     </MenuItem>
 
+    <MenuItem id="refreshBridgeConfig">
+        <Name>Make Home Re-read a Bridge's Accessories</Name>
+        <ConfigUI>
+            <Field id="Bridge" type="menu">
+                <Label>Bridge:</Label>
+                <List class="indigo.devices" filter="self"/>
+            </Field>
+            <Field id="refreshButton" type="button">
+                <Label>Do:</Label>
+                <Title>Re-read Accessories</Title>
+                <CallbackMethod>menu_actionRefreshBridgeConfig</CallbackMethod>
+            </Field>
+            <Field id="refreshLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+                <Label>Raises the bridge's configuration number, so every home hub, iPhone and iPad fetches its accessories again and drops any that are no longer published (e.g. an accessory still shown, as No Response, after it was removed). The bridge stays paired and keeps running; nothing is unpublished, and accessories keep their rooms, settings and recordings.</Label>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
+
         <MenuItem id="resetBridge">
         <Name>Reset Accessory / Bridge</Name>
         <ConfigUI>

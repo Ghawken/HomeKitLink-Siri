@@ -5476,6 +5476,24 @@ class Plugin(indigo.PluginBase):
         except:
             self.logger.exception("Caught Exception with this action")
 
+    def menu_actionRefreshBridgeConfig(self, valuesDict, typeId):
+        """Raise a running bridge's configuration number (c#): every Home device then fetches its accessories again
+        and drops any no longer published. The bridge keeps its pairing and keeps running."""
+        try:
+            bridge_dev = indigo.devices[int(valuesDict["Bridge"])]
+            uid = bridge_dev.pluginProps.get("bridgeUniqueID", "")
+            driver = next((d for d in self.driver_multiple if d is not None and str(d.indigodeviceid) == str(uid)), None)
+            if driver is None or getattr(driver, "loop", None) is None or not driver.loop.is_running():
+                self.logger.warning(f"'{bridge_dev.name}' isn't running: start it, then try again")
+                return
+            def bump():
+                driver.config_changed()   ## persists (atomically) and updates the mDNS advertisement
+                self.logger.info(f"'{bridge_dev.name}' (Bridge {uid}): configuration number now {driver.state.config_version}. "
+                                 f"Home hubs, iPhones and iPads fetch its accessories again over the next few minutes")
+            driver.loop.call_soon_threadsafe(bump)
+        except Exception:
+            self.logger.exception("Couldn't raise the bridge's configuration number")
+
     def menu_actionMoveAccessories(self, valuesDict, typeId):
         self.logger.info("Move Bridge Accessories called.  valueDict {}".format(valuesDict))
         try:

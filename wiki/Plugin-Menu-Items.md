@@ -228,6 +228,23 @@ Copies all HomeKit accessories from one bridge to another. Enables recovery when
 
 ---
 
+## Make Home Re-read a Bridge's Accessories
+
+**Plugins → HomeKitLink Siri → Make Home Re-read a Bridge's Accessories**
+
+Raises the bridge's configuration number. Every home hub, iPhone and iPad then fetches the bridge's accessories again and drops any that are no longer published. Use it when:
+- An accessory you removed is still in Home, as **No Response** (e.g. a camera shows an extra accessory)
+- A home hub keeps putting back an old copy of an accessory: its settings revert, or a camera's recordings don't save
+
+The bridge stays paired and keeps running. Nothing is unpublished: accessories keep their rooms, names, automations, settings and recordings.
+
+**Procedure:**
+1. Select the bridge (a camera's bridge is the one it's published to)
+2. Click **Re-read Accessories**. The log confirms the new number
+3. Give Home a few minutes, then check the Home app
+
+---
+
 ## Reset Accessory / Bridge
 
 **Plugins → HomeKitLink Siri → Reset Accessory / Bridge**
