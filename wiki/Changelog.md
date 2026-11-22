@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.52 — 2026-11-22
+
+### 🔧 Change
+- **Bridge dialog, Save Device on an already published device now logs**: what changed (e.g. *audioSelector, doorbellId changed*), or *no changes*, and that the bridge restarts when you close the dialog with Save. Before, only publishing or unpublishing logged anything, so it was easy to miss pressing Save Device
+
+---
+
 ## 0.8.51 — 2026-11-22
 
 ### 🐛 Fix

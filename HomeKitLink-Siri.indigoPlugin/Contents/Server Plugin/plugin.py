@@ -5209,6 +5209,7 @@ class Plugin(indigo.PluginBase):
                 self.logger.error("Error Saving this device.")
                 return
             device_props = dict(device.pluginProps)
+            old_props = dict(device_props)
 
             if values_dict["HomeKit_publishDevice_2"]:
                 # Note the 2 here - in the Alexa plugin this field was the same in the device and in the pluginConfig XML
@@ -5352,6 +5353,13 @@ class Plugin(indigo.PluginBase):
                     self.logger.warn("You have removed a HomeKit Device.")
                     self.logger.warn("After pressing Save, the Bridge will restart for this to take effect.")
                     self.logger.warn("The device should disappear from HomeKit Clients in a short space of time.")
+            elif device_props.get("HomeKit_publishDevice", False):   ## already published: say it saved, as the dialog doesn't
+                changed = sorted(k.replace("HomeKit_", "") for k in set(old_props) | set(device_props)
+                                 if self._is_publish_key(k) and old_props.get(k) != device_props.get(k))
+                if changed:
+                    self.logger.info(f"Saved '{device.name}': {', '.join(changed)} changed. Press Save to close the dialog, and the bridge restarts for this to take effect.")
+                else:
+                    self.logger.info(f"Saved '{device.name}': no changes.")
 
         except Exception as exc:
             self.logger.error(u"An unknown error occurred {}".format(str(exc)))
