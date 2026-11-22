@@ -2038,15 +2038,12 @@ class GarageDoor(HomeAccessory):
         the obstruction; otherwise stopped and reversing show it, and closed clears it."""
         states = device.states
         current = target = obstructed = None
-        if "doorState" in states:
-            try:
-                d = int(states["doorState"])
-                current = (0, 1, 2, 3, 4, 2)[d]
-                target = (0, 1, 0, 1, None, 0)[d]   ## stopped: the target stays where it was
-                obstructed = (None, False, None, None, True, True)[d]
-            except (ValueError, TypeError, IndexError):
-                pass
-        else:
+        d = GarageDoor.door_state(states["doorState"]) if "doorState" in states else None
+        if d is not None:
+            current = (0, 1, 2, 3, 4, 2)[d]
+            target = (0, 1, 0, 1, None, 0)[d]   ## stopped: the target stays where it was
+            obstructed = (None, False, None, None, True, True)[d]
+        else:   ## no doorState, or one that can't be read (update_door warns once)
             for name in ("onOffState", "binaryInput1"):
                 if name in states:
                     closed = bool(states[name]) != bool(on_opens)
@@ -2056,7 +2053,24 @@ class GarageDoor(HomeAccessory):
             obstructed = bool(states["obstructed"])
         return current, target, obstructed
 
+    DOOR_STATE_TEXT = {"open": 0, "closed": 1, "opening": 2, "closing": 3, "stopped": 4, "reversing": 5}
+
+    @staticmethod
+    def door_state(value):
+        """doorState as 0-5: a number, or its name in any case ("Open", "closing"). None if it can't be read."""
+        try:
+            d = int(value)
+        except (ValueError, TypeError):
+            d = GarageDoor.DOOR_STATE_TEXT.get(str(value).strip().lower())
+        return d if d is not None and 0 <= d <= 5 else None
+
     def update_door(self, device):
+        if "doorState" in device.states and self.door_state(device.states["doorState"]) is None:
+            value = device.states["doorState"]
+            if getattr(self, "_bad_door_state", None) != value:
+                self._bad_door_state = value
+                logger.warning("[{}] doorState {!r} isn't 0-5 or open/closed/opening/closing/stopped/reversing: using {} instead".format(
+                    self.display_name, value, next((n for n in ("onOffState", "binaryInput1") if n in device.states), "nothing (no on/off state)")))
         current, target, obstructed = self.door_values(device, self.on_opens)
         for char, value in ((self.char_target_state, target), (self.char_current_state, current),
                             (self.char_obstruction_detected, obstructed)):

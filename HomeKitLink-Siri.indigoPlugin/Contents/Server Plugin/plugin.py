@@ -4037,7 +4037,9 @@ class Plugin(indigo.PluginBase):
             elif statetoGet == "garageDoorState":
                 for stateName in ("doorState", "onOffState", "binaryInput1"):  # ordered by preference
                     if stateName in indigodevice.states:  # choose the first match
-                        doorState = indigodevice.states[stateName]  # Get Indigo doorState (0-5)
+                        doorState = HomeKitDevices.GarageDoor.door_state(indigodevice.states[stateName]) if stateName == "doorState" else int(bool(indigodevice.states[stateName]))
+                        if doorState is None:
+                            continue   ## unreadable doorState: the next state
                         if self.debug4:
                             self.logger.debug(f"Found {stateName=} using that., converted to {doorState}")
                         return (0, 1, 2, 3, 4, 2)[doorState]     # Return HomeKit currentDoorState (0-4)

@@ -191,7 +191,7 @@ HKLS reads the device's state itself; there's no state to choose. It uses the fi
 
 | State | Values |
 |---|---|
-| `doorState` (best) | 0 open, 1 closed, 2 opening, 3 closing, 4 stopped, 5 reversing |
+| `doorState` (best) | 0 open, 1 closed, 2 opening, 3 closing, 4 stopped, 5 reversing; or those words, in any case (v0.8.56+). A value it can't read falls back to the on/off state, with a warning in the log |
 | `onOffState` or `binaryInput1` | open / closed only: on = closed, or on = open with **Enable to Invert Controls** ticked |
 
 - **Obstructed:** an `obstructed` true/false state, when the device has one, sets and clears it (v0.8.55+). Otherwise stopped and reversing show it, and closed clears it.

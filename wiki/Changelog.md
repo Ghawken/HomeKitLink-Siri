@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.56 — 2026-11-22
+
+### 🔧 Change
+- **Garage Door: `doorState` as words too**: open, closed, opening, closing, stopped or reversing, in any case, as well as 0-5. A `doorState` it can't read now falls back to the on/off state (it left the tile unchanged), and the log warns once with the value → [Supported Devices](Supported-Devices#garage-door)
+
+---
+
 ## 0.8.55 — 2026-11-22
 
 ### ✨ New
