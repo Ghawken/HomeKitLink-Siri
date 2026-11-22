@@ -245,6 +245,32 @@ The bridge stays paired and keeps running. Nothing is unpublished: accessories k
 
 ---
 
+## New HomeKit Identity for a Device (emergency)
+
+**Plugins → HomeKitLink Siri → New HomeKit Identity for a Device (emergency)**
+
+Gives one published device a **new accessory ID**. Home removes the old accessory, together with anything Home kept for it, and adds the device as a brand-new accessory.
+
+Use it when Home keeps showing something that's no longer published, e.g. a camera's old control or sensor shown as **No Response**, and neither of these cleared it:
+- **Make Home Re-read a Bridge's Accessories**
+- Unpublishing and publishing again: that doesn't help, because the device comes back with the **same** accessory ID, and Home (or a home hub with an old copy) matches it to its old record
+
+| Kept | Starts again in the Home app |
+|---|---|
+| The bridge, its pairing and its other accessories | The device's room and name |
+| The device's HomeKitLink settings | Automations and scenes that use it |
+| A camera's HKSV Recorder and its settings | Notifications, and a camera's Recording Options |
+| | A camera's recordings (deleted) |
+
+**Procedure:**
+1. Choose the **Device**. The list shows each published device with its bridge
+2. Tick **Confirm**, then click **Make New Identity**. The log shows the old and new accessory IDs
+3. Its bridge restarts. In the Home app, the device appears as new in the bridge's room: set its room, name and settings again (for a camera, Stream & Allow Recording)
+
+Each press makes another new identity, so the tick is cleared after each one. The identity is kept when the device is unpublished, so publishing it again keeps the new ID.
+
+---
+
 ## Reset Accessory / Bridge
 
 **Plugins → HomeKitLink Siri → Reset Accessory / Bridge**

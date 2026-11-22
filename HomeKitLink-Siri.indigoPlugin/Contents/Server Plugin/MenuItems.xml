@@ -141,6 +141,31 @@ It would be important to unpair the old bridge in homekit app.
         </ConfigUI>
     </MenuItem>
 
+    <MenuItem id="newHomeKitIdentity">
+        <Name>New HomeKit Identity for a Device (emergency)</Name>
+        <ConfigUI>
+            <Field id="identityDevice" type="menu">
+                <Label>Device:</Label>
+                <List class="self" method="publishedDeviceListGenerator"/>
+            </Field>
+            <Field id="identityLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+                <Label>Gives the device a new accessory ID. Home removes the old accessory, with anything Home kept for it (e.g. a control or sensor still shown, as No Response, after it was removed, which neither unpublishing nor Make Home Re-read a Bridge's Accessories clears), and adds the device as a new accessory. Its bridge restarts; other accessories aren't affected. Its HomeKitLink settings and HKSV Recorder are kept.</Label>
+            </Field>
+            <Field id="identityWarning" type="label" fontColor="orange" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
+                <Label>In the Home app it starts again, as a new accessory: set its room, name, automations, scenes, notifications and (for a camera) Recording Options again. A camera's recordings are deleted.</Label>
+            </Field>
+            <Field id="identityConfirm" type="checkbox" defaultValue="false">
+                <Label>Confirm:</Label>
+                <Description>I understand Home removes this accessory and adds it as new</Description>
+            </Field>
+            <Field id="identityButton" type="button">
+                <Label>Do:</Label>
+                <Title>Make New Identity</Title>
+                <CallbackMethod>menu_actionNewIdentity</CallbackMethod>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
+
         <MenuItem id="resetBridge">
         <Name>Reset Accessory / Bridge</Name>
         <ConfigUI>

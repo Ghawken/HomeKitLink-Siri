@@ -6,6 +6,16 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.58 — 2026-11-22
+
+### ✨ New
+- **New HomeKit Identity for a Device (emergency)** menu item: gives a published device a new accessory ID, so Home removes the old accessory, with anything Home kept for it, and adds the device as new. For when Home keeps something that's no longer published (e.g. a camera's old control showing No Response), and neither unpublishing and publishing again (Home reuses its old record, as the ID is the same) nor Make Home Re-read a Bridge's Accessories clears it. Its room, name, automations, notifications and a camera's Recording Options are set again in Home; its HomeKitLink settings and HKSV Recorder are kept. Only its bridge restarts → [Plugin Menu Items](Plugin-Menu-Items#new-homekit-identity-for-a-device-emergency)
+
+### 🔧 Change
+- **Unpublishing keeps a device's identity generation**, so publishing it again doesn't bring back the accessory ID a New HomeKit Identity replaced
+
+---
+
 ## 0.8.57 — 2026-11-22
 
 ### ✨ New

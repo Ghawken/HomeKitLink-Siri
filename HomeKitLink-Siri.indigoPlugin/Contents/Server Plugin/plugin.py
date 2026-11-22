@@ -989,15 +989,9 @@ class Plugin(indigo.PluginBase):
                     # self.sleep(0.01)
                     self.logger.debug(f"Item :{item} exists for this bridge {bridge}")
                     indigodevice = self.return_deviceorAG(item["deviceid"])
-                    deviceAID = int(str(bridgenumber) + str(item["deviceid"]))
-                    ## Durosity's development build: "New HomeKit identity" put a generation number into the AID. Keep
-                    ## those AIDs exactly as that build made them, or Home would add the accessory again as a new one.
-                    try:
-                        aid_gen = int(indigodevice.pluginProps.get("HomeKit_aidGeneration", 0) or 0)
-                    except Exception:
-                        aid_gen = 0
-                    if aid_gen > 0:
-                        deviceAID = int(str(bridgenumber) + str(aid_gen) + str(item["deviceid"]))
+                    ## A generation number (menu: New HomeKit Identity; also Durosity's development build) goes into the
+                    ## AID. Keep those AIDs exactly as made, or Home would add the accessory again as a new one.
+                    deviceAID = self._accessory_aid(bridgenumber, item["deviceid"], self._aid_generation(indigodevice))
                     if self.debug1:
                         self.logger.debug("Adding Accessory Name: {},  ID  {} , Type: {}".format(item['devicename'], deviceAID, item['subtype']))
                     if item['subtype'] == "LightBulb":
@@ -1749,7 +1743,7 @@ class Plugin(indigo.PluginBase):
             if dev is not None:
                 self.device_list.add(dev.id)
         else:
-            for key in [k for k in values_dict.keys() if self._is_publish_key(k)]:   ## unpublished: none left
+            for key in [k for k in values_dict.keys() if self._unpublish_removes(k)]:   ## unpublished: none left (but its AID generation)
                 del values_dict[key]
             if dev is not None and old_uid:
                 self.device_list.discard(dev.id)
@@ -5226,6 +5220,26 @@ class Plugin(indigo.PluginBase):
         """A HomeKitLink publishing setting on a device (HomeKit_*, and the HomeKit name)."""
         return key.startswith("HomeKit_") or key == "homekit-name"
 
+    @staticmethod
+    def _unpublish_removes(key):
+        """Settings an unpublish removes: all publishing settings except the AID generation, so publishing the device
+        again doesn't bring back an AID its New HomeKit Identity replaced."""
+        return Plugin._is_publish_key(key) and key != "HomeKit_aidGeneration"
+
+    AID_GENERATION_MAX = 999   ## keeps an AID at 19 digits at most (HomeKit's AID is 64-bit)
+
+    @staticmethod
+    def _accessory_aid(bridgenumber, deviceid, generation=0):
+        """A device's accessory ID (AID): its bridge number then its Indigo id, its generation between them when set."""
+        return int(str(bridgenumber) + (str(generation) if generation > 0 else "") + str(deviceid))
+
+    @staticmethod
+    def _aid_generation(device):
+        try:
+            return max(0, int(device.pluginProps.get("HomeKit_aidGeneration", 0) or 0))
+        except Exception:
+            return 0
+
     def _prune_publish_props(self, device_props, subtype):
         """Remove type-specific settings that don't belong to the device's HomeKit type (e.g. Vacuum settings
         left after changing a device to Switch). Keys not listed are left alone."""
@@ -5367,8 +5381,8 @@ class Plugin(indigo.PluginBase):
                     ## The Recorder keeps the camera in HomeKit: keep its settings, so they're there if it's published again
                     device_props["HomeKit_publishDevice"] = False
                 else:
-                    ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default)
-                    device_props = {k: v for k, v in device_props.items() if not self._is_publish_key(k)}
+                    ## Unpublished: no HomeKitLink settings are left on the device (every reader has a default), but its AID generation
+                    device_props = {k: v for k, v in device_props.items() if not self._unpublish_removes(k)}
                 try:
                     self.device_list.discard(device.id)  ## not good to just remove here and internal list no longer deleted.
                     checkindex = self._own_index(device.id)   ## only its own entry: a camera may still use it as its doorbell
@@ -5493,6 +5507,87 @@ class Plugin(indigo.PluginBase):
             driver.loop.call_soon_threadsafe(bump)
         except Exception:
             self.logger.exception("Couldn't raise the bridge's configuration number")
+
+    def publishedDeviceListGenerator(self, filter="", valuesDict=None, typeId="", targetId=0):
+        """Published Indigo devices, by name, with their bridge (and generation, when they have one)."""
+        devices = []
+        for dev in indigo.devices:
+            props = dev.pluginProps
+            if not props.get("HomeKit_publishDevice", False):
+                continue
+            gen = self._aid_generation(dev)
+            devices.append((str(dev.id), "{}  (Bridge {}{})".format(dev.name, props.get("HomeKit_bridgeUniqueID", "?"),
+                                                                  ", generation {}".format(gen) if gen else "")))
+        return sorted(devices, key=lambda d: d[1].lower())
+
+    def menu_actionNewIdentity(self, valuesDict, typeId):
+        """Give a published device a new accessory ID (AID): raise its generation, so Home removes the old accessory, with
+        whatever Home kept for it, and adds the device as a new one. Restarts only its bridge."""
+        try:
+            if not valuesDict.get("identityConfirm", False):
+                self.logger.warning("New HomeKit Identity: tick the box to confirm first. Nothing was changed")
+                return
+            dev_id = int(valuesDict.get("identityDevice", 0) or 0)
+            if dev_id not in indigo.devices:
+                self.logger.warning("New HomeKit Identity: choose a device first. Nothing was changed")
+                return
+            device = indigo.devices[dev_id]
+            props = dict(device.pluginProps)
+            if not props.get("HomeKit_publishDevice", False):
+                self.logger.warning(f"New HomeKit Identity: '{device.name}' isn't published. Nothing was changed")
+                return
+            uid = str(props.get("HomeKit_bridgeUniqueID", ""))
+            bridge_dev, driver = self._bridge_for_uid(uid)
+            if bridge_dev is None:
+                self.logger.warning(f"New HomeKit Identity: '{device.name}' has no bridge (Bridge {uid}). Nothing was changed")
+                return
+            old_gen = self._aid_generation(device)
+            old_aid = self._accessory_aid(uid, dev_id, old_gen)
+            ## AIDs are joined digits, so another device's AID could match: skip any generation already in use on the bridge
+            in_use = set(getattr(getattr(driver, "accessory", None), "accessories", {}) or {})
+            for other in indigo.devices:
+                other_props = other.pluginProps
+                if other.id != dev_id and other_props.get("HomeKit_publishDevice", False) \
+                        and str(other_props.get("HomeKit_bridgeUniqueID", "")) == uid:
+                    in_use.add(self._accessory_aid(uid, other.id, self._aid_generation(other)))
+            gen = old_gen + 1
+            while self._accessory_aid(uid, dev_id, gen) in in_use and gen <= self.AID_GENERATION_MAX:
+                gen += 1
+            if gen > self.AID_GENERATION_MAX:
+                self.logger.error(f"New HomeKit Identity: '{device.name}' has no generation left (up to {self.AID_GENERATION_MAX}). Nothing was changed")
+                return
+            new_aid = self._accessory_aid(uid, dev_id, gen)
+            props["HomeKit_aidGeneration"] = gen
+            device.replacePluginPropsOnServer(indigo.Dict(props))
+            hksv_file = self._hksv_state_path(dev_id)
+            self.logger.warning(f"'{device.name}': new HomeKit identity, accessory ID {old_aid} → {new_aid} (generation {gen}). Home removes "
+                                f"the old accessory and adds this one as new, in the bridge's room: set its room, name, automations"
+                                f"{', Recording Options' if os.path.exists(hksv_file) else ''} and notifications again in the Home app")
+
+            def restart(dev_id=dev_id, bridge_id=bridge_dev.id, was_enabled=bridge_dev.enabled):
+                try:
+                    if was_enabled:
+                        t.sleep(2)   ## let the new generation reach the server first
+                        indigo.device.enable(bridge_id, value=False)
+                        t.sleep(4)
+                    ## Home starts the new accessory with recording off and no format: start HKLS's saved HKSV settings
+                    ## the same way. Removed while the bridge is stopped, so the old accessory can't save them again.
+                    try:
+                        os.remove(self._hksv_state_path(dev_id))
+                        self.logger.info(f"'{indigo.devices[dev_id].name}': its saved HKSV Home app settings were cleared for its new identity")
+                    except OSError:
+                        pass
+                    if was_enabled:
+                        indigo.device.enable(bridge_id, value=True)
+                    else:
+                        self.logger.info(f"Bridge '{indigo.devices[bridge_id].name}' is disabled: the new identity takes effect when it's enabled")
+                except Exception:
+                    self.logger.exception("New HomeKit Identity: bridge restart failed")
+            threading.Thread(target=restart, daemon=True, name="HKLS-new-identity").start()
+            valuesDict["identityConfirm"] = False   ## a second press needs ticking again: each press is another new identity
+            return valuesDict
+        except Exception:
+            self.logger.exception("New HomeKit Identity failed")
 
     def menu_actionMoveAccessories(self, valuesDict, typeId):
         self.logger.info("Move Bridge Accessories called.  valueDict {}".format(valuesDict))
