@@ -42,7 +42,7 @@ Either plugin works — see [UniFi Protect](#unifi-protect-v0812) below.
 3. Select your BI or SecuritySpy camera device from the list
 4. Select HomeKit type: **Camera** (auto-detected for camera devices)
 5. Configure the options that appear:
-   - **Doorbell device** — optional: select any on/off Indigo device; when it turns on, HomeKit fires a doorbell notification with live video
+   - **Doorbell device** — optional: a UniFi doorbell's button, or any on/off Indigo device (rings when it turns on or off); HomeKit fires a doorbell notification with live video. See [Doorbell Integration](#doorbell-integration)
    - **Motion sensor** — BI cameras automatically register as HomeKit motion sensors
 6. Click **Save Device** then **Save** in the dialog
 
@@ -269,8 +269,10 @@ The audio proxy also now forwards audio **RTCP** sender reports (encrypted as SR
 
 Any HKLS camera can have a **Doorbell** device associated with it:
 
-- Select any on/off Indigo device as the doorbell trigger
-- When that device turns **on**, HomeKit fires a doorbell notification
+- In **DoorBell Linked** choose the doorbell. The list has two parts, each by name:
+  - **Camera doorbells** (v0.8.53+): a UniFi Protect doorbell (e.g. the G6 Entry), or a UniFi camera ticked *Treat as a doorbell*. Pressing its button rings this camera too, so a Blue Iris gate camera rings when the G6 Entry beside it is pressed, and both show the ring in Home, each with its own picture
+  - **On/off devices**: any Indigo device with an on/off state; HomeKit fires a doorbell notification each time it turns on or off
+- Nothing else needs publishing: the doorbell device doesn't have to be published itself
 - The notification shows the **live camera stream** — tap to view the feed
 - Works great with smart doorbells, button devices, or motion-triggered relays
 

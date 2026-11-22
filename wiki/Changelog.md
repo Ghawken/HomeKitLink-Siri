@@ -6,6 +6,19 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.53 — 2026-11-22
+
+### ✨ New
+- **A camera can ring from a UniFi doorbell's button**: choose the doorbell (e.g. the G6 Entry) in a camera's **DoorBell Linked**, and pressing its button rings that camera in Home as well as the doorbell itself. E.g. a Blue Iris gate camera beside a G6 Entry. Works for Blue Iris, SecuritySpy and UniFi cameras; the log shows `[Gate] doorbell ring from 'G6 Entry' sent to HomeKit` → [Camera Setup](Camera-Setup#doorbell-integration)
+
+### 🔧 Change
+- **DoorBell Linked list**: *No DoorBell* first, then **Camera doorbells** (with their model), then **On/off devices**, each sorted by name; the camera being set up isn't listed
+
+### 🐛 Fix
+- The UniFi **G6 Pro Entry** (model "UVC G6 Pro Entry") is recognised as a doorbell without ticking *Treat as a doorbell*
+
+---
+
 ## 0.8.52 — 2026-11-22
 
 ### 🔧 Change

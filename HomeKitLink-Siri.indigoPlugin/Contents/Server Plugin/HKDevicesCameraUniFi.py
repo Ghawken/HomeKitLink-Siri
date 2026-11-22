@@ -44,7 +44,7 @@ _LOGGER = logging.getLogger("Plugin.HomeKitSpawn")
 UNIFI_DUROSITY_ID = "com.durosity.indigoplugin.unifi"
 UNIFI_KW123_ID = "com.karlwachs.uniFiAP"
 ## Doorbells whose model name doesn't say "doorbell" (not just "entry", which isn't specific enough)
-DOORBELL_MODELS = ("g6 entry",)
+DOORBELL_MODELS = ("g6 entry", "g6 pro entry")   ## model names without "doorbell" (e.g. "UVC G6 Pro Entry")
 UNIFI_PACKAGE_TYPE = "protectPackageCamera"   ## Durosity: a G4 Doorbell Pro / G6 Entry's second (package) lens
 UNIFI_CAMERA_TYPES = {
     UNIFI_DUROSITY_ID: ("protectCamera", UNIFI_PACKAGE_TYPE),

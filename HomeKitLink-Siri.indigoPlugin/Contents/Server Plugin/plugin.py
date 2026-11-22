@@ -3319,8 +3319,13 @@ class Plugin(indigo.PluginBase):
                 return
         # Check Doorbell prior to Camera..
         elif str(updateddevice_subtype) == "Linked-DoorBell":
-            # if type(original_device) == indigo.RelayDevice:
-            if "onOffState" in updated_device.states:  ## double check Linked Doorbell are set only to have onOffStates
+            accessory = self.device_list_internal[checkindex]["accessory"]
+            if HKDevicesCameraUniFi.is_unifi_camera(updated_device):   ## a UniFi doorbell's button rings this camera too
+                if HKDevicesCameraUniFi.doorbell_rang(original_device, updated_device) and getattr(accessory, "_char_doorbell_detected", None) is not None:
+                    self.logger.info("[{}] doorbell ring from '{}' sent to HomeKit".format(accessory.display_name, updated_device.name))
+                    accessory._char_doorbell_detected.set_value(0)
+                    accessory._char_doorbell_detected_switch.set_value(0)
+            elif "onOffState" in updated_device.states:  ## double check Linked Doorbell are set only to have onOffStates
                 if updated_device.states['onOffState'] != original_device.states['onOffState']:
                     newstate = updated_device.onState
                     if self.debug2:
@@ -4660,23 +4665,35 @@ class Plugin(indigo.PluginBase):
             return [(-1, "None (default)")]
 
     def doorbell_list_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
+        """DoorBell Linked: camera doorbells first (a UniFi doorbell's own button), then on/off devices, each by name."""
         try:
-            unassigned_device_list = []
-            assigned_device_list = []
+            try:
+                this_camera = int((valuesDict or {}).get("deviceId", 0) or 0)
+            except (TypeError, ValueError):
+                this_camera = 0
+            camera_doorbells, onoff_devices = [], []
             for device in indigo.devices:
-                if "onOffState" in device.states:  # for doorbell only use onOffState devices
-                    unassigned_device_list.append((device.id, device.name))
-            unassigned_device_list.sort(key=lambda x: x[1])
-            assigned_device_list.sort(key=lambda x: x[1])
-            device_list = []
-            device_list.append((-1, "No DoorBell Device Selected"))
-            device_list.append((-2, "%%disabled:Doorbell Devices available to use:%%"))
-            device_list.append((-3, u"%%separator%%"))
-            device_list.extend(unassigned_device_list)
-            ##
+                if device.id == this_camera:
+                    continue
+                if HKDevicesCameraUniFi.is_unifi_camera(device) and HKDevicesCameraUniFi.is_doorbell(device):
+                    model = HKDevicesCameraUniFi.camera_model(device)
+                    camera_doorbells.append((device.id, f"{device.name}  (doorbell button{', ' + model if model else ''})"))
+                elif "onOffState" in device.states:  # other doorbells: an on/off device
+                    onoff_devices.append((device.id, device.name))
+            camera_doorbells.sort(key=lambda x: x[1].lower())
+            onoff_devices.sort(key=lambda x: x[1].lower())
+            device_list = [(-1, "No DoorBell Device Selected")]
+            if camera_doorbells:
+                device_list.append((-3, "%%separator%%"))
+                device_list.append((-2, "%%disabled:Camera doorbells (rings when its button is pressed):%%"))
+                device_list.extend(camera_doorbells)
+            device_list.append((-5, "%%separator%%"))
+            device_list.append((-4, "%%disabled:On/off devices (rings when it turns on or off):%%"))
+            device_list.extend(onoff_devices)
             return device_list
         except:
             self.logger.exception("Caught Exception DoorBell ")
+            return [(-1, "No DoorBell Device Selected")]
 
     ########################################
     def debug_device_generator(self, filter="", valuesDict=None, typeId="", targetId=0):  # (self, *args, **kwargs):
