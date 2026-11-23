@@ -104,7 +104,11 @@
             </Field>
             <Field id="toBridge" type="menu">
                 <Label>To Bridge:</Label>
-                <List class="indigo.devices" filter="self"/>
+                <List class="indigo.devices" filter="self.homeKitBridgeDevice"/>
+            </Field>
+            <Field id="moveConfirm" type="checkbox" defaultValue="false">
+                <Label>Confirm:</Label>
+                <Description>Move them (unticked: logs which devices would move)</Description>
             </Field>
             <Field id="internallist" type="button">
                 <Label>Do:</Label>
@@ -112,9 +116,7 @@
                 <CallbackMethod>menu_actionMoveAccessories</CallbackMethod>
             </Field>
 			<Field id="moveLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
-				<Label>All going well, this will move accessories from one bridge to another.  It enables recovery of accessories (without needing to remove etc) if bridge deleted.
-It would be important to unpair the old bridge in homekit app.
-				</Label>
+				<Label>Moves every device published to the From Bridge onto the To Bridge. From Bridge lists every bridge a published device uses, a deleted bridge too (its devices are orphaned): use this to put them back on a bridge without publishing each again. From Bridge shows how many are published to each. Press with Confirm unticked to log which devices would move first. Both bridges restart. In the Home app the moved devices are new accessories (new accessory IDs): set their rooms, names, automations and scenes again, and a camera's Recording Options. If the old bridge was deleted, remove it from the Home app too. To unpublish orphaned devices instead: Unlink any Orphaned Devices.</Label>
 			</Field>
             <Field id="moveWarningLabel" type="label" fontColor="orange" fontSize="small" alignWithControl="true" alwaysUseInDialogHeightCalc="true">
 				<Label>NB: This is not without some risk to both bridges.  Use with caution.</Label>
@@ -128,7 +130,7 @@ It would be important to unpair the old bridge in homekit app.
         <ConfigUI>
             <Field id="Bridge" type="menu">
                 <Label>Bridge:</Label>
-                <List class="indigo.devices" filter="self"/>
+                <List class="indigo.devices" filter="self.homeKitBridgeDevice"/>
             </Field>
             <Field id="refreshButton" type="button">
                 <Label>Do:</Label>
@@ -171,7 +173,7 @@ It would be important to unpair the old bridge in homekit app.
         <ConfigUI>
             <Field id="Bridge" type="menu">
                 <Label>Bridge:</Label>
-                <List class="indigo.devices" filter="self"/>
+                <List class="indigo.devices" filter="self.homeKitBridgeDevice"/>
             </Field>
             <Field id="internallist2" type="button">
                 <Label>Do:</Label>

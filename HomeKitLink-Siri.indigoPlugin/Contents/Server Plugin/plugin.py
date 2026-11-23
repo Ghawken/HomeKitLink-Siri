@@ -5486,29 +5486,20 @@ class Plugin(indigo.PluginBase):
     ####
 
     def bridgeListGenerator(self, filter="", valuesDict=None, typeId="", targetId=0):
-        listofallBridges = []
+        """Every bridge ID a published device (or action group) uses, deleted bridges included, with its name and count."""
+        counts = {}
+        for obj in self._published_objects():
+            try:
+                uid = int(obj.pluginProps.get("HomeKit_bridgeUniqueID", 99))
+            except (TypeError, ValueError):
+                continue
+            counts[uid] = counts.get(uid, 0) + 1
+        counts.pop(99, None)
         myArray = []
-        for device in indigo.devices:
-            # ; original below ; may keep both as may be useful for HomeKit Bridge copies
-            # uniqueID = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)
-            # modified below
-            uniqueID = 99
-            spawnProps = device.globalProps.get("com.GlennNZ.indigoplugin.HomeKitSpawn")
-            if spawnProps !=None:
-                uniqueID = spawnProps.get("HomeKit_bridgeUniqueID", 99)
-            if uniqueID != 99 and uniqueID != "":
-                if int(uniqueID) not in listofallBridges:
-                    listofallBridges.append(int(uniqueID))
-
-        for device in indigo.devices:
-            uniqueID = device.pluginProps.get("HomeKit_bridgeUniqueID", 99)
-            if uniqueID != 99 and uniqueID != "":
-                if int(uniqueID) not in listofallBridges:
-                    listofallBridges.append(int(uniqueID))
-
-        for ID in listofallBridges:
-            myArray.append((ID, "Bridge ID:"+str(ID)))
-       # myArray = [("option1", "First Option"), ("option2", "Second Option")]
+        for uid in sorted(counts):
+            bridge_dev = self._bridge_for_uid(uid)[0]
+            name = f"'{bridge_dev.name}'" if bridge_dev is not None else "DELETED"
+            myArray.append((uid, f"Bridge {uid}  {name}: {counts[uid]} published"))
         return myArray
     ########################################
     def menu_actionResetAccessories(self, valuesDict, typeId):
@@ -5631,89 +5622,93 @@ class Plugin(indigo.PluginBase):
         except Exception:
             self.logger.exception("New HomeKit Identity failed")
 
+    def _published_on(self, uid):
+        """Devices and action groups published in HomeKitLink to bridge uid."""
+        return [o for o in self._published_objects() if self._bridge_id_matches(o.pluginProps.get("HomeKit_bridgeUniqueID", 99), uid)]
+
     def menu_actionMoveAccessories(self, valuesDict, typeId):
-        self.logger.info("Move Bridge Accessories called.  valueDict {}".format(valuesDict))
+        """Move every device and action group published to one bridge (a deleted one too) onto another. Needs Confirm
+        ticked: unticked, it logs how many would move."""
         try:
-            toBridgedevice = int(valuesDict["toBridge"])  ## deviceID not BridgeUniqueID
-            fromBridge = int(valuesDict["fromBridge"])  ## this is UniqueID as generated above
-
-            toBridge = int(indigo.devices[toBridgedevice].pluginProps.get("bridgeUniqueID", 99))
+            try:
+                toBridgedevice = int(valuesDict.get("toBridge", 0) or 0)   ## deviceID not BridgeUniqueID
+                fromBridge = int(valuesDict.get("fromBridge", 99) or 99)   ## UniqueID, from bridgeListGenerator
+                to_dev = indigo.devices[toBridgedevice]
+                toBridge = int(to_dev.pluginProps.get("bridgeUniqueID", 99))
+            except (KeyError, ValueError, TypeError):
+                self.logger.warning("Move Accessories: choose the From and To bridges first. Nothing was moved")
+                return
             if toBridge == 99 or fromBridge == 99:
-                self.logger.info("Error with the from Bridge or the to Bridge selection")
+                self.logger.warning("Move Accessories: choose the From and To bridges first. Nothing was moved")
+                return
+            if toBridge == fromBridge:
+                self.logger.warning("Move Accessories: the From and To bridges are the same. Nothing was moved")
                 return
 
-            something_done = False
+            published = self._published_on(fromBridge)
+            if not published:
+                self.logger.info(f"Move Accessories: nothing is published to Bridge {fromBridge}. Nothing was moved")
+                return valuesDict
+            if not valuesDict.get("moveConfirm", False):
+                self.logger.warning(f"Move Accessories: {len(published)} devices / action groups are published to Bridge {fromBridge}: "
+                                    + ", ".join(sorted(o.name for o in published))
+                                    + f". Tick Confirm to move them to '{to_dev.name}'. Nothing was moved")
+                return valuesDict
 
-            # TODO delete below when setup new devices
-            for device in indigo.devices:
-                spawnProps = device.globalProps.get("com.GlennNZ.indigoplugin.HomeKitSpawn")
-                if spawnProps == None:  ## no old props
-                    continue
-                if spawnProps.get("HomeKit_publishDevice", False):
+            to_driver = self._bridge_for_uid(toBridge)[1]
+            moved_ids = []   ## devices (not action groups) moved
+
+            def move(obj, props):
+                props["HomeKit_bridgeUniqueID"] = toBridge
+                ## its accessory ID changes with the bridge number; skip a generation whose ID another device there has
+                gen = self._aid_generation(props)
+                free = self._free_aid_generation(obj.id, toBridge, gen, to_driver)
+                if free is not None and free != gen:
+                    props["HomeKit_aidGeneration"] = free
+                obj.replacePluginPropsOnServer(indigo.Dict(props))
+                self.logger.warning(f"Moved '{obj.name}' from Bridge {fromBridge} to '{to_dev.name}' ({toBridge}): "
+                                    f"accessory ID {self._accessory_aid(toBridge, obj.id, self._aid_generation(props))}")
+                if isinstance(obj, indigo.Device):
+                    moved_ids.append(obj.id)
+
+            for obj in published:
+                try:
+                    move(obj, dict(obj.pluginProps))
+                except Exception:
+                    self.logger.exception(f"Move Accessories: couldn't move '{obj.name}'")
+            ## On the new bridge each device has a new accessory ID: Home adds it as a new accessory, so a camera's saved
+            ## HKSV Home app settings start again, as for a device published again. The source bridge (when it still exists)
+            ## is stopped first, so it drops them and can't save those settings again.
+            source_dev = self._bridge_for_uid(fromBridge)[0]
+            source_running = source_dev is not None and source_dev.enabled
+            if source_running:
+                indigo.device.enable(source_dev.id, value=False)
+                self.sleep(2)
+            for device_id in moved_ids:
+                hksv_file = self._hksv_state_path(device_id)
+                if os.path.exists(hksv_file) and self._hksv_recorder_for(device_id) is not None:
                     try:
-                        if self._bridge_id_matches(spawnProps.get("HomeKit_bridgeUniqueID", 99), fromBridge):
-                            device_props = dict(device.pluginProps)
-                            device_props["HomeKit_bridgeUniqueID"] = toBridge
-                            device_props["HomeKit_deviceSensor"] = spawnProps.get("HomeKit_deviceSensor")
-                            device_props["HomeKit_deviceSubtype"] = spawnProps.get("HomeKit_deviceSubtype")
-                            device_props["HomeKit_publishDevice"] = True
-                            device_props["homekit-name"] = spawnProps.get("homekit-name")
+                        os.remove(hksv_file)
+                        self.logger.info(f"'{indigo.devices[device_id].name}': its saved HKSV Home app settings were cleared: set its Recording Options in the Home app")
+                    except OSError:
+                        pass
 
-                            # HomeKit_bridgeUniqueID : 3283 (integer)
-                            # HomeKit_deviceSensor : onOffState (string)
-                            # HomeKit_deviceSubtype : OccupancySensor (string)
-                            # HomeKit_deviceSubtype : false (bool)
-                            # homekit-name : Occupatum Test (string)
-                            self.logger.warning("Found Device {} attached to Bridge ID {}, moving to new Bridge ID {}".format(device.name, fromBridge, toBridge))
-                            device.replacePluginPropsOnServer(indigo.Dict(device_props))
-                            self.logger.debug("new PluginProps {}".format(device_props))
-                            something_done = True
-                    except:
-                        self.logger.exception("Error in device update")
-                        self.logger.debug("Error in device Move", exc_info=True)
-
-            ## below keep
-            for device in indigo.devices:
-                if device.pluginProps.get("HomeKit_publishDevice", False):
-                    try:
-                        if self._bridge_id_matches(device.pluginProps.get("HomeKit_bridgeUniqueID", 99), fromBridge):
-                            device_props = dict(device.pluginProps)
-                            device_props["HomeKit_bridgeUniqueID"] = toBridge
-                            self.logger.warning("Found Device {} attached to Bridge ID {}, moving to new Bridge ID {}".format(device.name, fromBridge, toBridge))
-                            device.replacePluginPropsOnServer(indigo.Dict(device_props))
-                            self.logger.debug("new PluginProps {}".format(device_props))
-                            something_done = True
-                    except:
-                        self.logger.exception("Error in device update")
-                        self.logger.debug("Error in device Move", exc_info=True)
-
-            for device in indigo.actionGroups:  ## actionGroup not Device - lazy
-                if device.pluginProps.get("HomeKit_publishDevice", False):
-                    try:
-                        if self._bridge_id_matches(device.pluginProps.get("HomeKit_bridgeUniqueID", 99), fromBridge):
-                            device_props = dict(device.pluginProps)
-                            device_props["HomeKit_bridgeUniqueID"] = toBridge
-                            self.logger.warning("Found Device {} attached to Bridge {}, moving to new Bridge ID {}".format(device.name, fromBridge, toBridge))
-                            device.replacePluginPropsOnServer(indigo.Dict(device_props))
-                            something_done = True
-                    except:
-                        self.logger.exception("Error in device update")
-                        self.logger.debug("Error in device Move", exc_info=True)
-
-            if not something_done:
-                self.logger.info("No device found to update.  Ended")
-                return
-
-            self.logger.info("Now restarting destination Bridge.")
-
-            indigo.device.enable(toBridgedevice, value=False)
-            self.sleep(1)
-            indigo.device.enable(toBridgedevice, value=True)
-
-
-        except:
-            self.logger.info("Error.  Please select all items before running")
-            self.logger.debug("Error", exc_info=True)
+            self.logger.warning(f"Move Accessories: moved {len(published)} from Bridge {fromBridge} to '{to_dev.name}' ({toBridge})")
+            if to_dev.enabled:
+                self.logger.info("Now restarting destination Bridge." + (" Restarting the source Bridge too, without them." if source_running else ""))
+                indigo.device.enable(toBridgedevice, value=False)
+                self.sleep(1)
+                indigo.device.enable(toBridgedevice, value=True)
+            else:
+                self.logger.warning(f"Destination Bridge '{to_dev.name}' is disabled: the moved devices start when it's enabled")
+            if source_running:
+                indigo.device.enable(source_dev.id, value=True)
+            self.logger.info("Moved accessories are new accessories in the Home app (new accessory IDs): set their rooms, names, "
+                             "automations and scenes again. If the old bridge was deleted, remove it from the Home app too")
+            valuesDict["moveConfirm"] = False
+            return valuesDict
+        except Exception:
+            self.logger.exception("Move Accessories failed")
     ########################################
     def show_drivers(self, *args, **kwargs):
         # Write all published devices to the event log with their friendly name
@@ -5747,103 +5742,152 @@ class Plugin(indigo.PluginBase):
                 self.logger.info(f" Accessory {accessories}")
 
     ########################################
-    def show_device_publications(self, *args, **kwargs):
-        # Write all published devices to the event log with their friendly name
-        listofallBridges = []  # list of devices which exists, enabled or otherwise.
-        for device in indigo.devices.iter("self"):
-            try:
-                uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
-            except ValueError:
-                uniqueID = 99
-            if uniqueID != 99:
-                if int(uniqueID) not in listofallBridges:
-                    listofallBridges.append(int(uniqueID))
+    PUBLICATION_LINE = "  {0:<11} {1:<36} {2:<30} {3:<18} {4:<34} {5:>3}  {6:<20} {7}"
 
-        endpoint_list = []
-        for device_id in self.device_list:
-            datatoappend = ""
+    def _published_object(self, obj_id):
+        """The Indigo device or action group, or None when it no longer exists (no exception logged)."""
+        for collection in (indigo.devices, indigo.actionGroups):
             try:
-                device = self.return_deviceorAG(device_id)
-                device_props = dict(device.pluginProps)
-                devicename = device_props.get("homekit-name", "")
-                deviceType = device_props.get("HomeKit_deviceSubtype", "")
-                devicesensor = device_props.get("HomeKit_deviceSensor", "")
+                return collection[int(obj_id)]
+            except (KeyError, ValueError, TypeError):
+                continue
+        return None
+
+    def _published_objects(self):
+        """Every Indigo device and action group published to HomeKit, read from Indigo now (orphans included)."""
+        for collection in (indigo.devices, indigo.actionGroups):
+            for obj in collection:
                 try:
-                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
-                except ValueError:
-                    deviceBridgeID = 99
-                devicedoorbell = device_props.get("HomeKit_doorbellId", "-1")
-                if str(devicedoorbell) == "-1":
-                    devicedoorbell = "- None Selected -"
-                datatoappend = "{0:<20} {1:<50} {2:<40} {3:<20}".format(device.id, device.name, devicename, deviceType)
-                if "Sensor" in deviceType:
-                    datatoappend = datatoappend + " {0:<20}".format(devicesensor)
-                elif devicedoorbell != "":
-                    datatoappend = datatoappend + " {0:<20}".format(devicedoorbell)
-                if deviceBridgeID !=99:
-                    endpoint_list.append((int(deviceBridgeID), datatoappend))  # tuple
-            except:
-                self.logger.exception("Exception in Show Devices")
+                    if obj.pluginProps.get("HomeKit_publishDevice", False):
+                        yield obj
+                except Exception:
+                    continue
 
-        self.logger.info(u"{0:=^165}".format(" Currently Published Devices / Action Groups "))
-        self.logger.info("{0:<20} {1:<20} {2:<50} {3:<40} {4:<20} {5:<20}".format("BridgeID", "DeviceID", "Device Name", "HomeKit Name", "Device Type", "Sensor Type/Linked Doorbell"))
-        self.logger.info(u"{0:-^165}".format("-"))
+    def _publication_info(self, obj):
+        """A published device's (or action group's) bridge, names, type, details, generation and accessory ID."""
+        props = dict(obj.pluginProps)
+        try:
+            uid = int(props.get("HomeKit_bridgeUniqueID", 99))
+        except (TypeError, ValueError):
+            uid = 99
+        subtype = props.get("HomeKit_deviceSubtype", "") or ("Action Group" if isinstance(obj, indigo.ActionGroup) else "")
+        details = []
+        if "Sensor" in subtype and props.get("HomeKit_deviceSensor", ""):
+            details.append(props["HomeKit_deviceSensor"])
+        doorbell = str(props.get("HomeKit_doorbellId", "-1"))
+        if doorbell not in ("-1", ""):
+            bell = self._published_object(doorbell)
+            details.append("Doorbell: " + (bell.name if bell is not None else f"missing ({doorbell})"))
+        if isinstance(obj, indigo.Device):
+            recorder = self._hksv_recorder_for(obj.id)
+            if recorder is not None:
+                details.append("HKSV: " + recorder.name + ("" if recorder.enabled else " (disabled)"))
+        gen = self._aid_generation(props)
+        return {"uid": uid, "id": obj.id, "name": obj.name or "", "homekit_name": props.get("homekit-name", "") or "", "type": subtype or "",
+                "details": ", ".join(details), "gen": gen, "aid": self._accessory_aid(uid, obj.id, gen) if uid != 99 else None}
 
-        for endpoint in sorted(endpoint_list):
-            if int(endpoint[0]) not in self.deviceBridgeNumber:
-                if int(endpoint[0]) not in listofallBridges:
-                    bridgemsg = "Missing ID:{}".format(endpoint[0])
-                    self.logger.error("{0:<20} {1}".format(bridgemsg,endpoint[1]))
-                ## not enabled or doesn't exist.. differentiate
-                else:
-                    bridgemsg = "Disabled ID:{}".format(endpoint[0])
-                    self.logger.warning("{0:<20} {1}".format(bridgemsg, endpoint[1]))
+    def _publication_line(self, info, status=""):
+        return self.PUBLICATION_LINE.format(info["id"], info["name"][:36], info["homekit_name"][:30], info["type"][:18],
+                                            info["details"][:34], info["gen"] or "-", info["aid"] or "-", status)
+
+    def _publication_header(self, status="In HomeKit"):
+        return self.PUBLICATION_LINE.format("Indigo ID", "Indigo Name", "HomeKit Name", "Type", "Sensor / Doorbell / HKSV",
+                                            "Gen", "Accessory ID", status)
+
+    def _bridge_summary(self, uid):
+        """(log level, one line on a bridge: name, state, port, configuration number, pairing, accessories) and its
+        running accessory IDs."""
+        bridge_dev, driver = self._bridge_for_uid(uid)
+        if bridge_dev is None:
+            return logging.ERROR, f"Bridge {uid}: MISSING, no bridge device has this ID (deleted): these devices are orphaned", set()
+        name = f"Bridge '{bridge_dev.name}' ({uid})"
+        if not bridge_dev.enabled:
+            return logging.WARNING, f"{name}: disabled", set()
+        if driver is None:
+            return logging.WARNING, f"{name}: enabled but not running", set()
+        aids = set(getattr(getattr(driver, "accessory", None), "accessories", {}) or {})
+        try:
+            state = driver.state
+            return logging.INFO, (f"{name}: running, port {state.port}, configuration number {state.config_version}, "
+                                  f"{'paired' if state.paired else 'NOT PAIRED'}, {len(aids)} accessories"), aids
+        except Exception:
+            return logging.INFO, f"{name}: running, {len(aids)} accessories", aids
+
+    def show_device_publications(self, *args, **kwargs):
+        """Log every published device and action group, by bridge, with its accessory ID (AID) and generation."""
+        by_bridge = {}
+        for obj in self._published_objects():
+            try:
+                info = self._publication_info(obj)
+                by_bridge.setdefault(info["uid"], []).append(info)
+            except Exception:
+                self.logger.exception("Exception in Show Device Publications")
+
+        self.logger.info(u"{0:=^190}".format(" Currently Published Devices / Action Groups "))
+        total = renewed = not_running = 0
+        for uid in sorted(by_bridge, key=lambda u: (u == 99, u)):
+            infos = sorted(by_bridge[uid], key=lambda i: i["name"].lower())
+            if uid == 99:
+                level, summary, aids = logging.ERROR, "No bridge set: these devices are published to no bridge", set()
             else:
-                bridgemsg = "Bridge ID:" + str(endpoint[0])
-                self.logger.info("{0:<20} {1}".format(bridgemsg, endpoint[1]))
-        self.logger.info(u"{0:=^165}".format(" {} HomeKit Devices Found".format(len(endpoint_list))))
-        self.logger.info(u"{0:=^165}".format(" That's the end of Published Devices / Action Groups "))
+                level, summary, aids = self._bridge_summary(uid)
+            self.logger.info("")
+            self.logger.log(level, summary)
+            if uid == 99:
+                self.logger.error("  → Unlink any Orphaned Devices unpublishes them; then publish each again from a bridge's dialog")
+            elif self._bridge_for_uid(uid)[0] is None:
+                self.logger.error(f"  → Move Accessories to another Bridge (From Bridge {uid}) puts them on a bridge; "
+                                  f"or Unlink any Orphaned Devices unpublishes them")
+            self.logger.info(self._publication_header())
+            for info in infos:
+                total += 1
+                renewed += 1 if info["gen"] else 0
+                if info["aid"] in aids:
+                    self.logger.info(self._publication_line(info, "yes"))
+                else:
+                    not_running += 1
+                    self.logger.log(level if level != logging.INFO else logging.WARNING, self._publication_line(info, "no"))
+        self.logger.info("")
+        self.logger.info(f"{total} published on {len([u for u in by_bridge if u != 99])} bridges; {not_running} not in HomeKit now "
+                         f"(bridge disabled, missing or not running, or the device not added); {renewed} with a new HomeKit identity "
+                         f"(Gen: from unpublishing and publishing again, or New HomeKit Identity)")
+        self.logger.info(u"{0:=^190}".format(" That's the end of Published Devices / Action Groups "))
 
     #######################################
     # Menu Items
     ########################################
     def delete_isolated_devices(self, *args, **kwargs):
-        ## modify to only delete if bridge does not exist
-        ## Not disabled bridges for example
-        listofallBridges = []
-        for device in indigo.devices.iter("self"):
+        """Unpublish every device and action group whose bridge device no longer exists (or that has no bridge set).
+        A disabled bridge's devices are kept."""
+        listofallBridges = set()
+        for device in indigo.devices.iter("self.homeKitBridgeDevice"):
             try:
-                uniqueID = int(device.pluginProps.get("bridgeUniqueID", 99))
-            except ValueError:
-                uniqueID = 99
-            if uniqueID != 99:
-                if int(uniqueID) not in listofallBridges:
-                    listofallBridges.append(int(uniqueID))
-        ## current list of self bridge ID.  Now scan the full device_list
+                listofallBridges.add(int(device.pluginProps.get("bridgeUniqueID", 99)))
+            except (TypeError, ValueError):
+                continue
         isolated_device_found = False
-        for device_id in self.device_list:
+        for obj in list(self._published_objects()):
             try:
-                device = self.return_deviceorAG(device_id)
-                device_props = dict(device.pluginProps)
-                devicename = device_props.get("homekit-name", "")
+                device_props = dict(obj.pluginProps)
                 try:
                     deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
-                except ValueError:
+                except (TypeError, ValueError):
+                    deviceBridgeID = 99   ## blank: published to no bridge
+                if deviceBridgeID in listofallBridges:
                     continue
-                    # move to next device as this one blank
-                if deviceBridgeID not in listofallBridges:  ## Current Bridge not enabled, deleted or stopped
-                    isolated_device_found = True
-                    self.logger.warning("Isolated Device Found and HomeKit linkage to be removed. Device Name {} ".format(devicename))
-                    device_props["HomeKit_publishDevice"] = False
-                    device_props["HomeKit_bridgeUniqueID"] = ""
-                    device_props["HomeKit_deviceSubtype"] = ""
-                    device_props["HomeKit_deviceSensor"] = ""
-                    device_props["homekit-name"] = devicename   ## leave name same.
-                    device.replacePluginPropsOnServer(indigo.Dict(device_props))
-            except:
-                self.logger.exception("Problem with delete / unlinking isolated devices")
+                isolated_device_found = True
+                where = f"was published to Bridge {deviceBridgeID}, which doesn't exist" if deviceBridgeID != 99 else "was published to no bridge"
+                self.logger.warning(f"Orphaned: '{obj.name}' (Indigo ID {obj.id}) {where}. Unpublished; its HomeKit name is kept")
+                device_props["HomeKit_publishDevice"] = False
+                device_props["HomeKit_bridgeUniqueID"] = ""
+                device_props["HomeKit_deviceSubtype"] = ""
+                device_props["HomeKit_deviceSensor"] = ""
+                obj.replacePluginPropsOnServer(indigo.Dict(device_props))
+                self.device_list.discard(obj.id)
+            except Exception:
+                self.logger.exception(f"Couldn't unlink orphaned '{getattr(obj, 'name', obj)}'")
 
-        if isolated_device_found == False:
+        if not isolated_device_found:
             self.logger.info("No orphaned devices found to have HomeKit linkage removed.  Full list follows below.")
 
         self.update_deviceList()
@@ -6119,55 +6163,48 @@ class Plugin(indigo.PluginBase):
             self.logger.info("{" + "\n".join("{!r}: {!r},".format(k, v) for k, v in self.bridge_multiple[num].accessories.items()) + "}")
 
     def Menu_show_runningids(self, *args, **kwargs):
+        """Log the devices running in HomeKit, those on an enabled bridge yet not running, and any deleted from Indigo."""
         self.logger.debug("Show Running Ids called...")
         deleted_devices = []
-        self.logger.info(u"{0:=^190}".format(""))
-        self.logger.info(u"{0:=^190}".format(" Device Bridges enabled and up and Running "))
-        self.logger.info(u"{0:=^190}".format(""))
-        for num in range(0,len(self.running_deviceids)):
-            device = self.return_deviceorAG(self.running_deviceids[num])
-            if device == None:
-                ##  HomekitLink has this device listed but doesn't exist anymore.. Issue
-                deleted_devices.append(self.running_deviceids[num])
-            else:
-                device_props = dict(device.pluginProps)
-                devicename = device_props.get("homekit-name", "")
-                deviceType = device_props.get("HomeKit_deviceSubtype", "")
-                devicesensor = device_props.get("HomeKit_deviceSensor", "")
+        running, not_running = [], []
+        for ids, infos in ((list(dict.fromkeys(self.running_deviceids)), running),
+                           ([i for i in dict.fromkeys(self.device_list_internal_idonly) if i not in self.running_deviceids], not_running)):
+            for obj_id in ids:
                 try:
-                    deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
-                except ValueError:
-                    deviceBridgeID = 99
-                self.logger.info("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
-
-        missing_id = list(set(self.device_list_internal_idonly).difference(self.running_deviceids))
-        if len(missing_id) >0:
-            self.logger.info(u"{0:=^190}".format(""))
-            self.logger.info(u"{0:=^190}".format(" Enabled Bridge, yet not Running Devices "))
-            self.logger.info(u"{0:=^190}".format(""))
-        for num in range(0, len(missing_id) ):
-            device = self.return_deviceorAG(missing_id[num])
-            if device is None:
-                deleted_devices.append(missing_id[num])
-                continue
-            device_props = dict(device.pluginProps)
-            devicename = device_props.get("homekit-name", "")
-            deviceType = device_props.get("HomeKit_deviceSubtype", "")
-            devicesensor = device_props.get("HomeKit_deviceSensor", "")
+                    obj = self._published_object(obj_id)
+                    if obj is None:
+                        deleted_devices.append(obj_id)
+                        continue
+                    infos.append(self._publication_info(obj))
+                except Exception:
+                    self.logger.exception(f"Identify Devices Running: couldn't read device {obj_id}")
+        known = set(self.running_deviceids) | set(self.device_list_internal_idonly)
+        not_started = []
+        for obj in self._published_objects():
             try:
-                deviceBridgeID = int(device_props.get("HomeKit_bridgeUniqueID", 99))
-            except ValueError:
-                deviceBridgeID = 99
-            self.logger.warning("Bridge: {0:<20}: Indigo Id: {1:<20} Name: {2:<50} DeviceName: {3:<40} Type: {4:<20}".format(deviceBridgeID, device.id, device.name, devicename, deviceType))
-        self.logger.info(u"{0:=^190}".format(""))
-        if len(deleted_devices)>0:
-            self.logger.info(u"{0:=^190}".format(""))
-            self.logger.info(u"{0:=^190}".format(" No longer in Indigo yet registered in HomeKit "))
-            self.logger.info(u"{0:=^190}".format(""))
-            for num in range(0, len(deleted_devices)):
-                self.logger.warning(f"Indigo Device ID {deleted_devices[num]}: Deleted but still in HomeKit.")
+                if obj.id not in known:
+                    not_started.append(self._publication_info(obj))
+            except Exception:
+                self.logger.exception(f"Identify Devices Running: couldn't read '{obj.name}'")
 
-        #self.logger.info(f"{missing_id}")
+        def log_section(title, infos, level):
+            self.logger.info(u"{0:=^190}".format(title))
+            self.logger.info("  {0:<8} ".format("Bridge") + self._publication_header("")[2:])
+            for info in sorted(infos, key=lambda i: (i["uid"], i["name"].lower())):
+                self.logger.log(level, "  {0:<8} ".format(info["uid"] if info["uid"] != 99 else "-") + self._publication_line(info, "")[2:])
+
+        log_section(" Device Bridges enabled and up and Running ({}) ".format(len(running)), running, logging.INFO)
+        if not_running:
+            log_section(" Enabled Bridge, yet not Running Devices ({}) ".format(len(not_running)), not_running, logging.WARNING)
+        if not_started:
+            log_section(" Published, but its Bridge is Disabled, Deleted or not Set ({}) ".format(len(not_started)), not_started, logging.WARNING)
+            self.logger.info("  Show Device Publications shows each bridge's state. A deleted bridge's devices: Move Accessories to "
+                             "another Bridge, or Unlink any Orphaned Devices")
+        if deleted_devices:
+            self.logger.info(u"{0:=^190}".format(" No longer in Indigo yet registered in HomeKit "))
+            for obj_id in deleted_devices:
+                self.logger.warning(f"Indigo Device ID {obj_id}: Deleted but still in HomeKit.")
+        self.logger.info(u"{0:=^190}".format(""))
 
     def Menu_Crash(self, *args, **kwargs):
         self.logger.debug("Crash Homekit Called... ..")

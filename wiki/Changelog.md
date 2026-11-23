@@ -6,6 +6,18 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.60 — 2026-11-23
+
+### 🔧 Change
+- **Show Device Publications is grouped by bridge**: each bridge has a line with its name, state (running, disabled, not running or missing), port, configuration number, pairing and accessory count. Each device shows its accessory ID and generation (Gen), whether it's in HomeKit now, and its sensor, linked doorbell (by name) and HKSV Recorder. It ends with totals → [Plugin Menu Items](Plugin-Menu-Items#show-device-publications)
+- **Identify Devices Running / Not Running** (also at the end of Troubleshoot 1) uses the same columns, sorted by bridge, with a count for each section. A device deleted from Indigo is listed without an error in the log. A new section lists devices published to a bridge that's disabled, deleted or not set
+- **Orphaned devices** (their bridge was deleted): Show Device Publications reads published devices from Indigo as it runs, so they're always listed, under MISSING, with what to do next
+- **Move Accessories to another Bridge**: a **Confirm** tick is needed. Pressed without it, it lists the devices that would move and changes nothing. From Bridge shows each bridge's name (or DELETED) and how many are published to it. Each moved device is logged with its new accessory ID, then the total. A moved device whose new ID another device on the bridge has gets the next free generation. To Bridge lists only bridges. The source bridge restarts too when it still exists; a disabled destination isn't enabled. A moved camera's saved HKSV Home app settings are cleared (it's a new accessory to Home). Choosing the same bridge twice does nothing. Settings left by a pre-release version are no longer read, so they can't publish forgotten devices → [Plugin Menu Items](Plugin-Menu-Items#move-accessories-to-another-bridge)
+- **Unlink any Orphaned Devices**: also unpublishes devices with no bridge set, logs each one clearly, and no longer logs an error for a deleted device
+- **Make Home Re-read a Bridge's Accessories** and **Reset Accessory / Bridge**: the Bridge list shows only bridges
+
+---
+
 ## 0.8.59 — 2026-11-22
 
 ### 🔧 Change

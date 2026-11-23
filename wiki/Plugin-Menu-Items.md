@@ -109,14 +109,17 @@ Private keys are never logged and IDs are shortened, so the output is safe to po
 
 **Plugins → HomeKitLink Siri → Show Device Publications**
 
-Lists all Indigo devices currently configured for HomeKit publishing in the Indigo log.
+Lists every published device and action group in the Indigo log, grouped by bridge. It reads them from Indigo as it runs, so orphaned devices are listed too.
 
-![Log Devices](https://github.com/Ghawken/HomeKitLink-Siri/blob/add_controls/Images/logDevices.png?raw=true)
+Each bridge starts with one line: its name and ID, then its state:
+- **Running**: its port, configuration number, whether it's paired, and how many accessories it has
+- **Disabled** or **enabled but not running** (warning)
+- **Missing**: no bridge device has its ID (it was deleted), so its devices are orphaned (red). A line under it points to **Move Accessories to another Bridge** and **Unlink any Orphaned Devices**
+- **No bridge set**: devices published to no bridge (red)
 
-Status indicators:
-- **Normal** — device is published and bridge is running
-- **Warning** — bridge is disabled
-- **Red** — bridge no longer exists (device is orphaned)
+Each device shows its Indigo ID and name, HomeKit name, type, its sensor, linked doorbell or HKSV Recorder, its **Gen** (HomeKit identity generation; `-` when it has its first ID) and its **Accessory ID**, which is also the serial number the Home app shows. **In HomeKit** is `yes` when its bridge is running it now. The list ends with totals.
+
+A device has a Gen after it's unpublished and published again, or after **New HomeKit Identity for a Device**.
 
 **Use it for:** Auditing which devices are published; identifying orphaned device references.
 
@@ -126,7 +129,7 @@ Status indicators:
 
 **Plugins → HomeKitLink Siri → Identify Devices Running / Not Running**
 
-Shows which HKLS bridge devices are currently running and which are stopped or disabled.
+Lists the devices running in HomeKit, those on an enabled bridge that aren't running (warning), those published to a bridge that's disabled, deleted or not set (warning), and any deleted from Indigo that are still in HomeKit, with the same columns as Show Device Publications. Troubleshoot 1 ends with this list.
 
 ---
 
@@ -153,7 +156,17 @@ Stops and restarts all HomeKitLink bridges. Use when:
 
 **Plugins → HomeKitLink Siri → Unlink any Orphaned Devices**
 
-Removes the HomeKit bridge association for any Indigo device whose bridge device has been deleted from Indigo. Cleans up stale references so those devices can be re-published to a new bridge.
+Unpublishes every device and action group whose bridge was deleted from Indigo, or that has no bridge set. Each one is logged, and its HomeKit name is kept. A **disabled** bridge's devices are left alone. It ends with Show Device Publications.
+
+To keep the devices published instead, use **Move Accessories to another Bridge**.
+
+### When a bridge is deleted
+
+Its devices stay published to a bridge that no longer exists (orphaned): Show Device Publications lists them under **MISSING**. Either:
+- **Move Accessories to another Bridge**: choose the deleted bridge as **From Bridge** to put them all on another bridge, or
+- **Unlink any Orphaned Devices**: unpublish them, then publish each again from a bridge's dialog when you want it
+
+Either way they're new accessories in the Home app. Remove the deleted bridge from the Home app too.
 
 ---
 
@@ -214,17 +227,22 @@ Use these when investigating internal state issues — particularly useful when 
 
 **Plugins → HomeKitLink Siri → Move Accessories to another Bridge**
 
-Copies all HomeKit accessories from one bridge to another. Enables recovery when:
-- A bridge device was accidentally deleted
+Moves every device and action group published to one bridge onto another. A device you unpublished isn't moved: it no longer has a bridge. Use it when:
+- A bridge device was deleted: its devices are orphaned, and this puts them back on a bridge without publishing each again
 - You want to consolidate or reorganise bridges
 
-> **⚠️ This operation carries some risk.** Use with caution and unpair the old bridge from the Home app first.
+**From Bridge** lists every bridge a published device uses, with its name (or **DELETED**) and how many devices are published to it. **To Bridge** lists your bridges.
+
+> **⚠️ This operation carries some risk.** Press **Move Accessories** with **Confirm** unticked first: the log lists the devices that would move, and nothing changes.
 
 **Procedure:**
-1. Select the **From Bridge** (source)
-2. Select the **To Bridge** (destination)
-3. Click **Move Accessories**
-4. Unpair the old bridge from the Home app
+1. Select the **From Bridge** (source) and the **To Bridge** (destination)
+2. Press **Move Accessories** with Confirm unticked, and check the list in the log
+3. Tick **Confirm** and press it again. The log lists each device with its new accessory ID, then the totals; both bridges restart (the source only if it still exists, the destination only if it's enabled)
+4. In the Home app the moved devices are **new accessories**: set their rooms, names, automations and scenes again. A moved camera's saved HKSV settings are cleared, so set its Recording Options again
+5. If the old bridge was deleted, remove it from the Home app too
+
+A moved device keeps its generation: its accessory ID changes anyway, because it starts with the bridge's number. If that ID is one another device on the destination bridge already has, the next free generation is used.
 
 ---
 
