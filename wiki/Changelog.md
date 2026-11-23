@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.64 — 2026-11-23
+
+### 🔧 Change
+- **HKSV: a recording the hub ends early is logged**, as a warning with how long it ran, how much was sent and the hub's reason (e.g. *bad data*, *invalid configuration*, *cancelled*). It was only in Debug HKSV, so a recording the hub dropped showed just *recording to hub* and nothing more. A data stream that closes during a recording is logged the same way
+
+---
+
 ## 0.8.63 — 2026-11-23
 
 ### 🐛 Fix

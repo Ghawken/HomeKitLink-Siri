@@ -51,6 +51,8 @@ REASON_BUSY = 2
 REASON_CANCELLED = 3
 REASON_UNEXPECTED_FAILURE = 5
 REASON_INVALID_CONFIGURATION = 9
+CLOSE_REASONS = {0: "normal", 1: "not allowed", 2: "busy", 3: "cancelled", 4: "unsupported", 5: "unexpected failure",
+                 6: "timeout", 7: "bad data", 8: "protocol error", 9: "invalid configuration"}   ## HAP-NodeJS
 
 # Copy limits
 COPY_MAX_WIDTH, COPY_MAX_HEIGHT = 1920, 1080
@@ -488,6 +490,7 @@ class RecordingSession:
         self.request_id = request_id
         self.stream_id = stream_id
         self.closed = False
+        self.finished = False   ## the last fragment was sent: a close from the hub after it is the normal end
         self.task = None
         self.bytes_sent = 0
         self.started = time.time()
@@ -579,6 +582,7 @@ class RecordingSession:
                 await self._send(group[3], False, seq, last)
                 sent += 1
             if last:
+                self.finished = True
                 _LOGGER.info("[%s] HKSV: recording finished - %.0f s, %.1f MB", name,
                              time.monotonic() - started, self.bytes_sent / 1e6)
                 # The hub closes the stream; if it doesn't, close it ourselves (as HAP-NodeJS)
@@ -594,7 +598,8 @@ class RecordingSession:
             _LOGGER.warning("[%s] HKSV: no video from the prebuffer - ending the recording", name)
             self._close_event(REASON_UNEXPECTED_FAILURE)
         except (ConnectionError, OSError):
-            _dbg("[%s] HKSV: the hub's data stream closed during a recording", name)
+            _LOGGER.warning("[%s] HKSV: the hub's data stream closed during a recording (after %.0f s, %.1f MB sent)", name,
+                            time.monotonic() - started, self.bytes_sent / 1e6)
         except Exception:
             _LOGGER.warning("[%s] HKSV: recording stream error", name, exc_info=True)
             self._close_event(REASON_UNEXPECTED_FAILURE)
@@ -865,6 +870,11 @@ class Recorder:
              message.get("reason"))
         s = self._match(conn, message)
         if s:
+            if not s.finished:
+                reason = message.get("reason")
+                _LOGGER.warning("[%s] HKSV: the hub ended the recording early - after %.0f s, %.1f MB sent, reason %s (%s)",
+                                self.name, time.time() - s.started, s.bytes_sent / 1e6, reason,
+                                CLOSE_REASONS.get(reason, "unknown"))
             s.close()
 
     def _on_ack(self, conn, message):
