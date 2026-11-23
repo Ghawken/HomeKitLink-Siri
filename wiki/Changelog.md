@@ -6,6 +6,14 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.66 — 2026-11-23
+
+### 🔧 Change
+- **HKSV: a copied full-range stream is labelled normal (TV) range**, still with no re-encoding, as is a level above 4.0. A hub took clips from a camera's own sub-stream (full range) but never showed them, while BlueIris's re-encoded stream (normal range) saved. The *prebuffer started* line lists what was labelled
+- **HKSV: a hub ending a recording normally is an info line** (*recording ended by the hub*), as it's how a hub usually ends one. Any other reason is still a warning
+
+---
+
 ## 0.8.65 — 2026-11-23
 
 ### 🐛 Fix

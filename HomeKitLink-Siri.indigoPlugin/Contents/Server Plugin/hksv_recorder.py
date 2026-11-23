@@ -123,7 +123,7 @@ def probe_stream(ffprobe, url, timeout=PROBE_TIMEOUT):
     try:
         res = subprocess.run([ffprobe, *_rtsp_args(url), "-v", "error",
                               "-show_entries", "stream=codec_name,codec_type,width,height,r_frame_rate,"
-                                               "pix_fmt,profile,level,sample_rate,channels",
+                                               "pix_fmt,color_range,profile,level,sample_rate,channels",
                               "-of", "json", "-i", url], capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         info["error"] = "no answer in {} s".format(timeout)
@@ -152,6 +152,7 @@ def probe_stream(ffprobe, url, timeout=PROBE_TIMEOUT):
     info.update(ok=True, codec=video.get("codec_name", "?"), width=int(video.get("width") or 0),
                 height=int(video.get("height") or 0), fps=fps, profile=video.get("profile", "?"),
                 level=int(video.get("level") or 0), pix_fmt=video.get("pix_fmt", "?"), gop_s=None,
+                full_range=video.get("color_range") in ("pc", "jpeg") or video.get("pix_fmt") == "yuvj420p",
                 audio_codec=audio.get("codec_name") if audio else None,
                 audio_rate=int(audio.get("sample_rate") or 0) if audio else 0)
     # Keyframe interval from a few seconds of packets (retried once: a short read
@@ -287,7 +288,20 @@ def needs_relevel(probe):
     return bool(probe) and probe.get("level", 0) > HOMEKIT_MAX_LEVEL
 
 
-def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotoolbox", relevel=False):
+def copy_relabels(probe):
+    """h264_metadata settings for a copied stream (labels only, no re-encoding): level 4.0 above it, and normal (TV)
+    range for full-range video. A hub took full-range clips from a camera's own sub-stream but never showed them."""
+    if not probe:
+        return {}
+    out = {}
+    if needs_relevel(probe):
+        out["level"] = "4"
+    if probe.get("full_range"):
+        out["video_full_range_flag"] = "0"
+    return out
+
+
+def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotoolbox", relabel=None):
     """ffmpeg command writing fragmented MP4 to stdout."""
     v, a = selected["video"], selected["audio"]
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats", "-nostdin",
@@ -296,8 +310,8 @@ def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotool
         cmd += ["-map", "0:a:0?"]
     if mode == "copy":
         cmd += ["-c:v", "copy"]
-        if relevel:
-            cmd += ["-bsf:v", "h264_metadata=level=4"]
+        if relabel:
+            cmd += ["-bsf:v", "h264_metadata=" + ":".join("{}={}".format(k, v) for k, v in sorted(relabel.items()))]
     else:
         w, h, fps = v["width"], v["height"], v["fps"] or 30
         iframe_s = max(1.0, (v["iframe_interval_ms"] or 4000) / 1000.0)
@@ -748,21 +762,24 @@ class Recorder:
             _LOGGER.warning("[%s] HKSV: can't record - %s", self.name, reason)
             self.on_change()
             return
-        relevel = mode == "copy" and needs_relevel(self.probes[idx])
-        key = (idx, mode, audio_on, self.encoder, repr(selected), relevel)
+        relabel = copy_relabels(self.probes[idx]) if mode == "copy" else {}
+        key = (idx, mode, audio_on, self.encoder, repr(selected), repr(relabel))
         if self.prebuffer is not None and key == self.running_key:
             return
         if self.prebuffer is not None:
             self._stop_prebuffer("settings changed")
         self.prebuffer_s = max(1.0, (selected.get("prebuffer_ms") or 4000) / 1000.0)
         self.fragment_s = max(1.0, (selected.get("fragment_ms") or 4000) / 1000.0)
-        cmd = build_command(self.ffmpeg, self.sources[idx][1], mode, selected, audio_on, self.encoder, relevel)
+        cmd = build_command(self.ffmpeg, self.sources[idx][1], mode, selected, audio_on, self.encoder, relabel)
         self.prebuffer = Prebuffer(self.name, self.loop, cmd, self.fragment_s, self.prebuffer_s, self._pb_event)
         self.running_key = key
         self.prebuffer.start()
         v = selected["video"]
         _LOGGER.info("[%s] HKSV: prebuffer started - %s%s", self.name, reason,
-                     (", labelled level 4.0 for HomeKit (it's {:.1f})".format(self.probes[idx]["level"] / 10) if relevel else "")
+                     ((", labelled for HomeKit: " + ", ".join(
+                         (["level 4.0 (it's {:.1f})".format(self.probes[idx]["level"] / 10)] if "level" in relabel else []) +
+                         (["normal colour range (it's full range)"] if "video_full_range_flag" in relabel else [])))
+                      if relabel else "")
                      if mode == "copy" else " to {}x{}@{} {} kbps ({})".format(
                          v["width"], v["height"], v["fps"], v["bitrate_kbps"],
                          "VideoToolbox" if self.encoder != "libx264" else "libx264"))
@@ -892,9 +909,13 @@ class Recorder:
         if s:
             if not s.finished:
                 reason = message.get("reason")
-                _LOGGER.warning("[%s] HKSV: the hub ended the recording early - after %.0f s, %.1f MB sent, reason %s (%s)",
-                                self.name, time.time() - s.started, s.bytes_sent / 1e6, reason,
-                                CLOSE_REASONS.get(reason, "unknown"))
+                if reason == 0:   ## how a hub normally ends a recording (motion over, as it judged it)
+                    _LOGGER.info("[%s] HKSV: recording ended by the hub - %.0f s, %.1f MB", self.name,
+                                 time.time() - s.started, s.bytes_sent / 1e6)
+                else:
+                    _LOGGER.warning("[%s] HKSV: the hub ended the recording - after %.0f s, %.1f MB sent, reason %s (%s)",
+                                    self.name, time.time() - s.started, s.bytes_sent / 1e6, reason,
+                                    CLOSE_REASONS.get(reason, "unknown"))
             s.close()
 
     def _on_ack(self, conn, message):
