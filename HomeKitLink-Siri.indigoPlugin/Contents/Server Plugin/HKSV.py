@@ -264,7 +264,7 @@ class HKSVRecording:
             _LOGGER.warning("[%s] HKSV: this camera has no motion sensor in HomeKit, so the hub will never "
                             "record it. Turn on the camera's motion sensor in its HomeKitLink settings", self.name)
         if self.enabled:
-            _LOGGER.info("[%s] HomeKit Secure Video services added", self.name)
+            _dbg("[%s] HomeKit Secure Video services added", self.name)
         else:
             _LOGGER.info("[%s] HomeKit Secure Video services added, but its Recorder device is disabled: nothing is "
                          "checked or recorded. Delete the Recorder to remove HKSV from this camera", self.name)
@@ -722,6 +722,6 @@ class HKSVRecording:
                              "PeriodicSnapshotsActive": int(self.char_periodic_snapshots.value or 0)}
         if state.get("streaming_active"):
             self._last_values["streaming"] = int(state["streaming_active"][0])
-        self._info("[%s] HKSV: restored Home app settings (recording %s%s)", self.name,
+        _dbg("[%s] HKSV: restored Home app settings (recording %s%s)", self.name,
                      "allowed" if self.recording_active else "off",
                      ", format chosen" if self.selected else "")

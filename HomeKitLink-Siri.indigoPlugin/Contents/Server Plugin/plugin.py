@@ -278,20 +278,13 @@ class Plugin(indigo.PluginBase):
 
         self.plugin_iidstorage = None
 
-        self.logger.info("{0:=^130}".format(" Initializing New Plugin Session "))
-        self.logger.info("{0:<30} {1}".format("Plugin name:", pluginDisplayName))
-        self.logger.info("{0:<30} {1}".format("Plugin version:", pluginVersion))
-        self.logger.info("{0:<30} {1}".format("Plugin ID:", pluginId))
-        self.logger.info("{0:<30} {1}".format("Indigo version:", indigo.server.version) )
-        self.logger.info("{0:<30} {1}".format("Silicon version:", str(platform.machine()) ))
-
-
+        last_version = str(self.pluginPrefs.get("lastStartedVersion", "") or "")
+        new_version = bool(last_version) and last_version != pluginVersion
+        self.logger.info("{0:=^130}".format(" {} {} {}  ·  Initializing New Plugin Session ".format(
+            "🆕" if new_version else "🏠", pluginDisplayName, pluginVersion)))
         self.ffmpeg_command_line = get_ffmpeg_binary()
-
-        self.logger.info("{0:<30} {1}".format("Python version:", sys.version.replace('\n', '')))
-        self.logger.info("{0:<30} {1}".format("Python Directory:", sys.prefix.replace('\n', '')))
-        self.logger.info(u"{0:<30} {1}".format("FFmpeg :", self.ffmpeg_command_line.replace('\n', '')))
-        self.logger.info("")
+        for label, value in self._startup_info(pluginDisplayName, pluginVersion, pluginId):
+            self.logger.info("{0:<30} {1}".format(label, value))
         self.pluginprefDirectory = '{}/Preferences/Plugins/com.GlennNZ.indigoplugin.HomeKitLink-Siri'.format(indigo.server.getInstallFolderPath())
 
         # Change to logging
@@ -444,6 +437,9 @@ class Plugin(indigo.PluginBase):
      #   self.logger.debug(f"\nmDNS Self.zc Setup: {self.select_interfaces=} {self.select_ip_version=} {self.apple_2p2=}")
     #    self.async_zeroconf_instance = IndigoAsyncZeroconf(zc=self.zc)
 
+        self.logger.info("{0:<30} {1}".format("🌐 Network:", "mDNS {}, interfaces {}, advertised {}, server IP {}".format(
+            str(self.select_ip_version).replace("IPVersion.", ""), self.select_interfaces or "all",
+            self.HAPAdvertised_ipaddress or "auto", self.HAPServeripaddress or "auto")))
         self.logger.info(u"{0:=^130}".format(" End Initializing New Plugin  "))
 
         # try:
@@ -2758,6 +2754,93 @@ class Plugin(indigo.PluginBase):
                 list_adapters.append(adapter)
 ###
 
+    MACOS_NAMES = {"10.13": "High Sierra", "10.14": "Mojave", "10.15": "Catalina", "11": "Big Sur", "12": "Monterey",
+                   "13": "Ventura", "14": "Sonoma", "15": "Sequoia", "26": "Tahoe"}
+
+    @classmethod
+    def _macos_name(cls, ver):
+        """'15.7.2' -> 'Sequoia' (10.x by major.minor, later by major), '' when not known."""
+        parts = str(ver).split(".")
+        return cls.MACOS_NAMES.get(".".join(parts[:2]) if parts[0] == "10" else parts[0], "")
+
+    @staticmethod
+    def _wrap_path(path, width=95):
+        """A long path split before a '/' into lines of about width characters."""
+        lines = [""]
+        for piece in re.findall(r"/?[^/]+|/", str(path)):
+            if lines[-1] and len(lines[-1]) + len(piece) > width:
+                lines.append("")
+            lines[-1] += piece
+        return lines
+
+    def _startup_info(self, name, version, plugin_id):
+        """(label, value) lines for the startup banner. Each part is best effort: a failure shows '?'."""
+        def safe(fn):
+            try:
+                return fn()
+            except Exception:
+                return "?"
+        def run(*cmd):
+            return subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout.strip()
+        def macos():
+            ver = platform.mac_ver()[0]
+            return "macOS {} {}".format(ver, self._macos_name(ver)).strip()
+        def hardware():
+            cpu = run("/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string") or platform.machine()
+            cores = run("/usr/sbin/sysctl", "-n", "hw.ncpu")
+            mem_gb = int(run("/usr/sbin/sysctl", "-n", "hw.memsize") or 0) / 1024 ** 3
+            return "{}, {} cores, {:.0f} GB memory".format(cpu, cores, mem_gb)
+        def bridges():
+            all_bridges = list(indigo.devices.iter("self.homeKitBridgeDevice"))
+            published = sum(1 for d in indigo.devices if d.pluginProps.get("HomeKit_publishDevice", False)) + \
+                sum(1 for a in indigo.actionGroups if a.pluginProps.get("HomeKit_publishDevice", False))
+            return "{} ({} enabled), {} devices / action groups published".format(
+                len(all_bridges), sum(1 for d in all_bridges if d.enabled), published)
+        def recorders():
+            recs = list(indigo.devices.iter("self.hksvRecorder"))
+            return "{} ({} enabled)".format(len(recs), sum(1 for d in recs if d.enabled)) if recs else "none"
+        def upgraded():
+            last = str(self.pluginPrefs.get("lastStartedVersion", "") or "")
+            self.pluginPrefs["lastStartedVersion"] = version
+            return "  🆕 upgraded from {}".format(last) if last and last != version else ""
+        def addresses():
+            found = []
+            for adapter in ifaddr.get_adapters():
+                for ip in adapter.ips:
+                    if ip.is_IPv4 and not str(ip.ip).startswith(("127.", "169.254.")):
+                        found.append("{} {}".format(adapter.nice_name, ip.ip))
+            return ", ".join(found) or "none found"
+        def libraries():
+            import pyhap.const, zeroconf
+            return "HAP-python {}, zeroconf {}".format(pyhap.const.__version__, zeroconf.__version__)
+        def settings():
+            prefs = self.pluginPrefs
+            return "improved live view {}, BlueIris remote stream {}, log level {}".format(
+                "on" if prefs.get("liveImproved", True) else "off", prefs.get("bi_remote_stream", "0"),
+                {5: "detailed debugging", 10: "debugging", 20: "informational", 30: "warnings", 40: "errors"}.get(
+                    int(prefs.get("showDebugLevel", 20) or 20), prefs.get("showDebugLevel")))
+        ffmpeg = self.ffmpeg_command_line
+        lines = [
+            ("🧩 Plugin:", f"{name} {version}  ({plugin_id})" + safe(upgraded)),
+            ("🟦 Indigo:", safe(lambda: f"{indigo.server.version}, at {indigo.server.getInstallFolderPath()}")),
+            ("💻 Mac:", "{}, {} ({}), '{}'".format(safe(macos), safe(lambda: run("/usr/sbin/sysctl", "-n", "hw.model")),
+                                                   safe(platform.machine), safe(socket.gethostname))),
+            ("🧠 Hardware:", safe(hardware)),
+            ("🐍 Python:", "{} at {}".format(sys.version.split()[0], sys.prefix)),
+            ("📚 Libraries:", safe(libraries)),
+            ("🎬 FFmpeg:", safe(lambda: " ".join(run(ffmpeg, "-version").split()[2:3]) or "?")
+                + (" (bundled with HomeKitLink)" if "homekitlink_ffmpeg" in str(ffmpeg) else "")),
+        ]
+        ## no emoji on these lines: an emoji shows two characters wide, so one more space lines them up
+        lines += [("", (" at " if i == 0 else "    ") + part) for i, part in enumerate(self._wrap_path(ffmpeg))]
+        lines += [
+            ("🌉 Bridges:", safe(bridges)),
+            ("🎥 HKSV Recorders:", safe(recorders)),
+            ("🔧 Settings:", safe(settings)),
+            ("🔌 IP addresses:", safe(addresses)),
+        ]
+        return lines
+
     def _set_live_tuning(self, prefs):
         """Improved live view (plugin setting, on by default): matching video ports, 1200-byte packets, and re-encoded
         video sized and tuned for the request (see HKutils.live_tuning). Off: live view exactly as before 0.8.44."""
@@ -2765,7 +2848,7 @@ class Plugin(indigo.PluginBase):
         self.liveTuningPorts = self.liveTuningEncode = self.liveTuningScale = on
         self.liveTuningScope = "all"
         self.liveTuningViewers = set()
-        self.logger.info(f"Live view: {'improved (matching ports, HomeKit-sized re-encoding)' if on else 'previous settings (Improved live view is off)'}.")
+        self.logger.debug(f"Live view: {'improved (matching ports, HomeKit-sized re-encoding)' if on else 'previous settings (Improved live view is off)'}.")
 
     def _migrate_durosity_build(self):
         """Devices set up with Durosity's development build (unifi-hksv-twoway), changed once at startup:

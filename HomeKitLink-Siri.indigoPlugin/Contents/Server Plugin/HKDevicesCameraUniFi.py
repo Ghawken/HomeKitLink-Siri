@@ -193,7 +193,7 @@ def apply_talk_through(plugin, dev, config):
         config["talk_target"] = target_id
         config["talk_stream"] = True
         config["speaker_service"] = True
-        plugin.logger.info("[{}] Talk: the Home app's talk button streams to '{}' ({}, plays a little late)".format(
+        plugin.logger.debug("[{}] Talk: the Home app's talk button streams to '{}' ({})".format(
             dev.name, target.name, "Sonos" if HKTalkStream.is_sonos_target(target) else "AirPlay"))
         return
     if target.pluginId != UNIFI_DUROSITY_ID or is_package_camera(target) or talkback_info(target) is None:
@@ -202,7 +202,7 @@ def apply_talk_through(plugin, dev, config):
     config["two_way_audio"] = True
     config["talk_target"] = target_id
     config["speaker_service"] = True   ## HomeKit shows the talk button when the camera has a Speaker
-    plugin.logger.info("[{}] Talk: the Home app's talk button speaks through '{}'".format(dev.name, target.name))
+    plugin.logger.debug("[{}] Talk: the Home app's talk button speaks through '{}'".format(dev.name, target.name))
 
 
 def talkback_config(plugin, config, name):
@@ -299,7 +299,7 @@ def get_camera_options(plugin, dev):
             config["speaker_service"] = True  ## HomeKit shows the talk button when the camera has a Speaker
             two_way = "yes"
     yes_no = lambda v: "yes" if v else "no"
-    plugin.logger.info("[{}] UniFi Protect {} ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}, two-way {}{}".format(
+    plugin.logger.debug("[{}] UniFi Protect {} ({}, {}): High {}, Medium {}, Low {}, Stream URL override {}, doorbell {}, motion {}, audio {}, two-way {}{}".format(
         dev.name, "package camera" if is_package_camera(dev) else "camera",
         "UniFi plugin" if dev.pluginId == UNIFI_DUROSITY_ID else "uniFiAP plugin", camera_model(dev) or "model unknown",
         yes_no(urls["high"]), yes_no(urls["medium"]), yes_no(urls["low"]),

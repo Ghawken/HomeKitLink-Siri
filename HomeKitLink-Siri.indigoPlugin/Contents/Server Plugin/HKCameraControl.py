@@ -84,7 +84,7 @@ def add_control(accessory, plugin, camera_id):
     accessory.control = settings
     if settings["follow"]:
         update_from_device(accessory, target)
-    plugin.logger.info("[{}] control: '{}' as a {}, {}".format(
+    plugin.logger.debug("[{}] control: '{}' as a {}, {}".format(
         dev.name, name, settings["kind"],
         "follows the device" if settings["follow"] else "momentary ({:g} s)".format(settings["seconds"])))
 

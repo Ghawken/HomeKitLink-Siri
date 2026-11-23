@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.62 — 2026-11-23
+
+### 🔧 Change
+- **Startup log**: the session banner shows the plugin, Indigo, the Mac (macOS version and name, model, name), its CPU, cores and memory, Python, HAP-python and zeroconf versions, FFmpeg (version, and its path over several lines), how many bridges and published devices, HKSV Recorders, the main settings (improved live view, BlueIris remote stream, log level), the Mac's IP addresses and the network settings. The version is in the session's header line (🆕 after an update, with the version it was upgraded from). Each camera's talk, control, UniFi capabilities and HKSV setup lines, and the live view line, are now debug only; warnings are unchanged
+
+---
+
 ## 0.8.61 — 2026-11-23
 
 ### 🔧 Change
