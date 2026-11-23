@@ -356,9 +356,7 @@ class HDSConnection:
                             _LOGGER.warning("[%s] HDS: first message wasn't hello (%s/%s) - closing", name, protocol, topic)
                             return
                         self.ready = True
-                        self.server.log_once("hello-{}".format(self.peer[0] if self.peer else "?"),
-                                             "[{}] HDS: hub {} connected - data stream ready".format(
-                                                 name, self.peer[0] if self.peer else "?"))
+                        _dbg("[{}] HDS: hub {} connected - data stream ready".format(name, self.peer[0] if self.peer else "?"))
                         self.send_response("control", "hello", mid)
                         await self.drain()
                         continue

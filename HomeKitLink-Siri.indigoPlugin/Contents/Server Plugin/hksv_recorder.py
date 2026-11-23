@@ -702,7 +702,7 @@ class RecordingSession:
                 seq += 1
                 await self._send(pre[3], False, seq, False)
                 sent += 1
-            _LOGGER.info("[%s] HKSV: recording to hub %s (%.1f s of prebuffer)", name,
+            _dbg("[%s] HKSV: recording to hub %s (%.1f s of prebuffer)", name,
                          self.conn.peer[0] if self.conn.peer else "?", (pre[1] - pre[0]) if pre else 0.0)
             r.recording_started(self)
             clear_since = None
@@ -726,7 +726,7 @@ class RecordingSession:
                 sent += 1
             if last:
                 self.finished = True
-                _LOGGER.info("[%s] HKSV: recording finished - %.0f s, %.1f MB", name,
+                _dbg("[%s] HKSV: recording finished - %.0f s, %.1f MB", name,
                              time.monotonic() - started, self.bytes_sent / 1e6)
                 # The hub closes the stream; if it doesn't, close it ourselves (as HAP-NodeJS)
                 for _ in range(CLOSE_TIMEOUT * 10):
@@ -1020,7 +1020,7 @@ class Recorder:
             if not s.finished:
                 reason = message.get("reason")
                 if reason == 0:   ## how a hub normally ends a recording (motion over, as it judged it)
-                    _LOGGER.info("[%s] HKSV: recording ended by the hub - %.0f s, %.1f MB", self.name,
+                    _dbg("[%s] HKSV: recording ended by the hub - %.0f s, %.1f MB", self.name,
                                  time.time() - s.started, s.bytes_sent / 1e6)
                 else:
                     _LOGGER.warning("[%s] HKSV: the hub ended the recording - after %.0f s, %.1f MB sent, reason %s (%s)",

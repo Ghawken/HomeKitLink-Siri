@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.68 — 2026-11-23
+
+### 🔧 Change
+- **HKSV: quieter log**: a hub's data stream connecting, each recording starting, finishing or ended by the hub are now in Debug HKSV only. The Recorder device's states still show recordings today and the last recording; problems (a hub ending a recording for a reason, a stream that drops) are still warnings
+
+---
+
 ## 0.8.67 — 2026-11-23
 
 ### 🐛 Fix
