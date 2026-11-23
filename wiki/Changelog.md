@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.65 — 2026-11-23
+
+### 🐛 Fix
+- **HKSV: clips from a high-bitrate stream weren't kept**: a copied stream keeps the camera's own bitrate, and a hub took 32 s of a 1080p sub-stream at about 8 Mbps (it asked for about 2 Mbps) but never showed the clip. The stream check now measures each stream's bitrate (shown on its line), and a stream above twice the hub's bitrate (at least 3000 kbps) isn't copied: the next best stream is, or it's re-encoded. Set a camera sub-stream used for HKSV to about 2 Mbps
+
+---
+
 ## 0.8.64 — 2026-11-23
 
 ### 🔧 Change

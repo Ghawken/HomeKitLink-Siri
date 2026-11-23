@@ -64,6 +64,10 @@ HOMEKIT_MAX_LEVEL = 40
 COPY_MAX_GOP_SECONDS = 4.0      # typical (median) keyframe gap
 COPY_MAX_GOP_PEAK_SECONDS = 8.0 # longest single gap (BlueIris streams vary)
 COPY_MAX_FPS = 30.5
+## A copied stream keeps its own bitrate. A hub kept the data of a 1080p stream at 8 Mbps (it asked for ~2 Mbps)
+## but never showed the clips: copy only up to COPY_BITRATE_FACTOR x the hub's bitrate (no less than COPY_MIN_KBPS).
+COPY_BITRATE_FACTOR = 2.0
+COPY_MIN_KBPS = 3000
 BAD_PROFILES = ("High 10", "High 4:2:2", "High 4:4:4 Predictive", "High 10 Intra", "High 4:2:2 Intra")
 
 
@@ -155,17 +159,17 @@ def probe_stream(ffprobe, url, timeout=PROBE_TIMEOUT):
     for _attempt in range(2):
         try:
             res = subprocess.run([ffprobe, *_rtsp_args(url), "-v", "error", "-select_streams", "v:0",
-                                  "-show_entries", "packet=pts_time,dts_time,flags", "-of", "csv=p=0",
+                                  "-show_entries", "packet=pts_time,dts_time,size,flags", "-of", "csv=p=0",
                                   "-read_intervals", "%+14", "-i", url], capture_output=True, timeout=timeout + 5)
         except subprocess.TimeoutExpired:
             continue
         except Exception:  # noqa: BLE001
             _LOGGER.debug("keyframe probe failed", exc_info=True)
             continue
-        times, all_times = [], []
+        times, all_times, total_bytes = [], [], 0
         for line in res.stdout.decode(errors="replace").splitlines():
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) < 3:
+            parts = [p.strip() for p in line.split(",")]   ## pts_time, dts_time, size, flags (ffprobe's order)
+            if len(parts) < 4:
                 continue
             t = None
             for value in parts[:2]:          # pts_time, else dts_time
@@ -177,11 +181,16 @@ def probe_stream(ffprobe, url, timeout=PROBE_TIMEOUT):
             if t is None:
                 continue
             all_times.append(t)
-            if "K" in parts[2]:
+            try:
+                total_bytes += int(parts[2])
+            except ValueError:
+                pass
+            if "K" in parts[3]:
                 times.append(t)
         # The stream's declared frame rate isn't reliable (BlueIris); measure it
         if len(all_times) > 10 and max(all_times) > min(all_times):
             info["fps"] = round((len(all_times) - 1) / (max(all_times) - min(all_times)), 1)
+            info["kbps"] = int(total_bytes * 8 / (max(all_times) - min(all_times)) / 1000)
         if len(times) >= 2:
             gaps = sorted(b - a for a, b in zip(times, times[1:]))
             info["gop_s"] = round(gaps[len(gaps) // 2], 1)      # typical gap
@@ -199,8 +208,14 @@ def _gop_text(p):
     return str(p["gop_s"])
 
 
-def copy_check(p):
-    """(can copy, reason) for a probed stream."""
+def copy_kbps_limit(selected):
+    """The highest bitrate copied for the hub's chosen format."""
+    asked = ((selected or {}).get("video") or {}).get("bitrate_kbps") or 2000
+    return max(COPY_MIN_KBPS, int(asked * COPY_BITRATE_FACTOR))
+
+
+def copy_check(p, max_kbps=None):
+    """(can copy, reason) for a probed stream; max_kbps (the hub's chosen bitrate, see copy_kbps_limit) when known."""
     if not p.get("ok"):
         return False, "couldn't read it ({})".format(p.get("error", "?"))
     if p["codec"] != "h264":
@@ -222,17 +237,20 @@ def copy_check(p):
         return False, "keyframe every {} s (needs 4 s or less)".format(p["gop_s"])
     if p.get("gop_max", 0) > COPY_MAX_GOP_PEAK_SECONDS:
         return False, "keyframes up to {} s apart (needs 8 s or less)".format(p["gop_max"])
+    if max_kbps and p.get("kbps", 0) > max_kbps:
+        return False, "{} kbps is above {} kbps (twice the hub's bitrate)".format(p["kbps"], max_kbps)
     return True, "H.264 {} {:.1f}, {}x{} @ {} fps, keyframe every {} s".format(
         p["profile"], p["level"] / 10, p["width"], p["height"], p["fps"], _gop_text(p))
 
 
-def describe_probe(label, p):
+def describe_probe(label, p, max_kbps=None):
     if not p.get("ok"):
         return "{}: unreadable ({})".format(label, p.get("error", "?"))
-    ok, why = copy_check(p)
+    ok, why = copy_check(p, max_kbps or copy_kbps_limit(None))
     audio = "{} {} Hz".format(p["audio_codec"], p["audio_rate"]) if p.get("audio_codec") else "no audio"
-    return "{}: {} {}x{} @ {} fps, {} {:.1f}, keyframe {} - {}".format(
-        label, p["codec"], p["width"], p["height"], p["fps"], p["profile"], p["level"] / 10,
+    return "{}: {} {}x{} @ {} fps{}, {} {:.1f}, keyframe {} - {}".format(
+        label, p["codec"], p["width"], p["height"], p["fps"],
+        ", {} kbps".format(p["kbps"]) if p.get("kbps") else "", p["profile"], p["level"] / 10,
         "every {} s".format(_gop_text(p)) if p["gop_s"] is not None else ("over 8 s" if p.get("gop_long") else "unknown"),
         "copy OK" if ok else "can't copy: " + why) + ", " + audio
 
@@ -248,10 +266,11 @@ def choose_source(sources, probes, selected, allow_copy=True):
     readable = [i for i, p in enumerate(probes) if p.get("ok")]
     if not readable:
         return None, None, "none of the camera's streams could be read"
-    copyable = [i for i in readable if copy_check(probes[i])[0]]
+    max_kbps = copy_kbps_limit(selected)
+    copyable = [i for i in readable if copy_check(probes[i], max_kbps)[0]]
     if allow_copy and copyable:
         best = min(copyable, key=lambda i: (abs(probes[i]["height"] - target_h), -probes[i]["height"], not _is_sub_stream(sources[i])))
-        return best, "copy", "{} can be copied ({})".format(sources[best][0], copy_check(probes[best])[1])
+        return best, "copy", "{} can be copied ({})".format(sources[best][0], copy_check(probes[best], max_kbps)[1])
     # Transcode: the smallest stream at least as tall as the hub asked for, else the tallest
     tall = [i for i in readable if probes[i]["height"] >= target_h]
     best = min(tall, key=lambda i: (probes[i]["height"], not _is_sub_stream(sources[i]))) if tall \
@@ -259,7 +278,7 @@ def choose_source(sources, probes, selected, allow_copy=True):
     if not allow_copy:
         why = "copy is turned off for this Recorder"
     else:
-        why = "no stream can be copied ({}: {})".format(sources[best][0], copy_check(probes[best])[1])
+        why = "no stream can be copied ({}: {})".format(sources[best][0], copy_check(probes[best], max_kbps)[1])
     return best, "transcode", "transcoding {} - {}".format(sources[best][0], why)
 
 
@@ -683,7 +702,8 @@ class Recorder:
             return
         self.probes = results
         for (label, _), p in zip(self.sources, results):
-            _LOGGER.info("[%s] HKSV stream check - %s", self.name, describe_probe(label, p))
+            _LOGGER.info("[%s] HKSV stream check - %s", self.name,
+                         describe_probe(label, p, copy_kbps_limit(self.wanted[0] if self.wanted else None)))
         if not self.sources:
             _LOGGER.warning("[%s] HKSV: no stream URL found for this camera", self.name)
         self._apply()
