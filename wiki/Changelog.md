@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.67 — 2026-11-23
+
+### 🐛 Fix
+- **HKSV: recordings of a BlueIris Direct-to-wire stream couldn't be played by Apple devices**, so the hub took them but no clip ever appeared. BlueIris announces its own encoder's H.264 settings but sends the camera's video, whose settings differ (e.g. a camera's sub-stream with `&decode=-1`), and the recording's header carried the announced ones. Apple's decoder reads the header: *Cannot Decode*, not one frame. The header is now rebuilt from the video's own settings (no re-encoding), logged once when it's needed. Tested with Apple's own decoder: 0 frames before, every frame after
+
+---
+
 ## 0.8.66 — 2026-11-23
 
 ### 🔧 Change

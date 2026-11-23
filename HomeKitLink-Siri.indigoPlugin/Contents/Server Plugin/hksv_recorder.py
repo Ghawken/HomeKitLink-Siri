@@ -337,6 +337,112 @@ def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotool
     return cmd
 
 
+
+# ------------------------------------------------------------- avcC repair
+## BlueIris (Direct-to-wire, e.g. a camera's sub-stream with &decode=-1) announces its own encoder's H.264 parameters
+## (SDP sprop-parameter-sets), but sends the camera's video, whose SPS/PPS differ under the same ids. ffmpeg writes the
+## announced ones into the MP4 header (avcC); a hub decodes from the header, gets garbage, and the clip never appears.
+## The header is rebuilt from the SPS/PPS in the first keyframe.
+_CONTAINERS = {b"moov": 0, b"trak": 0, b"mdia": 0, b"minf": 0, b"stbl": 0, b"stsd": 8, b"avc1": 78}
+
+
+def _iter_boxes(data, start=0, end=None):
+    end = len(data) if end is None else end
+    i = start
+    while i + 8 <= end:
+        size = int.from_bytes(data[i:i + 4], "big")
+        head = 8
+        if size == 1:
+            size, head = int.from_bytes(data[i + 8:i + 16], "big"), 16
+        elif size == 0:
+            size = end - i
+        if size < head or i + size > end:
+            return
+        yield i, size, head, data[i + 4:i + 8]
+        i += size
+
+
+def _replace_avcc(data, new_avcc, start=0, end=None):
+    """data with the avcC box (under moov/.../avc1) replaced; parent box sizes updated. None if there isn't one."""
+    end = len(data) if end is None else end
+    out, found = bytearray(), False
+    pos = start
+    for i, size, head, btype in _iter_boxes(data, start, end):
+        out += data[pos:i]
+        pos = i + size
+        if btype == b"avcC":
+            out += (8 + len(new_avcc)).to_bytes(4, "big") + b"avcC" + new_avcc
+            found = True
+        elif btype in _CONTAINERS and not found:
+            skip = head + _CONTAINERS[btype]
+            inner = _replace_avcc(data, new_avcc, i + skip, i + size)
+            if inner is None:
+                out += data[i:i + size]
+            else:
+                body = data[i + head:i + skip] + inner
+                out += (8 + len(body)).to_bytes(4, "big") + btype + body
+                found = True
+        else:
+            out += data[i:i + size]
+    out += data[pos:end]
+    return bytes(out) if found else None
+
+
+def _find_avcc(data, start=0, end=None):
+    for i, size, head, btype in _iter_boxes(data, start, end):
+        if btype == b"avcC":
+            return data[i + head:i + size]
+        if btype in _CONTAINERS:
+            found = _find_avcc(data, i + head + _CONTAINERS[btype], i + size)
+            if found is not None:
+                return found
+    return None
+
+
+def _inband_sps_pps(fragment):
+    """(SPS, PPS) from the first keyframe in a moof+mdat fragment (4-byte NAL lengths), or None."""
+    for i, size, head, btype in _iter_boxes(fragment):
+        if btype != b"mdat":
+            continue
+        payload = fragment[i + head:i + size]
+        for j in range(0, min(len(payload), 4096) - 5):
+            n = int.from_bytes(payload[j:j + 4], "big")
+            if 4 <= n < 512 and payload[j + 4] & 0x1F == 7 and j + 4 + n + 5 <= len(payload):
+                sps = payload[j + 4:j + 4 + n]
+                k = j + 4 + n
+                m = int.from_bytes(payload[k:k + 4], "big")
+                if 1 <= m < 512 and payload[k + 4] & 0x1F == 8:
+                    return sps, payload[k + 4:k + 4 + m]
+    return None
+
+
+def _build_avcc(sps, pps, old):
+    """An avcC from one SPS and PPS (version, profile, compatibility and level from the SPS; 4-byte NAL lengths).
+    High profiles keep the old avcC's chroma / bit depth fields when it had them."""
+    body = bytes([1, sps[1], sps[2], sps[3], 0xFF, 0xE1]) + len(sps).to_bytes(2, "big") + sps + \
+        bytes([1]) + len(pps).to_bytes(2, "big") + pps
+    if sps[1] in (100, 110, 122, 144):
+        body += bytes([0xFC | 1, 0xF8, 0xF8, 0])   ## 4:2:0, 8-bit, no SPS extensions
+    return body
+
+
+def repair_init_segment(init, fragment):
+    """(init segment, repaired) - the avcC rebuilt from the video's own SPS/PPS when they differ from the header's."""
+    try:
+        old = _find_avcc(init)
+        found = _inband_sps_pps(fragment)
+        if old is None or found is None:
+            return init, False
+        sps, pps = found
+        if sps in old and pps in old:
+            return init, False
+        new = _replace_avcc(init, _build_avcc(sps, pps, old))
+        return (new, True) if new else (init, False)
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("avcC repair failed", exc_info=True)
+        return init, False
+
+
 # --------------------------------------------------------------- prebuffer
 class Prebuffer:
     """One ffmpeg writing fMP4; keeps the init segment and recent fragments."""
@@ -452,13 +558,17 @@ class Prebuffer:
                 box = head + await stream.readexactly(size - 8)
             self.bytes_out += len(box)
             if self.init_segment is None and btype in (b"ftyp", b"moov"):
-                init.append(box)
-                if btype == b"moov":
-                    self.init_segment = b"".join(init)
-                    _dbg("[%s] prebuffer: init segment %d bytes", self.name, len(self.init_segment))
+                init.append(box)   ## held until the first fragment: its header may need the video's own SPS/PPS
             elif btype == b"mdat" and frag:
                 frag.append(box)
-                self._add_fragment(b"".join(frag))
+                data = b"".join(frag)
+                if self.init_segment is None and init:
+                    self.init_segment, repaired = repair_init_segment(b"".join(init), data)
+                    _dbg("[%s] prebuffer: init segment %d bytes", self.name, len(self.init_segment))
+                    if repaired:
+                        _LOGGER.info("[%s] HKSV: the stream's H.264 settings differ from those it announced (BlueIris "
+                                     "Direct-to-wire): recordings use the stream's own", self.name)
+                self._add_fragment(data)
                 frag = []
             elif btype == b"moof":
                 frag = [box]
