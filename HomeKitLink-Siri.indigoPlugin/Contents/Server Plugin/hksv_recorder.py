@@ -55,6 +55,10 @@ REASON_INVALID_CONFIGURATION = 9
 # Copy limits
 COPY_MAX_WIDTH, COPY_MAX_HEIGHT = 1920, 1080
 COPY_MAX_LEVEL = 42
+## HomeKit is offered H.264 levels 3.1, 3.2 and 4.0 only (HKSV.py), and a hub drops recordings above what it was offered.
+## 4.1 / 4.2 differ from 4.0 only in limits a 1080p stream at up to 30 fps is within, so a copied 4.1 / 4.2 stream is
+## labelled 4.0 (h264_metadata: the SPS level only, no re-encoding). Seen: a camera sub-stream at Main 4.2.
+HOMEKIT_MAX_LEVEL = 40
 COPY_MAX_GOP_SECONDS = 4.0      # typical (median) keyframe gap
 COPY_MAX_GOP_PEAK_SECONDS = 8.0 # longest single gap (BlueIris streams vary)
 COPY_MAX_FPS = 30.5
@@ -257,7 +261,12 @@ def choose_source(sources, probes, selected, allow_copy=True):
     return best, "transcode", "transcoding {} - {}".format(sources[best][0], why)
 
 
-def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotoolbox"):
+def needs_relevel(probe):
+    """A copied stream above level 4.0 is labelled 4.0 (see HOMEKIT_MAX_LEVEL)."""
+    return bool(probe) and probe.get("level", 0) > HOMEKIT_MAX_LEVEL
+
+
+def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotoolbox", relevel=False):
     """ffmpeg command writing fragmented MP4 to stdout."""
     v, a = selected["video"], selected["audio"]
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "warning", "-nostats", "-nostdin",
@@ -266,6 +275,8 @@ def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotool
         cmd += ["-map", "0:a:0?"]
     if mode == "copy":
         cmd += ["-c:v", "copy"]
+        if relevel:
+            cmd += ["-bsf:v", "h264_metadata=level=4"]
     else:
         w, h, fps = v["width"], v["height"], v["fps"] or 30
         iframe_s = max(1.0, (v["iframe_interval_ms"] or 4000) / 1000.0)
@@ -712,20 +723,22 @@ class Recorder:
             _LOGGER.warning("[%s] HKSV: can't record - %s", self.name, reason)
             self.on_change()
             return
-        key = (idx, mode, audio_on, self.encoder, repr(selected))
+        relevel = mode == "copy" and needs_relevel(self.probes[idx])
+        key = (idx, mode, audio_on, self.encoder, repr(selected), relevel)
         if self.prebuffer is not None and key == self.running_key:
             return
         if self.prebuffer is not None:
             self._stop_prebuffer("settings changed")
         self.prebuffer_s = max(1.0, (selected.get("prebuffer_ms") or 4000) / 1000.0)
         self.fragment_s = max(1.0, (selected.get("fragment_ms") or 4000) / 1000.0)
-        cmd = build_command(self.ffmpeg, self.sources[idx][1], mode, selected, audio_on, self.encoder)
+        cmd = build_command(self.ffmpeg, self.sources[idx][1], mode, selected, audio_on, self.encoder, relevel)
         self.prebuffer = Prebuffer(self.name, self.loop, cmd, self.fragment_s, self.prebuffer_s, self._pb_event)
         self.running_key = key
         self.prebuffer.start()
         v = selected["video"]
         _LOGGER.info("[%s] HKSV: prebuffer started - %s%s", self.name, reason,
-                     "" if mode == "copy" else " to {}x{}@{} {} kbps ({})".format(
+                     (", labelled level 4.0 for HomeKit (it's {:.1f})".format(self.probes[idx]["level"] / 10) if relevel else "")
+                     if mode == "copy" else " to {}x{}@{} {} kbps ({})".format(
                          v["width"], v["height"], v["fps"], v["bitrate_kbps"],
                          "VideoToolbox" if self.encoder != "libx264" else "libx264"))
         if self._usage_task is None:

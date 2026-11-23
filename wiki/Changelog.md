@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.63 — 2026-11-23
+
+### 🐛 Fix
+- **HKSV: recordings from a level 4.1 / 4.2 stream weren't saved**: HomeKit is offered H.264 up to level 4.0, and a hub drops recordings above that. A copied stream at level 4.1 or 4.2 (e.g. a camera's 1080p sub-stream at Main 4.2, recorded since 0.8.61) is now labelled level 4.0, still copied with no re-encoding: a 1080p stream at up to 30 fps is within level 4.0's limits. The log's *prebuffer started* line says when it's done
+
+---
+
 ## 0.8.62 — 2026-11-23
 
 ### 🔧 Change
