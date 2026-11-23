@@ -2,8 +2,9 @@
 
 Only used for a camera with an HKSV Recorder device.
 
-  * Stream check: each of the camera's streams (BlueIris streams 0-2, UniFi
-    High/Medium/Low, SecuritySpy) is probed once with ffprobe in a background
+  * Stream check: each of the camera's streams (BlueIris streams 0-2, and each
+    with &decode=-1 for the camera's sub-stream; UniFi High/Medium/Low,
+    SecuritySpy) is probed once with ffprobe in a background
     thread. A stream can be recorded by copying (no re-encoding, almost no CPU)
     when it's H.264, 8-bit 4:2:0, at most 1920x1080 and level 4.2, at most
     30 fps, with a keyframe at least every 4 s. Otherwise the best stream is
@@ -87,6 +88,10 @@ def candidate_sources(config):
         base = src.split("&stream=")[0]
         for n in (0, 1, 2):
             out.append(("BlueIris stream {}".format(n), "{}&stream={}".format(base, n)))
+        ## &decode=-1: Blue Iris uses the camera's sub-stream. With a stream set to Direct-to-wire that's the camera's
+        ## own video, untouched: a 1080p H.264 sub-stream can be copied with no re-encoding anywhere.
+        for n in (0, 1, 2):
+            out.append(("BlueIris stream {} sub-stream".format(n), "{}&stream={}&decode=-1".format(base, n)))
     elif "SS_name" in config and src:
         native = re.sub(r"&width=\d+", "", src)
         out.append(("SecuritySpy", native))
@@ -226,19 +231,25 @@ def describe_probe(label, p):
         "copy OK" if ok else "can't copy: " + why) + ", " + audio
 
 
+def _is_sub_stream(source):
+    return "&decode=-1" in source[1]
+
+
 def choose_source(sources, probes, selected, allow_copy=True):
-    """(index, mode, reason) - the stream to record and whether it can be copied."""
+    """(index, mode, reason) - the stream to record and whether it can be copied. Of streams equally close to the
+    size the hub asked for, a camera's sub-stream (BlueIris &decode=-1) is preferred: less for anything to decode."""
     target_h = (selected or {}).get("video", {}).get("height", 1080) or 1080
     readable = [i for i, p in enumerate(probes) if p.get("ok")]
     if not readable:
         return None, None, "none of the camera's streams could be read"
     copyable = [i for i in readable if copy_check(probes[i])[0]]
     if allow_copy and copyable:
-        best = min(copyable, key=lambda i: (abs(probes[i]["height"] - target_h), -probes[i]["height"]))
+        best = min(copyable, key=lambda i: (abs(probes[i]["height"] - target_h), -probes[i]["height"], not _is_sub_stream(sources[i])))
         return best, "copy", "{} can be copied ({})".format(sources[best][0], copy_check(probes[best])[1])
     # Transcode: the smallest stream at least as tall as the hub asked for, else the tallest
     tall = [i for i in readable if probes[i]["height"] >= target_h]
-    best = min(tall, key=lambda i: probes[i]["height"]) if tall else max(readable, key=lambda i: probes[i]["height"])
+    best = min(tall, key=lambda i: (probes[i]["height"], not _is_sub_stream(sources[i]))) if tall \
+        else max(readable, key=lambda i: (probes[i]["height"], _is_sub_stream(sources[i])))
     if not allow_copy:
         why = "copy is turned off for this Recorder"
     else:

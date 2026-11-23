@@ -332,14 +332,22 @@ HomeKit Secure Video (HKSV) lets your home hubs record a camera's motion and doo
 ### How it records
 HomeKit wants each recording to start a few seconds **before** the motion, so while the Home app allows recording, one ffmpeg keeps the last few seconds of the camera in memory (the prebuffer). It only runs while recording is allowed: if the Home app is set to Stream or Off (for example while you're home), nothing runs.
 
-At bridge start the Recorder checks each of the camera's streams (BlueIris streams 0–2, UniFi High/Medium/Low, SecuritySpy) and logs one line per stream:
+At bridge start the Recorder checks each of the camera's streams (BlueIris streams 0–2, and each again as the camera's sub-stream; UniFi High/Medium/Low; SecuritySpy) and logs one line per stream:
 ```
 [Gate Cam] HKSV stream check - BlueIris stream 0: h264 1912x1080 @ 11.2 fps, Main 4.0, keyframe every 2.7 s - copy OK, aac 64000 Hz
 [Gate Cam] HKSV stream check - BlueIris stream 2: h264 2688x1520 @ 11.8 fps, Constrained Baseline 5.1, keyframe every 1.4 s - can't copy: 2688x1520 is larger than 1920x1080, aac 64000 Hz
+[Gate Cam] HKSV stream check - BlueIris stream 1 sub-stream: h264 1920x1080 @ 15.1 fps, Main 4.2, keyframe every 1.0 s - copy OK, aac 64000 Hz
 ```
-A stream is **copied** (no re-encoding, about 1–2 % CPU) when it is H.264, at most 1920×1080 and level 4.2, at most 30 fps, with a keyframe at least every 4 seconds. Otherwise the best stream is **re-encoded** to the format the hub chose, with VideoToolbox by default (measured 6–10 % CPU and ~150 MB for 1080p). Audio is always converted to AAC-LC, which costs very little.
+A stream is **copied** (no re-encoding, about 1–2 % CPU) when it is H.264, at most 1920×1080 and level 4.2, at most 30 fps, with a keyframe at least every 4 seconds. Of the streams that can be copied, the one closest to the size the hub asked for is used, and of equally close ones a **sub-stream** is preferred. Otherwise the best stream is **re-encoded** to the format the hub chose, with VideoToolbox by default (measured 6–10 % CPU and ~150 MB for 1080p). Audio is always converted to AAC-LC, which costs very little.
 
 > To let a BlueIris camera be copied, give one of its streams (often stream 0) a size of 1920×1080 or less, a **fixed** frame rate (e.g. 15 fps) and a keyframe interval of 4 s or less. A stream whose frame rate drops (e.g. at night) also stretches the time between keyframes, so it may copy at one bridge start and re-encode at the next.
+
+#### Best: record the camera's own sub-stream (BlueIris, no re-encoding at all)
+Blue Iris's `&decode=-1` (see its manual, *RTSP server*) sends a camera's **sub-stream**, and a stream set to **Direct-to-wire** passes it untouched. With a 1080p H.264 sub-stream, nothing decodes or re-encodes for HKSV: not Blue Iris, not HKLS.
+1. **On the camera's own web page**, set its sub-stream to **H.264** (not H.265), **1920×1080**, a fixed **15 fps**, and an I-frame (keyframe) interval of 2 s or less. Turn off any low-light "slow shutter" or automatic frame rate if you can: when the frame rate falls at night, keyframes fall with it
+2. **In Blue Iris**, make sure that sub-stream is the camera's sub-stream (camera settings → Video → Configure)
+3. **Settings → Web server → Advanced → Encoding**: turn **Direct-to-wire where possible** on for **Stream 1**, with **Resize off**. Leave **Stream 0** re-encoding (Direct-to-wire off): it's the remote viewing stream, which must be resized (see [Remote / Mobile Viewing](#remote--mobile-viewing--blue-iris-v0809)). With Direct-to-wire on, Stream 1 on its own sends the camera's main stream, which may be H.265: that's fine, HKSV uses its sub-stream
+4. Restart the camera's bridge. The stream check should show `BlueIris stream 1 sub-stream: h264 1920x1080 … copy OK`, and the Recorder's `recordSource` *BlueIris stream 1 sub-stream*
 
 ### Approach and costs
 HKSV is built very differently from live view, and that is why it is opt-in per camera.
@@ -379,7 +387,7 @@ VideoToolbox is about five times cheaper than libx264 here. Apple Silicon Macs e
 **Known limitations**
 - Tested with BlueIris and an Apple TV hub. SecuritySpy and UniFi Protect use the same code with their own streams, but haven't yet been tried with a real hub.
 - A camera whose keyframe interval varies (BlueIris re-encoded streams at a variable frame rate) may copy at one bridge start and re-encode at the next.
-- The stream check takes about 10–15 s per stream at bridge start; recording can't start before it finishes.
+- The stream check takes about 10–15 s per stream at bridge start (six streams for a BlueIris camera); recording can't start before it finishes.
 
 ### The Recorder device
 | Setting | |

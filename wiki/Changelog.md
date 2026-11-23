@@ -6,6 +6,13 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.61 — 2026-11-23
+
+### 🔧 Change
+- **HKSV records a BlueIris camera's sub-stream when it suits**: the stream check also tries BlueIris streams 0–2 with `&decode=-1` (the camera's sub-stream). Of streams equally close to the size the hub asked for, a sub-stream is preferred, also when re-encoding. With the camera's sub-stream at 1080p H.264 and a BlueIris stream set to Direct-to-wire, nothing re-encodes for HKSV: neither BlueIris nor HKLS. The check takes longer (six streams per BlueIris camera) → [Camera Setup](Camera-Setup#best-record-the-cameras-own-sub-stream-blueiris-no-re-encoding-at-all)
+
+---
+
 ## 0.8.60 — 2026-11-23
 
 ### 🔧 Change
