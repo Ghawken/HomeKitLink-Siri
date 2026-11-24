@@ -194,8 +194,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         ]
         ## A portrait camera (UniFi doorbells): offer its own shape, or HomeKit asks for
         ## landscape video it never gets (PR #42)
+        ## Then the landscape sizes: HomeView (a 640x360 tile) never asked a portrait-only camera for video.
+        ## A landscape request is re-encoded and padded to that size (see _landscape_fit).
         if config.get("custom_resolutions"):
-            resolutions = [(w, h, max_fps) for w, h in config["custom_resolutions"]]
+            resolutions = [(w, h, max_fps) for w, h in config["custom_resolutions"]] + [
+                (w, h, max_fps) for w, h in RESOLUTIONS if w <= 1920 and h <= 1080]
 
         video_options = {
             "codec": {
@@ -312,6 +315,15 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
         """Stream URL, its ffprobe result and video codec setting for this request (UniFi overrides)."""
         return self.config.get(CONF_STREAM_SOURCE), self.config.get("ffprobe_video"), self.config[CONF_VIDEO_CODEC]
 
+    def _landscape_fit(self, stream_config):
+        """A portrait camera asked for a landscape size: the ffmpeg filter that scales its picture to fit
+        and pads it to exactly that size (HomeKit expects the size it chose), or "" otherwise."""
+        width, height = int(stream_config.get("width", 0) or 0), int(stream_config.get("height", 0) or 0)
+        if not self.config.get("custom_resolutions") or not width or not height or height >= width:
+            return ""
+        return (f"-vf scale=w={width}:h={height}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
+                f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2 ")
+
     async def start_stream(self, session_info, stream_config):
         """Start a new stream with the given configuration."""
         audio_proxy = None
@@ -405,6 +417,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
                 max_width=self.config[CONF_MAX_WIDTH],
                 max_height=self.config[CONF_MAX_HEIGHT],
             )
+
+            landscape_fit = self._landscape_fit(stream_config)
+            if landscape_fit and strategy["use_copy"]:
+                strategy["use_copy"] = False
+                strategy["reasons"].append("portrait camera, landscape view")
 
             # Log warnings from strategy
             for w in strategy["warnings"]:
@@ -579,6 +596,11 @@ class SecuritySpyCamera(HomeAccessory, PyhapCamera):
 
             ## Improved live view (plugin setting, on by default; HKutils.live_tuning)
             tuning = live_tuning(self.plugin, stream_config.get("address"))
+            if landscape_fit:
+                tuning = tuning - {"scale"}
+                output = output.replace("-pix_fmt yuv420p ", landscape_fit + "-pix_fmt yuv420p ", 1)
+                _LOGGER.log(view_level, "[%s] %s: portrait camera in a %sx%s view: scaled to fit, with side bars", session_info["id"],
+                            self.display_name, stream_config.get("width"), stream_config.get("height"))
             if tuning:
                 output, tuning_notes = tune_live_video(output, tuning, stream_config, strategy["use_copy"])
                 _LOGGER.log(view_level, "[%s] %s: improved live view for %s (%s): %s", session_info["id"], self.display_name,

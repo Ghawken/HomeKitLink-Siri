@@ -6,6 +6,11 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.70 — 2026-11-24
+
+### 🐛 Fix
+- **Portrait cameras (UniFi doorbells) also offer landscape sizes**: a G6 Pro Entry offered only portrait sizes, and HomeView (whose camera tiles ask for 640x360) never asked it for video, showing the camera crossed out. Portrait sizes still come first, so phones view it as before; a landscape view is re-encoded with the picture scaled to fit and side bars
+
 ## 0.8.69 — 2026-11-24
 
 ### 🐛 Fix
