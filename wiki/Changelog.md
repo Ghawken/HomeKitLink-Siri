@@ -6,6 +6,11 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.69 — 2026-11-24
+
+### 🐛 Fix
+- **UniFi snapshots scaled to the size HomeKit asks for**: Protect's high-quality snapshot is the camera's full sensor (a G6 Pro Entry: 3024×4096, about 2.2 MB), and HomeView showed the camera crossed out instead. A snapshot over 500 KB is now scaled to the requested width (at most 1920 high), about 100–300 KB. Snapshots are also saved whole before they replace the last one
+
 ## 0.8.68 — 2026-11-23
 
 ### 🔧 Change

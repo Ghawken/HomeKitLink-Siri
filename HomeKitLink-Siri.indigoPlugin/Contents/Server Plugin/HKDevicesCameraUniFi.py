@@ -415,6 +415,31 @@ def _package_snapshot(plugin, camera, path, width):
     return False, camera.get("_package_error") or _PACKAGE_NOT_READY
 
 
+SNAPSHOT_MAX_BYTES = 500000  ## larger snapshots are scaled down to the size HomeKit asked for
+
+
+def _save_snapshot(plugin, data, path, width):
+    """Protect's highQuality snapshot is the full sensor (a G6 Pro Entry: 3024x4096, ~2.2 MB), which
+    HomeView failed to show. A large one is scaled to fit the width HomeKit asked for (and 1920 high)."""
+    import subprocess
+    tmp = path + ".tmp.jpg"
+    if len(data) > SNAPSHOT_MAX_BYTES:
+        w = max(320, min(int(width or 1280), 1920))
+        try:
+            r = subprocess.run([plugin.ffmpeg_command_line, "-hide_banner", "-loglevel", "error", "-f", "image2pipe", "-i", "pipe:0",
+                                "-vf", "scale='min(iw,{})':'min(ih,1920)':force_original_aspect_ratio=decrease:force_divisible_by=2".format(w),
+                                "-q:v", "4", "-y", "-f", "image2", tmp], input=data, capture_output=True, timeout=10)
+            if r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 0:
+                os.replace(tmp, path)
+                return
+            plugin.logger.debug("UniFi snapshot not scaled: {}".format((r.stderr or b"").decode(errors="replace").strip()[-160:]))
+        except Exception as e:  # noqa: BLE001
+            plugin.logger.debug("UniFi snapshot not scaled: {}".format(e))
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+
 def _fetch_snapshot(plugin, camera, path, width, session):
     dev = indigo.devices[int(camera["UP_deviceId"])]
     if camera.get("UP_package"):
@@ -432,8 +457,7 @@ def _fetch_snapshot(plugin, camera, path, width, session):
         if r.status_code != 200 or not r.content:
             hint = {401: " - check the controller's API key", 403: " - check the API key's permissions", 429: " - Protect rate limit"}.get(r.status_code, "")
             return False, "HTTP {}{}".format(r.status_code, hint)
-        with open(path, "wb") as f:
-            f.write(r.content)
+        _save_snapshot(plugin, r.content, path, width)
         return True, ""
 
     ## kw123 uniFiAP: its own action fetches the snapshot and writes the file
