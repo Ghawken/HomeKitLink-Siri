@@ -1517,11 +1517,13 @@ class Plugin(indigo.PluginBase):
         "smoke": ("SmokeSensor", "service_SmokeSensor", False, None, ""),
         "co": ("CarbonMonoxideSensor", "service_SmokeSensor", False, None, ""),
         "co2": ("CarbonDioxideSensor", "service_SmokeSensor", False, None, ""),
+        "airquality": ("AirQualitySensor", "service_AirQuality", True, None, ""),   ## one reading (mirrorAqReading)
+        "value": ("", "", None, None, ""),   ## the state as it is (number or on/off); its type chosen in a bridge
     }
 
     MIRROR_KIND_NAMES = {"temperature": "Temperature", "humidity": "Humidity", "light": "Light", "contact": "Contact",
                          "motion": "Motion", "occupancy": "Occupancy", "leak": "Leak", "smoke": "Smoke",
-                         "co": "Carbon Monoxide", "co2": "Carbon Dioxide"}
+                         "co": "Carbon Monoxide", "co2": "Carbon Dioxide", "airquality": "Air Quality", "value": ""}
 
     def _own_device_name_check(self, values_dict, dev_id, suggestion):
         """A HomeKitLink device being published needs a HomeKit name from its own settings. If it's empty, fill in
@@ -1554,6 +1556,18 @@ class Plugin(indigo.PluginBase):
         kind = self._mirror_kind(mirror)
         if kind is None:
             return None, "no sensor kind chosen"
+        if kind[2] is None:   ## Copy value only: a number, else on/off
+            if isinstance(raw, bool):
+                return raw, None
+            value = HKutils.convert_to_float(raw)
+            if value is not None:
+                return value, None
+            text = str(raw).strip().lower()
+            if text in ("true", "on", "yes", "open", "detected", "wet"):
+                return True, None
+            if text in ("false", "off", "no", "closed", "clear", "dry"):
+                return False, None
+            return None, "'{}' isn't a number or on/off ({})".format(state, raw)
         if kind[2]:
             value = HKutils.convert_to_float(raw)
             return (value, None) if value is not None else (None, "'{}' isn't a number ({})".format(state, raw))
@@ -1579,7 +1593,7 @@ class Plugin(indigo.PluginBase):
             mirror.setErrorStateOnServer("error")
             return
         kind = self._mirror_kind(mirror)
-        if kind[2]:
+        if kind[2] or (kind[2] is None and not isinstance(value, bool)):
             if mirror.states.get("sensorValue") != value or mirror.errorState:
                 unit = "°F" if mirror.pluginProps.get("HomeKit_tempSelector", False) else ("°C" if kind[0] == "TemperatureSensor" else "")
                 mirror.updateStateOnServer("sensorValue", value=value, uiValue="{}{}{}".format(round(value, 1), kind[4], unit), decimalPlaces=1)
@@ -1633,20 +1647,32 @@ class Plugin(indigo.PluginBase):
         refused = self._own_device_name_check(values_dict, dev_id, suggestion)
         if refused:
             return refused
-        values_dict["SupportsSensorValue"] = kind[2]   ## an Indigo sensor with a value, or an on/off sensor
-        values_dict["SupportsOnState"] = not kind[2]
+        values_dict["SupportsSensorValue"] = kind[2] is not False   ## an Indigo sensor with a value, or an on/off sensor
+        values_dict["SupportsOnState"] = not kind[2]   ## Copy value only: both
         values_dict["SupportsStatusRequest"] = False
         values_dict["HomeKit_deviceSensor"] = "sensorValue"   ## numeric: its value; on/off: falls through to its on/off
         if kind[0] == "TemperatureSensor":
             values_dict["HomeKit_tempSelector"] = bool(values_dict.get("mirrorFahrenheit", False))
         else:
             values_dict["mirrorFahrenheit"] = False
+        if kind[0] == "AirQualitySensor":   ## the Air Quality Sensor's own settings: this one reading, from the value
+            reading = str(values_dict.get("mirrorAqReading", "aqPM25") or "aqPM25")
+            for field, _char, _label in self.AQ_READINGS:
+                values_dict["HomeKit_" + field] = "sensorValue" if field == reading else "none"
+            values_dict["HomeKit_aqGasUnit"] = str(values_dict.get("mirrorAqUnit", "ugm3") or "ugm3")
+            values_dict["HomeKit_aqConfigured"] = True
         try:
             old = indigo.devices[dev_id].pluginProps
             changed = old.get("sensorKind", "") != values_dict.get("sensorKind", "")
         except Exception:
-            changed = False
-        return self._own_device_publish(values_dict, dev_id, kind[0], "HomeKitLink Sensor",
+            old, changed = {}, False
+        subtype = kind[0]
+        if not subtype:   ## Copy value only: the type chosen in a bridge's settings
+            subtype = old.get("HomeKit_deviceSubtype", "") if old.get("HomeKit_publishDevice", False) else ""
+            if not subtype and str(values_dict.get("publishBridge", "none") or "none") not in ("none", "-1"):
+                errors["publishBridge"] = "Copy value only: publish it from a bridge's settings (Show All) to choose its HomeKit type"
+                return (False, values_dict, errors)
+        return self._own_device_publish(values_dict, dev_id, subtype, "HomeKitLink Sensor",
                                         "to update the sensor type of '{}'" if changed else None)
 
     def mirror_source_list(self, filter="", valuesDict=None, typeId="", targetId=0):
@@ -4976,7 +5002,7 @@ class Plugin(indigo.PluginBase):
         and air conditioners, which default to Heater-Cooler, and HomeKitLink Sensors, which use their kind."""
         try:
             dev = indigo.devices[deviceid]
-            if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkSensor" and self._mirror_kind(dev):
+            if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkSensor" and self._mirror_kind(dev) and self._mirror_kind(dev)[0]:
                 return self._mirror_kind(dev)[0]
         except Exception:
             pass
@@ -5008,7 +5034,7 @@ class Plugin(indigo.PluginBase):
                 return "service_Buttons"
             if dev.pluginId == self.pluginId and dev.deviceTypeId == "hkSensor":
                 kind = self._mirror_kind(dev)
-                return kind[1] if kind else "service_TemperatureSensor"
+                return (kind[1] if kind else "") or "service_TemperatureSensor"   ## Copy value only: any type with Show All
 
             if any(self._air_quality_guess(dev).values()):
                 return "service_AirQuality"
@@ -6321,6 +6347,100 @@ class Plugin(indigo.PluginBase):
     def Menu_runffprobe(self, *args, **kwargs):
         """Menu callback: probe all enabled camera streams with ffprobe and log codec compatibility."""
         self._run_ffprobe(debug_only=False)
+
+    def Menu_hksv_readiness(self, *args, **kwargs):
+        """Menu callback: for every published camera, which stream HKSV would record, copied or transcoded, and what
+        that costs (a 10 s test recording each). In the background: a camera's streams take up to a minute."""
+        lock = self.__dict__.setdefault("_hksv_readiness_lock", threading.Lock())
+        if not lock.acquire(blocking=False):
+            self.logger.info("HKSV readiness check is already running")
+            return
+        def run():
+            try:
+                self._hksv_readiness()
+            except Exception:
+                self.logger.exception("HKSV readiness check failed")
+            finally:
+                lock.release()
+        threading.Thread(target=run, daemon=True, name="HKLS-hksv-readiness").start()
+
+    def _hksv_readiness(self):
+        import hksv_recorder as hr
+        from homekitlink_ffmpeg import get_ffprobe_binary
+        ffmpeg, ffprobe = get_ffmpeg_binary(), get_ffprobe_binary()
+        cameras = [d for d in indigo.devices if d.pluginProps.get("HomeKit_publishDevice", False)
+                   and d.pluginProps.get("HomeKit_deviceSubtype", "") in HKSV_CAMERA_SUBTYPES]
+        if not cameras:
+            self.logger.info("HKSV readiness: no published cameras")
+            return
+        self.logger.info("HKSV readiness: checking {} camera(s) in the background - each stream is read, then 10 s "
+                         "is recorded as HKSV would (nothing is sent to HomeKit). Results follow when done.".format(len(cameras)))
+        rows = []
+        for n, dev in enumerate(cameras, 1):
+            name = dev.name
+            recorder_dev = self._hksv_recorder_for(dev.id)
+            hk = self.hksv_by_camera.get(dev.id)
+            rec = getattr(hk, "recorder", None)
+            opts = self._hksv_options(recorder_dev) if recorder_dev else {"allow_copy": True, "encoder": "h264_videotoolbox"}
+            selected = getattr(hk, "selected", None) or hr.TYPICAL_SELECTED
+            row = {"name": name, "recorder": ("yes" if recorder_dev.enabled else "disabled") if recorder_dev else "none",
+                   "stream": "", "mode": "", "cpu": None, "mem": None, "note": ""}
+            rows.append(row)
+            if rec is not None and rec.prebuffer is not None and rec.probes is not None:
+                ## Already recording: its own stream check and its ffmpeg's measured use
+                idx, mode, reason = rec.choice
+                row.update(stream=rec.sources[idx][0] if idx is not None else "", mode=mode or "",
+                           cpu=rec.cpu, mem=rec.mem_mb, note="running now - " + reason)
+                continue
+            config = self.get_CameraOptions(dev.id)
+            if not config:
+                row["note"] = "no camera settings (see log)"
+                continue
+            sources = hr.candidate_sources(config)
+            if not sources:
+                row["note"] = "no stream URL found"
+                continue
+            self.logger.info("HKSV readiness: {} ({}/{}) - checking {} stream(s)".format(name, n, len(cameras), len(sources)))
+            if rec is not None and rec.probes is not None:   ## its Recorder has checked them already
+                sources, probes = rec.sources, rec.probes
+            else:
+                probes = [hr.probe_stream(ffprobe, url) for _, url in sources]
+            max_kbps = hr.copy_kbps_limit(selected)
+            for (label, _), p in zip(sources, probes):
+                self.logger.info("    " + hr.describe_probe(label, p, max_kbps))
+            idx, mode, reason = hr.choose_source(sources, probes, selected, opts["allow_copy"])
+            if idx is None:
+                row["note"] = reason
+                continue
+            relabel = hr.copy_relabels(probes[idx]) if mode == "copy" else {}
+            cmd = hr.build_command(ffmpeg, sources[idx][1], mode, selected, bool(probes[idx].get("audio_codec")),
+                                   opts["encoder"], relabel)
+            cost = hr.measure_cost(cmd)
+            row.update(stream=sources[idx][0], mode=mode, note=reason)
+            if "error" in cost:
+                row["note"] = "test recording failed: " + cost["error"]
+            else:
+                row.update(cpu=cost["cpu"], mem=cost["mem_mb"])
+        v = hr.TYPICAL_SELECTED["video"]
+        self.logger.info("=" * 100)
+        self.logger.info("HKSV readiness - one HKSV Recorder per camera: CPU is % of one core, measured on this Mac "
+                         "({} cores, so {}% is all of them)".format(os.cpu_count(), (os.cpu_count() or 1) * 100))
+        self.logger.info("Format: the hub's choice when it has made one, else the usual {}x{}@{} {} kbps".format(
+            v["width"], v["height"], v["fps"], v["bitrate_kbps"]))
+        self.logger.info("{:<28} {:<9} {:<26} {:<10} {:>7} {:>8}  {}".format("Camera", "Recorder", "Stream recorded", "Mode", "CPU %", "Mem MB", "Why"))
+        self.logger.info("-" * 100)
+        for r in rows:
+            self.logger.info("{:<28} {:<9} {:<26} {:<10} {:>7} {:>8}  {}".format(
+                r["name"][:28], r["recorder"], r["stream"][:26], r["mode"] or "-",
+                "-" if r["cpu"] is None else r["cpu"], "-" if r["mem"] is None else r["mem"], r["note"]))
+        total_cpu = sum(r["cpu"] or 0 for r in rows)
+        total_mem = sum(r["mem"] or 0 for r in rows)
+        self.logger.info("-" * 100)
+        self.logger.info("All cameras recording: about {:.0f}% CPU ({:.1f} cores) and {:.0f} MB, running all the time "
+                         "(HKSV keeps a prebuffer going while recording is allowed)".format(total_cpu, total_cpu / 100, total_mem))
+        self.logger.info("Copy uses almost no CPU. Transcoding with VideoToolbox puts the encode on the Mac's hardware "
+                         "encoder; the CPU shown is mostly decoding the camera's stream.")
+        self.logger.info("=" * 100)
 
     def _add_enabled_camera(self, cameraoptions):
         """Add a camera to listofenabledcameras, replacing its entry from an earlier start of its bridge. Its stream

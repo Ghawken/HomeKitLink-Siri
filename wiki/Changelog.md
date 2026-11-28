@@ -6,6 +6,15 @@ Complete version history for HomeKitLink Siri.
 
 ---
 
+## 0.8.71 — 2026-11-28
+
+### ✨ New
+- **Menu: HKSV Readiness: Check Cameras and CPU Cost**: for every published camera, with or without an HKSV Recorder, checks its streams as HKSV does, picks the one a recording would use (copied or transcoded, and why), then records 10 s exactly as HKSV would (output discarded) to measure its CPU and memory. Runs in the background and ends with a table and the total for all cameras. Uses the hub's chosen format when there is one (else the usual 1080p 30 fps 2 Mbps), the Recorder's copy and encoder settings, and the live figures of a Recorder already buffering
+- **HomeKitLink Sensor: Air Quality and Copy value only**: Air Quality publishes one reading of a device (PM2.5, PM10, VOC, NO2 or AQI) as an Air Quality Sensor, graded Excellent to Poor. Copy value only copies one state as it is (a number, or on/off) with no sensor type, to publish from a bridge's settings with Show All as any type
+
+### 🐛 Fix
+- **Garage Door: an obstruction clears on any other door state**, not only closed: a door obstructed while closing (e.g. Virtual Garage Door's travel time exceeded) and then opened stayed obstructed in Home until it next closed. An `obstructed` state stored as text ("false", "no") was read as obstructed and never cleared
+
 ## 0.8.70 — 2026-11-24
 
 ### 🐛 Fix

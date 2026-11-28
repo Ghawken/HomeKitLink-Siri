@@ -337,6 +337,44 @@ def build_command(ffmpeg, url, mode, selected, audio_on, encoder="h264_videotool
     return cmd
 
 
+# ------------------------------------------------------- readiness check
+## What a hub usually chooses (1080p, 30 fps, ~2 Mbps, a keyframe every 4 s), for a camera whose hub hasn't chosen yet.
+TYPICAL_SELECTED = {"prebuffer_ms": 4000, "fragment_ms": 4000,
+                    "video": {"profile": "high", "level": "4.0", "bitrate_kbps": 2000, "iframe_interval_ms": 4000,
+                              "width": 1920, "height": 1080, "fps": 30},
+                    "audio": {"codec": "aac-lc", "channels": 1, "sample_rate": 32000, "bitrate_kbps": 64}}
+
+
+def measure_cost(cmd, seconds=10, timeout=45):
+    """Run a recording command for `seconds` of video, output discarded.
+    Returns {"cpu": % of one core per second of video, "mem_mb": peak, "wall": s} or {"error": ...}."""
+    import os
+    import tempfile
+    import threading
+    cmd = cmd[:-1] + ["-t", str(seconds), cmd[-1]]
+    with tempfile.TemporaryFile() as err:
+        t0 = time.monotonic()
+        try:
+            proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+        timer = threading.Timer(timeout, proc.kill)
+        timer.start()
+        try:
+            _, status, usage = os.wait4(proc.pid, 0)   ## this ffmpeg's own CPU and memory, not the plugin's other ones
+        finally:
+            timer.cancel()
+        proc.returncode = os.waitstatus_to_exitcode(status)
+        wall = time.monotonic() - t0
+        if proc.returncode != 0:
+            err.seek(0)
+            last = err.read().decode(errors="replace").strip().splitlines()[-1:]
+            return {"error": "timed out" if wall >= timeout else mask(last[0] if last else "ffmpeg failed")}
+    peak = usage.ru_maxrss / (1024 * 1024) if sys.platform == "darwin" else usage.ru_maxrss / 1024   ## bytes on macOS
+    return {"cpu": round((usage.ru_utime + usage.ru_stime) / seconds * 100, 1), "mem_mb": round(peak, 1),
+            "wall": round(wall, 1)}
+
+
 
 # ------------------------------------------------------------- avcC repair
 ## BlueIris (Direct-to-wire, e.g. a camera's sub-stream with &decode=-1) announces its own encoder's H.264 parameters

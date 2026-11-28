@@ -28,11 +28,14 @@ HomeKitLink publishes each Indigo device once, as one HomeKit type. Many devices
 |---|---|
 | **Device to mirror** | Any Indigo device (HomeKitLink's own devices aren't listed) |
 | **State** | The state to follow; its current value is shown next to it |
-| **Sensor type** | Temperature, Humidity, Light (lux), Contact, Motion, Occupancy, Leak, Smoke, Carbon Monoxide, Carbon Dioxide |
+| **Sensor type** | Temperature, Humidity, Light (lux), Contact, Motion, Occupancy, Leak, Smoke, Carbon Monoxide, Carbon Dioxide, **Air Quality** (v0.8.71+), or **Copy value only** (v0.8.71+) |
+| **Reading** | Air Quality only: PM2.5, PM10, VOC, NO2 or air quality index (US AQI). The Home app grades it Excellent to Poor. VOC and NO2 can be in µg/m³ or ppb |
 | **Temperature in** | Temperature only: tick for °F |
 | **Detected when the state** | On/off types only: *is true / on*, *is false / off*, or *equals a value* (then type the value, e.g. `rain`, `open`) |
 | **Publish to bridge** | The bridge to publish it to, or *Not published* |
 | **HomeKit name** | The name it's added to the Home app with |
+
+**Copy value only** copies the state as it is, without a sensor type: a number to the sensor's value, true/false (on/off, yes/no) to its on/off. Publish it from a bridge's settings, with **Show All**, to choose its HomeKit type and state there.
 
 For the on/off types, "true / on" also accepts `on`, `yes`, `1`, `open`, `detected`, `wet`, and any number above 0. **Contact: on = open.**
 

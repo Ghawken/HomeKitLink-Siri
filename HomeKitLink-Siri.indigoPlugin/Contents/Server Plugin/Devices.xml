@@ -404,7 +404,30 @@ If device fails and changing device types, unpublish the device, Save Device, Sa
 					<Option value="smoke">Smoke</Option>
 					<Option value="co">Carbon Monoxide</Option>
 					<Option value="co2">Carbon Dioxide</Option>
+					<Option value="-1">%%separator%%</Option>
+					<Option value="airquality">Air Quality (one reading)</Option>
+					<Option value="value">Copy value only (choose the type in a bridge)</Option>
 				</List>
+			</Field>
+			<Field id="mirrorAqReading" type="menu" defaultValue="aqPM25" visibleBindingId="sensorKind" visibleBindingValue="airquality">
+				<Label>Reading:</Label>
+				<List>
+					<Option value="aqPM25">PM2.5 (µg/m³)</Option>
+					<Option value="aqPM10">PM10 (µg/m³)</Option>
+					<Option value="aqVOC">VOC</Option>
+					<Option value="aqNO2">NO2</Option>
+					<Option value="aqAQI">Air quality index (US AQI, 0-500)</Option>
+				</List>
+			</Field>
+			<Field id="mirrorAqUnit" type="menu" defaultValue="ugm3" visibleBindingId="sensorKind" visibleBindingValue="airquality">
+				<Label>VOC and NO2 are in:</Label>
+				<List>
+					<Option value="ugm3">µg/m³</Option>
+					<Option value="ppb">ppb (converted for HomeKit)</Option>
+				</List>
+			</Field>
+			<Field id="valueLabel" type="label" fontColor="darkgray" fontSize="small" alignWithControl="true" visibleBindingId="sensorKind" visibleBindingValue="value">
+				<Label>Copies the state as it is: a number to the sensor's value, true/false (on/off, yes/no) to its on/off. Publish it from a bridge's settings, with Show All, to choose its HomeKit type and state.</Label>
 			</Field>
 			<Field id="mirrorFahrenheit" type="checkbox" defaultValue="false" visibleBindingId="sensorKind" visibleBindingValue="temperature">
 				<Label>Temperature in:</Label>

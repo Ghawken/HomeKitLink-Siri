@@ -58,6 +58,10 @@
         <Name>Check or Update Camera Streams for Compatibility</Name>
         <CallbackMethod>Menu_runffprobe</CallbackMethod>
     </MenuItem>
+    <MenuItem id="hksvReadiness">
+        <Name>HKSV Readiness: Check Cameras and CPU Cost</Name>
+        <CallbackMethod>Menu_hksv_readiness</CallbackMethod>
+    </MenuItem>
 
     <MenuItem id="debugMenu">
         <Name>Debug Log Menu Options</Name>

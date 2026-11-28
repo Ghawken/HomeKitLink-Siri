@@ -2035,14 +2035,15 @@ class GarageDoor(HomeAccessory):
         """(CurrentDoorState, TargetDoorState, ObstructionDetected) from the Indigo device; None = leave as is.
         doorState (0 open, 1 closed, 2 opening, 3 closing, 4 stopped, 5 reversing) is used first, then onOffState
         or binaryInput1 (on = closed, or on = open with on_opens). An "obstructed" state, when there, sets and clears
-        the obstruction; otherwise stopped and reversing show it, and closed clears it."""
+        the obstruction; otherwise stopped and reversing (Virtual Garage Door: obstructed, 4) show it, and any other
+        state clears it: a door obstructed while closing then opened stayed obstructed in Home until it next closed."""
         states = device.states
         current = target = obstructed = None
         d = GarageDoor.door_state(states["doorState"]) if "doorState" in states else None
         if d is not None:
             current = (0, 1, 2, 3, 4, 2)[d]
             target = (0, 1, 0, 1, None, 0)[d]   ## stopped: the target stays where it was
-            obstructed = (None, False, None, None, True, True)[d]
+            obstructed = d in (4, 5)
         else:   ## no doorState, or one that can't be read (update_door warns once)
             for name in ("onOffState", "binaryInput1"):
                 if name in states:
@@ -2050,10 +2051,22 @@ class GarageDoor(HomeAccessory):
                     current = target = 1 if closed else 0
                     break
         if "obstructed" in states:
-            obstructed = bool(states["obstructed"])
+            obstructed = GarageDoor.yes_no(states["obstructed"], obstructed)
         return current, target, obstructed
 
-    DOOR_STATE_TEXT = {"open": 0, "closed": 1, "opening": 2, "closing": 3, "stopped": 4, "reversing": 5}
+    @staticmethod
+    def yes_no(value, default=None):
+        """A true/false state that may be text ("false" was read as obstructed, so it never cleared)."""
+        if isinstance(value, (bool, int, float)):
+            return bool(value)
+        text = str(value).strip().lower()
+        if text in ("true", "yes", "on", "1", "obstructed"):
+            return True
+        if text in ("false", "no", "off", "0", "clear", ""):
+            return False
+        return default
+
+    DOOR_STATE_TEXT = {"open": 0, "closed": 1, "opening": 2, "closing": 3, "stopped": 4, "reversing": 5, "obstructed": 4}
 
     @staticmethod
     def door_state(value):

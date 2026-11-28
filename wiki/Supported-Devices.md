@@ -194,7 +194,7 @@ HKLS reads the device's state itself; there's no state to choose. It uses the fi
 | `doorState` (best) | 0 open, 1 closed, 2 opening, 3 closing, 4 stopped, 5 reversing; or those words, in any case (v0.8.56+). A value it can't read falls back to the on/off state, with a warning in the log |
 | `onOffState` or `binaryInput1` | open / closed only: on = closed, or on = open with **Enable to Invert Controls** ticked |
 
-- **Obstructed:** an `obstructed` true/false state, when the device has one, sets and clears it (v0.8.55+). Otherwise stopped and reversing show it, and closed clears it.
+- **Obstructed:** an `obstructed` true/false state (or text such as true/false, yes/no), when the device has one, sets and clears it (v0.8.55+). Otherwise stopped and reversing (Virtual Garage Door's obstructed, 4) show it, and any other door state clears it (v0.8.71+; before, only closed did).
 - **Enable to Invert Controls** (v0.8.55+): tick it when the device turns **on to open** (e.g. a Nice IT4WIFI gate). Home's Open then turns the device on and Close turns it off. Unticked, Close turns it on (e.g. an Insteon I/O Linc).
 - Each open or close from Home is logged, e.g. `[Gate] Home asked to open: turning the device on`
 
